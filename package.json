@@ -1,0 +1,16 @@
+{
+  "name": "x402-research-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@x402/express": "latest",
+    "@x402/core": "latest",
+    "@x402/evm": "latest",
+    "express": "^4.21.0",
+    "dotenv": "^16.4.0"
+  }
+}
