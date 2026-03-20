@@ -105,10 +105,16 @@ if (NVM_API_KEY) {
   console.warn("NVM_API_KEY not set — endpoints OPEN (dev mode)");
 }
 
-// ─── REST endpoints ────────────────────────────────────────
+// ─── Static files + REST endpoints ─────────────────────────
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Health / landing
-app.get("/", (req, res) => {
+// Serve landing page
+app.use(express.static(join(__dirname, "public")));
+
+// Health / API info
+app.get("/api/health", (req, res) => {
   res.json({
     service: "Clawnkers Crypto Research",
     version: "4.0.0",
