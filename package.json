@@ -8,10 +8,6 @@
   },
   "dependencies": {
     "@nevermined-io/payments": "^1.1.18",
-    "@x402/core": "latest",
-    "@x402/evm": "latest",
-    "@x402/express": "latest",
-    "dotenv": "^16.4.0",
     "express": "^4.21.0"
   }
 }
