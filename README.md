@@ -1,80 +1,98 @@
-# 🔍 Clawnkers Crypto Research Agent
+# Clawnkers Crypto Research 🦊
 
-AI-powered crypto research API. Pay per query in USDC — no API keys, no subscriptions, no KYC.
+Neural web search API for crypto, blockchain, and AI research. Pay per query with USDC.
 
-## How It Works
+**Live**: [x402-research.onrender.com](https://x402-research.onrender.com)
 
-1. **Buy credits**: [Get 100 queries for 1 USDC](https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147)
-2. **Send requests** with your `payment-signature` header
-3. **Get results** — real-time neural web search via [Exa](https://exa.ai)
+## Features
 
-## Endpoints
+- 🔍 **Neural Search** — Exa AI-powered semantic search across the web
+- 📄 **URL Extraction** — Extract clean text from any URL (up to 5000 chars)
+- 🤖 **MCP Compatible** — Streamable HTTP server for AI agent tool discovery
+- 💰 **USDC Payments** — Pay with crypto via Nevermined ($0.01/query)
 
-| Endpoint | Cost | Description |
-|----------|------|-------------|
-| `GET /research?q=query` | 1 credit ($0.01) | AI web search — returns 5 curated results with highlights |
-| `GET /fetch?url=https://...` | 1 credit ($0.01) | Extract readable content from any URL |
-| `GET /` | Free | Service info + checkout link |
+## Quick Start
 
-## Try It
+### MCP (for AI Agents)
 
-```bash
-# Health check (free)
-curl https://x402-research.onrender.com/
+Add to your MCP client config:
 
-# Research (needs payment-signature from Nevermined)
-curl -H "payment-signature: YOUR_TOKEN" \
-  "https://x402-research.onrender.com/research?q=solana+defi+trends"
+```json
+{
+  "mcpServers": {
+    "clawnkers-research": {
+      "type": "streamableHttp",
+      "url": "https://x402-research.onrender.com/mcp"
+    }
+  }
+}
 ```
 
-Without a valid token, protected endpoints return `402 Payment Required` with a checkout link.
+Tools: `crypto_research`, `url_extract`
 
-## For AI Agents
+### REST API
 
-This service is designed for **agent-to-agent commerce**. Any AI agent with USDC on Base can:
+```bash
+# Search
+curl -H "payment-signature: YOUR_TOKEN" \
+  "https://x402-research.onrender.com/research?q=bitcoin+etf+2026"
 
-1. Purchase a plan programmatically via [Nevermined SDK](https://nevermined.ai/docs)
-2. Get a payment token
-3. Query crypto intelligence at $0.01/request
+# Extract URL
+curl -H "payment-signature: YOUR_TOKEN" \
+  "https://x402-research.onrender.com/fetch?url=https://example.com"
+```
 
-```typescript
-import { Payments } from '@nevermined-io/payments'
+### Python SDK
 
-const payments = Payments.getInstance({
-  nvmApiKey: process.env.NVM_API_KEY,
-  environment: 'live'
-})
+```python
+from payments_py import Payments, PaymentOptions
 
-// Purchase credits
-const order = await payments.plans.purchase({
-  planId: '54250839092590488094557289937292598069305499079785004548382308387019941581147'
-})
+payments = Payments.get_instance(
+    PaymentOptions(nvm_api_key="YOUR_KEY", environment="live")
+)
 
-// Use the token to query
-const res = await fetch('https://x402-research.onrender.com/research?q=bitcoin+etf', {
-  headers: { 'payment-signature': order.token }
-})
+PLAN_ID = "54250839092590488094557289937292598069305499079785004548382308387019941581147"
+AGENT_ID = "19184742741465230596906933670651041789552219348391678650178832122066125642637"
+
+token = payments.x402.get_x402_access_token(PLAN_ID, AGENT_ID)
+
+import requests
+r = requests.get(
+    "https://x402-research.onrender.com/research",
+    params={"q": "defi yields 2026"},
+    headers={"payment-signature": token.access_token}
+)
+print(r.json())
 ```
 
 ## Pricing
 
-- **1 USDC** = 100 credits (100 queries)
-- **$0.01 per query** — neural web search with AI-curated results
-- Payment: USDC on Base (crypto) via [Nevermined](https://nevermined.app)
-- No Stripe, no credit card, no KYC
+| Plan | Price | Credits | Per Query |
+|------|-------|---------|-----------|
+| Pay Per Query | 1 USDC | 100 | $0.01 |
+
+[Buy Credits →](https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147)
+
+## Endpoints
+
+| Endpoint | Method | Description | Cost |
+|----------|--------|-------------|------|
+| `/` | GET | Landing page | Free |
+| `/api/health` | GET | Service health & info | Free |
+| `/research?q=...` | GET | Neural web search | 1 credit |
+| `/fetch?url=...` | GET | URL content extraction | 1 credit |
+| `/mcp` | POST/GET | MCP server (Streamable HTTP) | Free |
 
 ## Stack
 
-- **Runtime**: Node.js + Express on [Render](https://render.com) (free tier)
+- **Runtime**: Node.js + Express on [Render](https://render.com)
 - **Search**: [Exa AI](https://exa.ai) neural search
-- **Payments**: [Nevermined](https://nevermined.ai) — agent-to-agent payment rails
-- **Network**: Base (USDC)
+- **Payments**: [Nevermined](https://nevermined.io) USDC credits
+- **Protocol**: [MCP](https://modelcontextprotocol.io) Streamable HTTP
 
-## Links
+## License
 
-- 🛒 [Buy Credits](https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147)
-- 📊 [Service Health](https://x402-research.onrender.com/)
-- 📖 [Nevermined Docs](https://nevermined.ai/docs)
+MIT
 
 ---
 
