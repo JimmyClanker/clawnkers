@@ -1,6 +1,6 @@
 {
   "name": "x402-research-service",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
