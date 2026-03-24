@@ -90,8 +90,8 @@ function buildResponse({ projectName, rawData, scores, analysis, mode }) {
   };
 }
 
-async function runAnalysis({ projectName, exaService, mode, config }) {
-  const rawData = await collectAll(projectName, exaService);
+async function runAnalysis({ projectName, exaService, mode, config, collectAllFn }) {
+  const rawData = await collectAllFn(projectName, exaService);
   const scores = calculateScores(rawData);
   const analysis =
     mode === 'quick'
@@ -101,7 +101,7 @@ async function runAnalysis({ projectName, exaService, mode, config }) {
   return buildResponse({ projectName, rawData, scores, analysis, mode });
 }
 
-export function createAlphaRouter({ config, exaService, signalsService }) {
+export function createAlphaRouter({ config, exaService, signalsService, collectAllFn = collectAll }) {
   const router = express.Router();
   const cache = createCacheHelpers(signalsService.db);
   const inFlight = new Map();
@@ -127,7 +127,7 @@ export function createAlphaRouter({ config, exaService, signalsService }) {
 
     const promise = (async () => {
       try {
-        const report = await runAnalysis({ projectName, exaService, mode, config });
+        const report = await runAnalysis({ projectName, exaService, mode, config, collectAllFn });
         cache.write(cacheKey, report);
         return {
           ...report,
@@ -153,6 +153,17 @@ export function createAlphaRouter({ config, exaService, signalsService }) {
     const projectName = normalizeProject(req.query.project);
     if (!projectName) {
       return res.status(400).json({ error: 'Missing or invalid ?project= parameter (max 100 chars)' });
+    }
+
+    if (
+      mode === 'full' &&
+      config?.xaiApiKey &&
+      config?.alphaAuthKey &&
+      req.get('x-alpha-key') !== config.alphaAuthKey
+    ) {
+      return res.status(401).json({
+        error: 'Unauthorized: valid x-alpha-key header required for full alpha reports',
+      });
     }
 
     const ttlMs = mode === 'quick' ? QUICK_TTL_MS : FULL_TTL_MS;

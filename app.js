@@ -18,6 +18,7 @@ export function createApp({
   signalsService,
   paymentsService,
   config: providedConfig,
+  collectAllFn,
 } = {}) {
   const config = providedConfig || loadConfig(env);
   const app = express();
@@ -106,7 +107,7 @@ export function createApp({
   }
 
   app.use(createRestRouter({ config, exaService: exa, signalsService: signals }));
-  app.use(createAlphaRouter({ config, exaService: exa, signalsService: signals }));
+  app.use(createAlphaRouter({ config, exaService: exa, signalsService: signals, collectAllFn }));
   app.use(createMcpRouter({ config, exaService: exa, signalsService: signals }));
 
   return { app, config, services: { exa, signals, payments } };

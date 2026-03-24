@@ -7,10 +7,11 @@ import { collectTokenomics } from './tokenomics.js';
 const GLOBAL_TIMEOUT_MS = 20000;
 
 function withTimeout(promise, label, timeoutMs = GLOBAL_TIMEOUT_MS) {
+  let timer;
   return Promise.race([
-    promise,
+    promise.finally(() => clearTimeout(timer)),
     new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
     }),
   ]);
 }

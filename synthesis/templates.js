@@ -35,7 +35,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `- ${renderScoreLine('Onchain health', scores?.onchain_health)}`,
     `- ${renderScoreLine('Social momentum', scores?.social_momentum)}`,
     `- ${renderScoreLine('Development', scores?.development)}`,
-    `- ${renderScoreLine('Tokenomics risk', scores?.tokenomics_risk)}`,
+    `- ${renderScoreLine('Tokenomics health', scores?.tokenomics_health)}`,
     `- ${renderScoreLine('Overall', scores?.overall)}`,
     '',
     '🛡️ Moat',
@@ -70,7 +70,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
         <li>${escapeHtml(renderScoreLine('Onchain health', scores?.onchain_health))}</li>
         <li>${escapeHtml(renderScoreLine('Social momentum', scores?.social_momentum))}</li>
         <li>${escapeHtml(renderScoreLine('Development', scores?.development))}</li>
-        <li>${escapeHtml(renderScoreLine('Tokenomics risk', scores?.tokenomics_risk))}</li>
+        <li>${escapeHtml(renderScoreLine('Tokenomics health', scores?.tokenomics_health))}</li>
         <li>${escapeHtml(renderScoreLine('Overall', scores?.overall))}</li>
       </ul>
       <h2>🛡️ Moat</h2>

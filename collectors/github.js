@@ -1,3 +1,5 @@
+import githubRepos from './github-repos.json' with { type: 'json' };
+
 const GITHUB_API_BASE = 'https://api.github.com';
 const DEFAULT_TIMEOUT_MS = 12000;
 
@@ -45,6 +47,11 @@ function parseLastPage(linkHeader) {
   return match ? Number(match[1]) : null;
 }
 
+function getMappedRepo(projectName) {
+  const key = String(projectName || '').trim().toLowerCase();
+  return githubRepos[key] || null;
+}
+
 async function fetchContributorStats(owner, repo) {
   const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/stats/contributors`;
   // GitHub returns 202 while computing stats — retry up to 3 times
@@ -82,16 +89,23 @@ export async function collectGithub(projectName) {
   const fallback = createEmptyGithubResult(projectName);
 
   try {
-    const searchUrl = `${GITHUB_API_BASE}/search/repositories?q=${encodeURIComponent(`${projectName} crypto blockchain`)}&sort=stars&order=desc&per_page=1`;
-    const searchResponse = await fetchJson(searchUrl);
-    const topRepo = searchResponse.data?.items?.[0];
+    const mappedRepo = getMappedRepo(projectName);
+    let topRepo = null;
+    let owner = mappedRepo?.owner || null;
+    let repo = mappedRepo?.repo || null;
 
-    if (!topRepo?.owner?.login || !topRepo?.name) {
-      return { ...fallback, error: 'GitHub repository not found' };
+    if (!owner || !repo) {
+      const searchUrl = `${GITHUB_API_BASE}/search/repositories?q=${encodeURIComponent(`${projectName} crypto blockchain`)}&sort=stars&order=desc&per_page=1`;
+      const searchResponse = await fetchJson(searchUrl);
+      topRepo = searchResponse.data?.items?.[0];
+
+      if (!topRepo?.owner?.login || !topRepo?.name) {
+        return { ...fallback, error: 'GitHub repository not found' };
+      }
+
+      owner = topRepo.owner.login;
+      repo = topRepo.name;
     }
-
-    const owner = topRepo.owner.login;
-    const repo = topRepo.name;
 
     const [repoInfo, commitsInfo, contributorsInfo] = await Promise.allSettled([
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}`),
@@ -113,7 +127,7 @@ export async function collectGithub(projectName) {
 
     return {
       ...fallback,
-      repo_url: repoData?.html_url || topRepo.html_url || null,
+      repo_url: repoData?.html_url || topRepo?.html_url || `https://github.com/${owner}/${repo}`,
       stars: repoData?.stargazers_count ?? null,
       forks: repoData?.forks_count ?? null,
       open_issues: repoData?.open_issues_count ?? null,

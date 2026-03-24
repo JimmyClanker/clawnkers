@@ -90,7 +90,7 @@ export function fallbackReport(projectName, rawData, scores, error = null) {
 
   return {
     verdict,
-    analysis_text: `${projectName}: overall score ${overallScore}/10. Market ${scores?.market_strength?.score}/10, onchain ${scores?.onchain_health?.score}/10, social ${scores?.social_momentum?.score}/10, dev ${scores?.development?.score}/10, tokenomics ${scores?.tokenomics_risk?.score}/10.${error ? ` Fallback usato: ${error}.` : ''}`,
+    analysis_text: `${projectName}: overall score ${overallScore}/10. Market ${scores?.market_strength?.score}/10, onchain ${scores?.onchain_health?.score}/10, social ${scores?.social_momentum?.score}/10, dev ${scores?.development?.score}/10, tokenomics ${scores?.tokenomics_health?.score}/10.${error ? ` Fallback usato: ${error}.` : ''}`,
     moat:
       'Da validare con dati qualitativi esterni; il vantaggio competitivo dipende da rete, liquidità, brand e execution.',
     risks: risks.length ? risks : ['Copertura dati incompleta: servono ulteriori verifiche qualitative.'],

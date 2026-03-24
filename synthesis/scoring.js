@@ -105,11 +105,11 @@ function collectorCompleteness(data = {}) {
 }
 
 export function calculateScores(data) {
-  const market_strength = scoreMarketStrength(data?.market);
-  const onchain_health = scoreOnchainHealth(data?.onchain);
-  const social_momentum = scoreSocialMomentum(data?.social);
-  const development = scoreDevelopment(data?.github);
-  const tokenomics_risk = scoreTokenomicsRisk(data?.tokenomics);
+  const market_strength = scoreMarketStrength(data?.market || {});
+  const onchain_health = scoreOnchainHealth(data?.onchain || {});
+  const social_momentum = scoreSocialMomentum(data?.social || {});
+  const development = scoreDevelopment(data?.github || {});
+  const tokenomics_health = scoreTokenomicsRisk(data?.tokenomics || {});
 
   const completeness = collectorCompleteness(data);
 
@@ -118,7 +118,7 @@ export function calculateScores(data) {
     onchain_health.score * 0.25 +
     social_momentum.score * 0.15 +
     development.score * 0.15 +
-    tokenomics_risk.score * 0.25;
+    tokenomics_health.score * 0.25;
 
   // Penalize when data is incomplete — max -2 points when all collectors fail
   if (completeness < 1) {
@@ -131,7 +131,7 @@ export function calculateScores(data) {
     onchain_health,
     social_momentum,
     development,
-    tokenomics_risk,
+    tokenomics_health,
     overall: {
       score: clampScore(overallValue),
       completeness: Math.round(completeness * 100),
