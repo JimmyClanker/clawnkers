@@ -20,6 +20,7 @@
       --hold: #ffd3b6;
       --info: #b5c7d3;
       --dev: #c5b3e6;
+      --warn: #ffaaa5;
       --shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 18px 50px rgba(0,0,0,0.35);
     }
     * { box-sizing: border-box; }
@@ -90,25 +91,68 @@
     }
     button { background: linear-gradient(135deg, rgba(168,230,207,0.16), rgba(181,199,211,0.1)); }
     .status {
-      min-height: 72px;
+      min-height: 88px;
       display: flex;
       align-items: center;
       padding: 0 6px;
       color: var(--muted);
     }
+    .loading-wrap {
+      width: min(560px, 100%);
+      display: grid;
+      gap: 8px;
+    }
     .chalk-loading {
       font-family: 'Caveat', cursive;
-      font-size: 2rem;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
       letter-spacing: 1px;
       color: var(--text);
-      overflow: hidden;
-      white-space: nowrap;
-      width: 0;
-      border-right: 2px solid var(--text);
-      animation: write 1.9s steps(11, end) infinite alternate, blink .9s step-end infinite;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 2px;
+      text-shadow: 0 0 10px rgba(232,232,232,0.08);
     }
-    @keyframes write { from { width: 0; } to { width: 11ch; } }
-    @keyframes blink { 50% { border-color: transparent; } }
+    .loading-project {
+      color: var(--buy);
+      max-width: 18ch;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .loading-dots::after {
+      content: '';
+      display: inline-block;
+      width: 1.4em;
+      text-align: left;
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+    .loading-bar {
+      position: relative;
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .loading-bar::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(90deg, rgba(168,230,207,0.15), var(--hold), var(--buy), rgba(168,230,207,0.15));
+      animation: progressSweep 1.7s ease-in-out infinite;
+    }
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+    @keyframes progressSweep {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
     .grid {
       display: grid;
       grid-template-columns: 1.2fr 0.8fr;
@@ -128,13 +172,26 @@
       font-size: clamp(2rem, 5vw, 3.5rem);
       margin: 0;
     }
+    .verdict-wrap {
+      display: grid;
+      justify-items: end;
+      gap: 8px;
+    }
     .verdict {
-      font-size: clamp(1.4rem, 4vw, 2.2rem);
-      padding: 10px 16px;
-      border-radius: 999px;
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      padding: 14px 24px;
+      border-radius: 22px;
       border: 1px dashed currentColor;
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(255,255,255,0.03);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 0 24px currentColor;
+    }
+    .overall-score {
+      font-family: 'Caveat', cursive;
+      font-size: 1.8rem;
+      line-height: 1;
     }
     .buy { color: var(--buy); }
     .hold { color: var(--hold); }
@@ -168,7 +225,7 @@
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, var(--info), var(--dev), var(--buy));
+      transition: width 0.25s ease, background 0.25s ease;
     }
     .mini-grid {
       display: grid;
@@ -207,6 +264,7 @@
       vertical-align: top;
     }
     .table th { color: var(--muted); font-weight: 500; width: 38%; }
+    .table td { word-break: break-word; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     .sentiment-box {
       border: 1px dashed rgba(255,255,255,0.18);
@@ -222,7 +280,7 @@
       border-radius: 14px;
       background: rgba(255,139,148,0.05);
     }
-    svg { width: 100%; height: auto; display: block; }
+    svg { width: 100%; height: auto; display: block; overflow: visible; }
     @media (max-width: 900px) {
       .grid, .two-col, .mini-grid { grid-template-columns: 1fr; }
     }
@@ -230,6 +288,8 @@
       .toolbar { grid-template-columns: 1fr; }
       .score-row { grid-template-columns: 1fr; }
       .wrap { width: min(100% - 16px, 1120px); }
+      .header-row { align-items: flex-start; }
+      .verdict-wrap { justify-items: start; }
     }
   </style>
 </head>
@@ -282,9 +342,127 @@
       return 'avoid';
     }
 
+    function formatCompactNumber(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const abs = Math.abs(num);
+      const sign = num < 0 ? '-' : '';
+      if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}t`;
+      if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+      if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+      if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(2)}K`;
+      if (abs > 0 && abs < 1) {
+        const decimals = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4;
+        return `${sign}$${abs.toFixed(decimals)}`;
+      }
+      return `${sign}$${abs.toFixed(abs < 100 ? 2 : 0)}`;
+    }
+
+    function formatPercent(value, decimals = 1, signed = false) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const prefix = signed && num > 0 ? '+' : '';
+      return `${prefix}${num.toFixed(decimals)}%`;
+    }
+
+    function formatPrice(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const abs = Math.abs(num);
+      if (abs >= 1000) return formatCompactNumber(num);
+      if (abs >= 1) return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (abs > 0) {
+        const decimals = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4;
+        return `$${num.toFixed(decimals)}`;
+      }
+      return '$0.00';
+    }
+
+    function formatNumber(value, key = '') {
+      if (value === null || value === undefined || value === '') return 'n/a';
+      if (typeof value === 'string' && value.trim() === '') return 'n/a';
+      const normalizedKey = String(key || '').toLowerCase();
+      const numericValue = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+
+      if (!Number.isFinite(numericValue)) return String(value);
+      if (normalizedKey.includes('pct') || normalizedKey.includes('%')) return formatPercent(numericValue, 1);
+
+      const abs = Math.abs(numericValue);
+      if (abs >= 1e12) return `$${(numericValue / 1e12).toFixed(2)}t`;
+      if (abs >= 1e9) return `$${(numericValue / 1e9).toFixed(2)}B`;
+      if (abs >= 1e6) return `$${(numericValue / 1e6).toFixed(2)}M`;
+      if (abs >= 1e3) return `$${(numericValue / 1e3).toFixed(2)}K`;
+      if (abs > 0 && abs < 1) {
+        const decimals = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4;
+        return numericValue.toFixed(decimals);
+      }
+      return numericValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+
+    function formatMetricValue(label, key, value) {
+      const normalizedKey = String(key || label || '').toLowerCase();
+      if (value === null || value === undefined || value === '') return 'n/a';
+
+      switch (normalizedKey) {
+        case 'price':
+        case 'current_price':
+        case 'price_usd':
+          return formatPrice(value);
+        case 'market_cap':
+        case 'total_volume':
+        case 'fdv':
+        case 'tvl':
+        case 'fees_7d':
+        case 'revenue_7d':
+          return formatCompactNumber(value);
+        case 'tvl_change_7d':
+        case 'tvl_change_30d':
+          return formatPercent(value, 1, true);
+        case 'pct_circulating':
+          return formatPercent(value, 1);
+        case 'inflation_rate':
+          return formatPercent(value, 2);
+        default:
+          return formatNumber(value, normalizedKey);
+      }
+    }
+
+    function formatDuration(ms) {
+      const totalSeconds = Math.max(0, Math.round(Number(ms || 0) / 1000));
+      if (totalSeconds < 60) return `${totalSeconds}s`;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+      const hours = Math.floor(minutes / 60);
+      const remMinutes = minutes % 60;
+      return remMinutes ? `${hours}h ${remMinutes}m` : `${hours}h`;
+    }
+
+    function overallScore(scores) {
+      const values = Object.values(scores || {})
+        .map((item) => Number(item?.score))
+        .filter((value) => Number.isFinite(value));
+      if (!values.length) return null;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function barColor(value) {
+      if (value >= 8) return '#a8e6cf';
+      if (value >= 6) return '#ffd3b6';
+      if (value >= 4) return '#ffaaa5';
+      return '#ff8b94';
+    }
+
     function setLoading(isLoading, mode) {
       if (isLoading) {
-        statusBox.innerHTML = `<div class="chalk-loading">Scanning...</div><div style="margin-left:14px" class="footnote">${mode === 'quick' ? 'Quick / free path — algorithmic only' : 'Deep path — collectors + Grok + tools'}</div>`;
+        const project = escapeHtml(input.value.trim() || 'project');
+        statusBox.innerHTML = `
+          <div class="loading-wrap">
+            <div class="chalk-loading">Scanning <span class="loading-project">${project}</span><span class="loading-dots"></span></div>
+            <div class="loading-bar" aria-hidden="true"></div>
+            <div class="footnote">${mode === 'quick' ? 'Quick / free path — algorithmic only' : 'Deep path — collectors + Grok + tools'}</div>
+          </div>
+        `;
       } else {
         statusBox.innerHTML = '';
       }
@@ -316,11 +494,12 @@
         const angle = (-Math.PI / 2) + (index * Math.PI * 2 / labels.length);
         const x = center + Math.cos(angle) * radius;
         const y = center + Math.sin(angle) * radius;
-        const tx = center + Math.cos(angle) * (radius + 28);
-        const ty = center + Math.sin(angle) * (radius + 28);
+        const tx = center + Math.cos(angle) * (radius + 34);
+        const ty = center + Math.sin(angle) * (radius + 34);
+        const anchor = Math.cos(angle) > 0.25 ? 'start' : Math.cos(angle) < -0.25 ? 'end' : 'middle';
         return `
           <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="rgba(232,232,232,0.16)" />
-          <text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="13" text-anchor="middle">${label}</text>
+          <text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="13" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>
         `;
       }).join('');
       return `
@@ -339,7 +518,7 @@
         return `
           <div class="score-row">
             <div>${label}</div>
-            <div class="bar"><span style="width:${Math.max(0, Math.min(100, value * 10))}%"></span></div>
+            <div class="bar"><span style="width:${Math.max(0, Math.min(100, value * 10))}%; background:${barColor(value)}"></span></div>
             <div>${value.toFixed(1)}/10</div>
           </div>
         `;
@@ -347,24 +526,27 @@
     }
 
     function metricRows(raw) {
+      const marketPrice = raw?.market?.current_price ?? raw?.market?.price ?? raw?.market?.price_usd;
       const rows = [
-        ['Price', raw?.market?.price_usd],
-        ['Market cap', raw?.market?.market_cap],
-        ['24h volume', raw?.market?.total_volume],
-        ['TVL', raw?.onchain?.tvl],
-        ['30d TVL %', raw?.onchain?.tvl_change_30d],
-        ['Fees 7d', raw?.onchain?.fees_7d],
-        ['Revenue 7d', raw?.onchain?.revenue_7d],
-        ['Mentions', raw?.social?.mentions],
-        ['Commits 90d', raw?.github?.commits_90d],
-        ['Contributors', raw?.github?.contributors],
-        ['Pct circulating', raw?.tokenomics?.pct_circulating],
-        ['Inflation rate', raw?.tokenomics?.inflation_rate],
+        ['Price', 'price', marketPrice],
+        ['Market cap', 'market_cap', raw?.market?.market_cap],
+        ['24h volume', 'total_volume', raw?.market?.total_volume],
+        ['FDV', 'fdv', raw?.market?.fdv],
+        ['TVL', 'tvl', raw?.onchain?.tvl],
+        ['7d TVL %', 'tvl_change_7d', raw?.onchain?.tvl_change_7d],
+        ['30d TVL %', 'tvl_change_30d', raw?.onchain?.tvl_change_30d],
+        ['Fees 7d', 'fees_7d', raw?.onchain?.fees_7d],
+        ['Revenue 7d', 'revenue_7d', raw?.onchain?.revenue_7d],
+        ['Mentions', 'mentions', raw?.social?.mentions],
+        ['Commits 90d', 'commits_90d', raw?.github?.commits_90d],
+        ['Contributors', 'contributors', raw?.github?.contributors],
+        ['Pct circulating', 'pct_circulating', raw?.tokenomics?.pct_circulating],
+        ['Inflation rate', 'inflation_rate', raw?.tokenomics?.inflation_rate],
       ];
-      return rows.map(([label, value]) => `
+      return rows.map(([label, key, value]) => `
         <tr>
           <th>${escapeHtml(label)}</th>
-          <td>${escapeHtml(value ?? 'n/a')}</td>
+          <td>${escapeHtml(formatMetricValue(label, key, value))}</td>
         </tr>
       `).join('');
     }
@@ -380,6 +562,7 @@
       const analysis = payload?.llm_analysis || {};
       const scores = payload?.scores || {};
       const cache = payload?.cache || {};
+      const avgScore = overallScore(scores);
       reportBox.classList.remove('hidden');
       reportBox.innerHTML = `
         <div class="grid">
@@ -389,7 +572,10 @@
                 <div class="footnote">${escapeHtml(payload?.mode || 'full')} scan</div>
                 <h1 class="project-name">${escapeHtml(payload?.project_name || 'Unknown')}</h1>
               </div>
-              <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
+              <div class="verdict-wrap">
+                <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
+                <div class="overall-score ${verdictClass(verdict)}">${avgScore !== null ? `${avgScore.toFixed(1)}/10` : 'n/a'}</div>
+              </div>
             </div>
             <p class="analysis">${escapeHtml(analysis.analysis_text || 'No analysis available.')}</p>
             <div class="mini-grid">
@@ -442,8 +628,9 @@
         <section class="panel" style="margin-top:18px;">
           <div class="footer-row">
             <div class="footnote">Generated: ${escapeHtml(payload?.generated_at || 'n/a')}</div>
-            <div class="footnote">Cache: ${cache.hit ? 'HIT' : 'MISS'} · age ${Math.round((cache.age_ms || 0) / 1000)}s · ttl ${Math.round((cache.ttl_ms || 0) / 60000)}m</div>
+            <div class="footnote">Cache: ${cache.hit ? 'HIT' : 'MISS'} · age ${escapeHtml(formatDuration(cache.age_ms))} · ttl ${escapeHtml(formatDuration(cache.ttl_ms))}</div>
           </div>
+          <div class="footnote" style="margin-top:8px;">Powered by Grok 4.20 + CoinGecko + DeFiLlama</div>
         </section>
       `;
     }
