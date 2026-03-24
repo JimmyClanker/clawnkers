@@ -106,9 +106,13 @@ export function createSignalsService({ dbPath, maxBatchSignals = 100, ingestKey 
   }
 
   function normalizeSignal(row) {
+    let context = {};
+    try {
+      context = JSON.parse(row.context || '{}');
+    } catch (_) { /* corrupted row — ignore */ }
     return {
       ...row,
-      context: JSON.parse(row.context || '{}'),
+      context,
     };
   }
 
