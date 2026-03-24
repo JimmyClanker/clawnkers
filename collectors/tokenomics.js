@@ -24,8 +24,13 @@ function emptyTokenomicsResult(projectName, coinGeckoId, marketData) {
   };
 }
 
-function buildMessariSlugCandidates(projectName, coinGeckoId) {
-  const candidates = [coinGeckoId, projectName]
+function buildMessariSlugCandidates(projectName, coinGeckoId, marketData = null) {
+  const candidates = [
+    coinGeckoId,
+    projectName,
+    marketData?.name,
+    marketData?.symbol,
+  ]
     .filter(Boolean)
     .flatMap((value) => {
       const source = String(value).toLowerCase();
@@ -70,7 +75,7 @@ export async function collectTokenomics(projectName, coinGeckoId, marketData = n
   const fallback = emptyTokenomicsResult(projectName, coinGeckoId, marketData);
 
   try {
-    const slugs = buildMessariSlugCandidates(projectName, coinGeckoId);
+    const slugs = buildMessariSlugCandidates(projectName, coinGeckoId, marketData);
     const [profileResult, metricsResult] = await Promise.allSettled([
       fetchMessariEndpoint(slugs, 'profile'),
       fetchMessariEndpoint(slugs, 'metrics'),

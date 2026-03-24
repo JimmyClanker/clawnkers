@@ -9,7 +9,12 @@ function safeNumber(value, fallback = 0) {
 function scoreMarketStrength(market = {}) {
   const volume = safeNumber(market.total_volume);
   const marketCap = safeNumber(market.market_cap);
+  const fdv = safeNumber(market.fully_diluted_valuation);
+  const price = safeNumber(market.price);
+  const ath = safeNumber(market.ath);
   const ratio = marketCap > 0 ? volume / marketCap : 0;
+  const fdvOverhang = marketCap > 0 && fdv > 0 ? fdv / marketCap : 1;
+  const athDistancePct = price > 0 && ath > 0 ? ((price - ath) / ath) * 100 : null;
   const momentum = [
     safeNumber(market.price_change_pct_1h),
     safeNumber(market.price_change_pct_24h),
@@ -21,9 +26,18 @@ function scoreMarketStrength(market = {}) {
   raw += Math.min(ratio * 20, 3);
   raw += Math.max(Math.min(momentum / 20, 3), -2);
 
+  if (fdvOverhang > 1.1) {
+    raw -= Math.min((fdvOverhang - 1.1) * 0.7, 1.5);
+  }
+
+  if (athDistancePct != null) {
+    if (athDistancePct > -15) raw += 0.4;
+    if (athDistancePct < -50) raw -= Math.min((Math.abs(athDistancePct) - 50) / 25, 1.2);
+  }
+
   return {
     score: clampScore(raw),
-    reasoning: `Volume/MC ratio ${ratio.toFixed(2)} with cumulative momentum ${momentum.toFixed(2)}%.`,
+    reasoning: `Volume/MC ratio ${ratio.toFixed(2)}, cumulative momentum ${momentum.toFixed(2)}%, FDV/MC ${fdvOverhang.toFixed(2)}, distance from ATH ${athDistancePct == null ? 'n/a' : `${athDistancePct.toFixed(1)}%`}.`,
   };
 }
 
@@ -69,15 +83,32 @@ function scoreDevelopment(github = {}) {
   const contributors = safeNumber(github.contributors);
   const commits90d = safeNumber(github.commits_90d);
   const stars = safeNumber(github.stars);
+  const forks = safeNumber(github.forks);
+  const openIssues = safeNumber(github.open_issues);
+  const lastCommitDate = github?.last_commit?.date ? new Date(github.last_commit.date) : null;
+  const daysSinceCommit = lastCommitDate && !Number.isNaN(lastCommitDate.getTime())
+    ? (Date.now() - lastCommitDate.getTime()) / 86400000
+    : null;
+  const issuePressure = commits90d > 0 ? openIssues / commits90d : openIssues > 0 ? openIssues : 0;
 
   let raw = 4;
   raw += Math.min(contributors / 5, 2.5);
   raw += Math.min(commits90d / 30, 2.5);
   raw += stars > 0 ? Math.min(Math.log10(stars + 1), 1) : 0;
+  raw += forks > 0 ? Math.min(Math.log10(forks + 1) * 0.5, 0.8) : 0;
+
+  if (daysSinceCommit != null) {
+    if (daysSinceCommit <= 14) raw += 0.6;
+    else if (daysSinceCommit > 180) raw -= Math.min((daysSinceCommit - 180) / 90, 1.2);
+  }
+
+  if (issuePressure > 1.5) {
+    raw -= Math.min((issuePressure - 1.5) * 0.25, 0.8);
+  }
 
   return {
     score: clampScore(raw),
-    reasoning: `Contributors ${contributors}, commits_90d ${commits90d}, stars ${stars}.`,
+    reasoning: `Contributors ${contributors}, commits_90d ${commits90d}, stars ${stars}, forks ${forks}, issue pressure ${issuePressure.toFixed(2)}, days since last commit ${daysSinceCommit == null ? 'n/a' : daysSinceCommit.toFixed(0)}.`,
   };
 }
 

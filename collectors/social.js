@@ -23,6 +23,16 @@ function countKeywords(text, keywords) {
   return keywords.reduce((sum, keyword) => sum + (haystack.includes(keyword) ? 1 : 0), 0);
 }
 
+function classifySentiment(text) {
+  const bullish = countKeywords(text, BULLISH_KEYWORDS);
+  const bearish = countKeywords(text, BEARISH_KEYWORDS);
+  const neutral = countKeywords(text, NEUTRAL_KEYWORDS);
+
+  if (bullish > bearish && bullish >= neutral) return 'bullish';
+  if (bearish > bullish && bearish >= neutral) return 'bearish';
+  return 'neutral';
+}
+
 function extractNarratives(items, projectName) {
   const projectTokens = String(projectName || '')
     .split(/\s+/)
@@ -84,7 +94,12 @@ export async function collectSocial(projectName, exaService) {
   }
 
   try {
-    const queries = [`${projectName} crypto news 2026`, `${projectName} sentiment analysis`];
+    const queries = [
+      `${projectName} crypto news 2026`,
+      `${projectName} token catalyst OR partnership OR integration`,
+      `${projectName} protocol adoption OR ecosystem growth`,
+      `${projectName} sentiment analysis`,
+    ];
     const settled = await Promise.allSettled(queries.map((query) => exaService.exaSearch(query)));
     const items = settled
       .filter((entry) => entry.status === 'fulfilled')
@@ -94,7 +109,8 @@ export async function collectSocial(projectName, exaService) {
     const seen = new Set();
 
     for (const item of items) {
-      const key = item?.url || `${item?.title}-${item?.publishedDate}`;
+      const normalizedTitle = normalizeToken(item?.title || '');
+      const key = item?.url || `${normalizedTitle}-${item?.publishedDate || ''}`;
       if (!key || seen.has(key)) continue;
       seen.add(key);
       uniqueNews.push({
@@ -108,9 +124,8 @@ export async function collectSocial(projectName, exaService) {
     const sentimentCounts = uniqueNews.reduce(
       (acc, item) => {
         const corpus = `${item.title} ${item.highlights.join(' ')}`;
-        acc.bullish += countKeywords(corpus, BULLISH_KEYWORDS);
-        acc.bearish += countKeywords(corpus, BEARISH_KEYWORDS);
-        acc.neutral += countKeywords(corpus, NEUTRAL_KEYWORDS);
+        const label = classifySentiment(corpus);
+        acc[label] += 1;
         return acc;
       },
       { bullish: 0, bearish: 0, neutral: 0 }

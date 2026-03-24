@@ -86,11 +86,31 @@ function createCacheHelpers(db) {
   };
 }
 
+function summarizeDataQuality(rawData, scores) {
+  const collectors = rawData?.metadata?.collectors || {};
+  const failedCollectors = Object.entries(collectors)
+    .filter(([, payload]) => payload?.ok === false || payload?.error)
+    .map(([name, payload]) => ({ name, error: payload?.error || 'unknown error' }));
+
+  const durationMs = Number(rawData?.metadata?.duration_ms || 0);
+  const latencyBucket = durationMs >= 15000 ? 'slow' : durationMs >= 5000 ? 'moderate' : 'fast';
+
+  return {
+    completeness_pct: scores?.overall?.completeness ?? null,
+    collector_success_count: Object.keys(collectors).length - failedCollectors.length,
+    collector_failure_count: failedCollectors.length,
+    failed_collectors: failedCollectors,
+    latency_bucket: latencyBucket,
+    duration_ms: durationMs || null,
+  };
+}
+
 function buildResponse({ projectName, rawData, scores, analysis, mode }) {
   const formatted = formatReport(projectName, rawData, scores, analysis);
   return {
     ...formatted.json,
     mode,
+    data_quality: summarizeDataQuality(rawData, scores),
     report_text: formatted.text,
     report_html: formatted.html,
   };

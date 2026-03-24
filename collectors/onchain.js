@@ -149,11 +149,12 @@ export async function collectOnchain(projectName) {
   const fallback = createEmptyOnchainResult(projectName);
 
   try {
-    // Try as L1 chain first (Solana, Ethereum, Arbitrum, etc.)
-    const chainResult = await tryChainTvl(projectName);
+    // Run chain and protocol discovery in parallel to reduce cold-start latency.
+    const [chainResult, protocols] = await Promise.all([
+      tryChainTvl(projectName),
+      fetchJson(LLAMA_PROTOCOLS_URL),
+    ]);
 
-    // Also search protocols
-    const protocols = await fetchJson(LLAMA_PROTOCOLS_URL);
     const match = [...(protocols || [])]
       .map((protocol) => ({ protocol, score: similarityScore(projectName, protocol) }))
       .sort((a, b) => b.score - a.score)[0];

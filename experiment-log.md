@@ -45,3 +45,40 @@
 - **Files:** `synthesis/templates.js`
 - **Test:** `node --test test/*.test.js` → 15/15 pass
 - **Result:** kept. Better readability with no JSON/API contract changes.
+
+## Experiment 7 — Market score adds FDV overhang + ATH distance
+- **Hypothesis:** raw momentum + volume was too generous for tokens with large unlock overhang or still deeply below ATH.
+- **Change:** market scoring now factors `FDV/MC` dilution risk and distance from ATH, while preserving the existing liquidity/momentum blend.
+- **Files:** `synthesis/scoring.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Benchmark:** ETH 6.0 / SOL 5.2 / AAVE 4.9 (completeness 60/60/60)
+- **Result:** kept. Better market-quality discrimination without breaking score ranges.
+
+## Experiment 8 — Development score adds repo freshness + issue pressure
+- **Hypothesis:** stars and commits alone miss stale repos and overloaded issue queues.
+- **Change:** development scoring now considers forks, days since last commit, and a light `open_issues / commits_90d` pressure penalty.
+- **Files:** `synthesis/scoring.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Benchmark:** ETH 5.1 / SOL 5.0 / AAVE 4.9 on a later live run; results were network-variable because social/tokenomics were partially unavailable, but scoring remained stable and non-breaking.
+- **Result:** kept. Adds a useful maintenance-quality signal with conservative penalties.
+
+## Experiment 9 — Social collector query expansion + article-level sentiment
+- **Hypothesis:** two Exa queries under-covered catalysts/adoption narratives, and keyword totals overcounted sentiment from single noisy articles.
+- **Change:** expanded Exa query set to include catalysts and adoption coverage; switched sentiment aggregation from raw keyword counts to one vote per article; dedupe key now normalizes title fallback.
+- **Files:** `collectors/social.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Better data coverage and less sentiment inflation from repeated keywords.
+
+## Experiment 10 — Onchain collector parallel discovery
+- **Hypothesis:** chain detection and protocol-list discovery were serialized unnecessarily, increasing cold-start latency.
+- **Change:** `collectOnchain()` now runs `tryChainTvl()` and the protocol list fetch in parallel before matching.
+- **Files:** `collectors/onchain.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Small but clean latency win with no API changes.
+
+## Experiment 11 — Data-quality summary surfaced in API/report + tokenomics slug coverage
+- **Hypothesis:** users need faster visibility into partial-data conditions, and Messari lookups should try market name/symbol aliases, not only project/CoinGecko id.
+- **Change:** added `data_quality` summary to alpha responses (completeness, failed collectors, latency bucket, duration), surfaced collector failures in text/HTML reports, and expanded Messari slug candidates with market `name` + `symbol`.
+- **Files:** `routes/alpha.js`, `synthesis/templates.js`, `collectors/tokenomics.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Better operator visibility on degraded runs and slightly wider tokenomics lookup coverage.

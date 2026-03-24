@@ -17,6 +17,11 @@ function renderScoreLine(label, payload) {
 }
 
 export function formatReport(projectName, rawData, scores, llmAnalysis) {
+  const collectors = rawData?.metadata?.collectors || {};
+  const failedCollectors = Object.entries(collectors)
+    .filter(([, payload]) => payload?.ok === false || payload?.error)
+    .map(([name, payload]) => `${name}: ${payload?.error || 'unknown error'}`);
+
   const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
@@ -31,6 +36,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `📌 Verdict: ${json.verdict}`,
     `🕒 Generated at: ${json.generated_at}`,
     `🧩 Data completeness: ${scores?.overall?.completeness ?? 'n/a'}%`,
+    `🧪 Collector failures: ${failedCollectors.length ? failedCollectors.join(' | ') : 'none'}`,
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -68,6 +74,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
       <p><strong>Verdict:</strong> ${escapeHtml(json.verdict)}</p>
       <p><strong>Generated at:</strong> ${escapeHtml(json.generated_at)}</p>
       <p><strong>Data completeness:</strong> ${escapeHtml(scores?.overall?.completeness ?? 'n/a')}%</p>
+      <p><strong>Collector failures:</strong> ${escapeHtml(failedCollectors.length ? failedCollectors.join(' | ') : 'none')}</p>
       <h2>📊 Scores</h2>
       <ul>
         <li>${escapeHtml(renderScoreLine('Market strength', scores?.market_strength))}</li>
