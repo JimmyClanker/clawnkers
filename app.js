@@ -45,7 +45,15 @@ export function createApp({
     message: { error: 'Too many MCP requests' },
   });
 
-  const alphaLimiter = rateLimit({
+  const alphaFullLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many full alpha scans', retryAfterMs: 60000 },
+  });
+
+  const alphaQuickLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
     standardHeaders: true,
@@ -72,7 +80,8 @@ export function createApp({
 
   app.use('/research', apiLimiter);
   app.use('/fetch', apiLimiter);
-  app.use('/alpha', alphaLimiter);
+  app.use('/alpha/quick', alphaQuickLimiter);
+  app.use('/alpha', alphaFullLimiter);
   app.use('/api/signals/ingest', ingestLimiter);
   app.use('/mcp', mcpLimiter);
 

@@ -90,13 +90,13 @@ function buildResponse({ projectName, rawData, scores, analysis, mode }) {
   };
 }
 
-async function runAnalysis({ projectName, exaService, mode }) {
+async function runAnalysis({ projectName, exaService, mode, config }) {
   const rawData = await collectAll(projectName, exaService);
   const scores = calculateScores(rawData);
   const analysis =
     mode === 'quick'
       ? fallbackReport(projectName, rawData, scores)
-      : await generateReport(projectName, rawData, scores);
+      : await generateReport(projectName, rawData, scores, { apiKey: config?.xaiApiKey });
 
   return buildResponse({ projectName, rawData, scores, analysis, mode });
 }
@@ -104,6 +104,50 @@ async function runAnalysis({ projectName, exaService, mode }) {
 export function createAlphaRouter({ config, exaService, signalsService }) {
   const router = express.Router();
   const cache = createCacheHelpers(signalsService.db);
+  const inFlight = new Map();
+
+  // Cleanup expired cache rows every 30 min
+  const CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
+  const cleanupStmt = signalsService.db.prepare(
+    "DELETE FROM alpha_reports WHERE datetime(created_at) < datetime('now', '-2 hours')"
+  );
+  const cleanupTimer = setInterval(() => {
+    try { cleanupStmt.run(); } catch (_) { /* ignore */ }
+  }, CLEANUP_INTERVAL_MS);
+  cleanupTimer.unref?.();
+
+  async function getOrCreateReport({ cacheKey, ttlMs, projectName, exaService, mode }) {
+    const cached = cache.read(cacheKey, ttlMs);
+    if (cached) return cached;
+
+    // Single-flight: dedup concurrent requests for the same key
+    if (inFlight.has(cacheKey)) {
+      return inFlight.get(cacheKey);
+    }
+
+    const promise = (async () => {
+      try {
+        const report = await runAnalysis({ projectName, exaService, mode, config });
+        cache.write(cacheKey, report);
+        return {
+          ...report,
+          cache: {
+            ...(report.cache || {}),
+            hit: false,
+            key: cacheKey,
+            ttl_ms: ttlMs,
+            age_ms: 0,
+            created_at: new Date().toISOString(),
+          },
+        };
+      } finally {
+        inFlight.delete(cacheKey);
+      }
+    })();
+
+    inFlight.set(cacheKey, promise);
+    return promise;
+  }
 
   async function handleRequest(req, res, mode) {
     const projectName = normalizeProject(req.query.project);
@@ -113,25 +157,10 @@ export function createAlphaRouter({ config, exaService, signalsService }) {
 
     const ttlMs = mode === 'quick' ? QUICK_TTL_MS : FULL_TTL_MS;
     const cacheKey = buildCacheKey(projectName, mode);
-    const cached = cache.read(cacheKey, ttlMs);
-    if (cached) {
-      return res.json(cached);
-    }
 
     try {
-      const report = await runAnalysis({ projectName, exaService, mode, config });
-      cache.write(cacheKey, report);
-      return res.json({
-        ...report,
-        cache: {
-          ...(report.cache || {}),
-          hit: false,
-          key: cacheKey,
-          ttl_ms: ttlMs,
-          age_ms: 0,
-          created_at: new Date().toISOString(),
-        },
-      });
+      const response = await getOrCreateReport({ cacheKey, ttlMs, projectName, exaService, mode });
+      return res.json(response);
     } catch (error) {
       console.error(`[alpha:${mode}] ${error.stack || error.message}`);
       return res.status(502).json({ error: 'Alpha analysis failed' });

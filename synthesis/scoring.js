@@ -98,6 +98,12 @@ function scoreTokenomicsRisk(tokenomics = {}) {
   };
 }
 
+function collectorCompleteness(data = {}) {
+  const sections = ['market', 'onchain', 'social', 'github', 'tokenomics'];
+  const ok = sections.filter((key) => data?.[key] && !data[key].error).length;
+  return ok / sections.length;
+}
+
 export function calculateScores(data) {
   const market_strength = scoreMarketStrength(data?.market);
   const onchain_health = scoreOnchainHealth(data?.onchain);
@@ -105,12 +111,20 @@ export function calculateScores(data) {
   const development = scoreDevelopment(data?.github);
   const tokenomics_risk = scoreTokenomicsRisk(data?.tokenomics);
 
-  const overallValue =
+  const completeness = collectorCompleteness(data);
+
+  let overallValue =
     market_strength.score * 0.2 +
     onchain_health.score * 0.25 +
     social_momentum.score * 0.15 +
     development.score * 0.15 +
     tokenomics_risk.score * 0.25;
+
+  // Penalize when data is incomplete — max -2 points when all collectors fail
+  if (completeness < 1) {
+    const penalty = (1 - completeness) * 2;
+    overallValue = Math.max(1, overallValue - penalty);
+  }
 
   return {
     market_strength,
@@ -120,7 +134,8 @@ export function calculateScores(data) {
     tokenomics_risk,
     overall: {
       score: clampScore(overallValue),
-      reasoning: 'Weighted blend: market 20%, onchain 25%, social 15%, dev 15%, tokenomics 25%.',
+      completeness: Math.round(completeness * 100),
+      reasoning: `Weighted blend: market 20%, onchain 25%, social 15%, dev 15%, tokenomics 25%. Data completeness: ${Math.round(completeness * 100)}%.`,
     },
   };
 }

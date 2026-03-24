@@ -145,8 +145,8 @@ async function requestXai({ apiKey, model, input, tools = [], timeoutMs = DEFAUL
   return response.json();
 }
 
-export async function generateQuickReport(projectName, rawData, scores) {
-  const apiKey = process.env.XAI_API_KEY;
+export async function generateQuickReport(projectName, rawData, scores, { apiKey: explicitKey } = {}) {
+  const apiKey = explicitKey || process.env.XAI_API_KEY;
   if (!apiKey) {
     return fallbackReport(projectName, rawData, scores, 'XAI_API_KEY missing');
   }
@@ -174,8 +174,8 @@ export async function generateQuickReport(projectName, rawData, scores) {
   }
 }
 
-export async function generateReport(projectName, rawData, scores) {
-  const apiKey = process.env.XAI_API_KEY;
+export async function generateReport(projectName, rawData, scores, { apiKey: explicitKey } = {}) {
+  const apiKey = explicitKey || process.env.XAI_API_KEY;
   if (!apiKey) {
     return fallbackReport(projectName, rawData, scores, 'XAI_API_KEY missing');
   }
