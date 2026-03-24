@@ -1,6 +1,8 @@
 const LLAMA_PROTOCOLS_URL = 'https://api.llama.fi/protocols';
 const LLAMA_PROTOCOL_URL = 'https://api.llama.fi/protocol';
 const LLAMA_FEES_URL = 'https://api.llama.fi/summary/fees';
+const LLAMA_CHAINS_URL = 'https://api.llama.fi/v2/chains';
+const LLAMA_CHAIN_TVL_URL = 'https://api.llama.fi/v2/historicalChainTvl';
 const DEFAULT_TIMEOUT_MS = 12000;
 
 function createEmptyOnchainResult(projectName) {
@@ -109,15 +111,100 @@ function sumLastNDays(values, days) {
   return totals;
 }
 
+async function tryChainTvl(projectName) {
+  try {
+    const chains = await fetchJson(LLAMA_CHAINS_URL);
+    const target = normalize(projectName);
+    const chain = chains.find(
+      (c) => normalize(c.name) === target || normalize(c.gecko_id) === target
+    );
+    if (!chain) return null;
+
+    const chainName = chain.name;
+    const currentTvl = Number(chain.tvl) || 0;
+
+    let tvl7dAgo = null;
+    let tvl30dAgo = null;
+    try {
+      const history = await fetchJson(
+        `${LLAMA_CHAIN_TVL_URL}/${encodeURIComponent(chainName)}`
+      );
+      if (Array.isArray(history) && history.length > 0) {
+        const now = Date.now();
+        const find = (daysBack) => {
+          const targetTs = now - daysBack * 86400000;
+          let closest = null;
+          let dist = Infinity;
+          for (const pt of history) {
+            const d = Math.abs((pt.date || 0) * 1000 - targetTs);
+            if (d < dist && Number.isFinite(pt.tvl)) {
+              dist = d;
+              closest = pt.tvl;
+            }
+          }
+          return closest;
+        };
+        tvl7dAgo = find(7);
+        tvl30dAgo = find(30);
+      }
+    } catch {}
+
+    return {
+      slug: chainName.toLowerCase(),
+      tvl: currentTvl,
+      tvl_change_7d: computePctChange(currentTvl, tvl7dAgo),
+      tvl_change_30d: computePctChange(currentTvl, tvl30dAgo),
+      chains: [chainName],
+      category: 'Layer 1',
+      isChain: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function collectOnchain(projectName) {
   const fallback = createEmptyOnchainResult(projectName);
 
   try {
+    // Try as L1 chain first (Solana, Ethereum, Arbitrum, etc.)
+    const chainResult = await tryChainTvl(projectName);
+
+    // Also search protocols
     const protocols = await fetchJson(LLAMA_PROTOCOLS_URL);
     const match = [...(protocols || [])]
       .map((protocol) => ({ protocol, score: similarityScore(projectName, protocol) }))
       .sort((a, b) => b.score - a.score)[0];
 
+    const protocolTvl = match?.protocol?.tvl;
+    const useChain = chainResult && (!match?.protocol?.slug || match.score < 40 || protocolTvl == null);
+
+    if (useChain) {
+      // L1 chain path — use chain TVL + try to get fees from protocol slug
+      let fees7d = null;
+      let revenue7d = null;
+      try {
+        const feesData = await fetchJson(`${LLAMA_FEES_URL}/${encodeURIComponent(chainResult.slug)}`);
+        const feeTotals = sumLastNDays(feesData?.totalDataChart || feesData?.data || [], 7);
+        fees7d = feeTotals?.fees ?? (feesData?.total24h ? Number(feesData.total24h) * 7 : null);
+        revenue7d = feeTotals?.revenue ?? null;
+      } catch {}
+
+      return {
+        ...fallback,
+        slug: chainResult.slug,
+        tvl: chainResult.tvl,
+        tvl_change_7d: chainResult.tvl_change_7d,
+        tvl_change_30d: chainResult.tvl_change_30d,
+        chains: chainResult.chains,
+        category: chainResult.category,
+        fees_7d: fees7d,
+        revenue_7d: revenue7d,
+        error: null,
+      };
+    }
+
+    // Protocol path (DeFi protocols like Aave, Uniswap, etc.)
     if (!match?.protocol?.slug || match.score < 20) {
       return { ...fallback, error: 'DeFiLlama protocol not found' };
     }
@@ -130,10 +217,21 @@ export async function collectOnchain(projectName) {
 
     const protocol = protocolData.status === 'fulfilled' ? protocolData.value : null;
     const fees = feesData.status === 'fulfilled' ? feesData.value : null;
-    const currentTvl = protocol?.currentChainTvls
-      ? Object.values(protocol.currentChainTvls).reduce((sum, value) => sum + Number(value || 0), 0)
-      : Number(protocol?.tvl ?? match.protocol?.tvl ?? 0) || null;
-    const tvlHistory = protocol?.tvl || [];
+
+    // currentChainTvls can include "borrowed", "staking" etc — filter to real chain names only
+    let currentTvl = null;
+    if (protocol?.currentChainTvls) {
+      const validChains = new Set((protocol.chains || []).map((c) => c));
+      currentTvl = Object.entries(protocol.currentChainTvls)
+        .filter(([key]) => validChains.has(key))
+        .reduce((sum, [, value]) => sum + Number(value || 0), 0);
+      if (currentTvl === 0) currentTvl = null;
+    }
+    if (!currentTvl) {
+      currentTvl = Number(protocol?.tvl ?? match.protocol?.tvl ?? 0) || null;
+    }
+
+    const tvlHistory = Array.isArray(protocol?.tvl) ? protocol.tvl : [];
     const tvl7dAgo = getClosestHistoricalTvl(tvlHistory, 7);
     const tvl30dAgo = getClosestHistoricalTvl(tvlHistory, 30);
     const feeTotals = sumLastNDays(fees?.totalDataChart || fees?.data || [], 7);
@@ -146,7 +244,7 @@ export async function collectOnchain(projectName) {
       tvl_change_30d: computePctChange(currentTvl, tvl30dAgo),
       chains: protocol?.chains || match.protocol?.chains || [],
       category: protocol?.category || match.protocol?.category || null,
-      fees_7d: feeTotals?.fees ?? fees?.total24h ? Number(fees.total24h) * 7 : null,
+      fees_7d: feeTotals?.fees ?? (fees?.total24h ? Number(fees.total24h) * 7 : null),
       revenue_7d: feeTotals?.revenue ?? null,
       error: null,
     };

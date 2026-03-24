@@ -23,7 +23,7 @@ async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     const response = await fetch(url, {
       headers: {
         accept: 'application/vnd.github+json',
-        'user-agent': 'x402-research-service/5.2.0',
+        'user-agent': 'alpha-scanner/6.0.0',
       },
       signal: controller.signal,
     });
@@ -45,6 +45,39 @@ function parseLastPage(linkHeader) {
   return match ? Number(match[1]) : null;
 }
 
+async function fetchContributorStats(owner, repo) {
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/stats/contributors`;
+  // GitHub returns 202 while computing stats — retry up to 3 times
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+      try {
+        const response = await fetch(url, {
+          headers: {
+            accept: 'application/vnd.github+json',
+            'user-agent': 'alpha-scanner/6.0.0',
+          },
+          signal: controller.signal,
+        });
+        if (response.status === 202) {
+          // Computing — wait and retry
+          await new Promise((r) => setTimeout(r, 1500));
+          continue;
+        }
+        if (!response.ok) return { data: [], headers: response.headers };
+        const data = await response.json();
+        return { data: Array.isArray(data) ? data : [], headers: response.headers };
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      return { data: [], headers: new Headers() };
+    }
+  }
+  return { data: [], headers: new Headers() };
+}
+
 export async function collectGithub(projectName) {
   const fallback = createEmptyGithubResult(projectName);
 
@@ -63,7 +96,7 @@ export async function collectGithub(projectName) {
     const [repoInfo, commitsInfo, contributorsInfo] = await Promise.allSettled([
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}`),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=1`),
-      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/stats/contributors`).catch(() => ({ data: [] })),
+      fetchContributorStats(owner, repo),
     ]);
 
     const repoData = repoInfo.status === 'fulfilled' ? repoInfo.value.data : topRepo;
