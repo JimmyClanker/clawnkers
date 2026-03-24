@@ -1,6 +1,7 @@
+import { fetchJson } from './fetch.js';
+
 const COINGECKO_SEARCH_URL = 'https://api.coingecko.com/api/v3/search';
 const COINGECKO_COIN_URL = 'https://api.coingecko.com/api/v3/coins';
-const DEFAULT_TIMEOUT_MS = 10000;
 
 function createEmptyMarketResult(projectName) {
   return {
@@ -27,29 +28,6 @@ function createEmptyMarketResult(projectName) {
     telegram_channel_user_count: null,
     error: null,
   };
-}
-
-async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        accept: 'application/json',
-        ...(headers || {}),
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
-
-    return await response.json();
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export async function collectMarket(projectName) {

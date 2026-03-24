@@ -1,9 +1,10 @@
+import { fetchJson } from './fetch.js';
+
 const LLAMA_PROTOCOLS_URL = 'https://api.llama.fi/protocols';
 const LLAMA_PROTOCOL_URL = 'https://api.llama.fi/protocol';
 const LLAMA_FEES_URL = 'https://api.llama.fi/summary/fees';
 const LLAMA_CHAINS_URL = 'https://api.llama.fi/v2/chains';
 const LLAMA_CHAIN_TVL_URL = 'https://api.llama.fi/v2/historicalChainTvl';
-const DEFAULT_TIMEOUT_MS = 12000;
 
 function createEmptyOnchainResult(projectName) {
   return {
@@ -20,25 +21,6 @@ function createEmptyOnchainResult(projectName) {
   };
 }
 
-async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      headers: { accept: 'application/json' },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
-
-    return await response.json();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 function normalize(value) {
   return String(value || '')
