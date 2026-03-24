@@ -1,150 +1,516 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawnkers Crypto Research — AI-Powered Web Research API</title>
-  <meta name="description" content="Neural web search API for crypto, blockchain, and AI research. $0.01/query. Pay with USDC. MCP compatible for AI agents.">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alpha Scanner — Deep Crypto Alpha Analysis</title>
+  <meta name="description" content="Deep alpha analysis for any crypto project with market data, on-chain metrics, sentiment, development activity, and Grok 4.20 live search." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg: #0a0a0f; --card: #13131a; --border: #1e1e2e; --accent: #6366f1; --accent2: #818cf8; --text: #e2e8f0; --muted: #94a3b8; --green: #22c55e; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-    .container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
-    
-    /* Hero */
-    .hero { padding: 80px 0 60px; text-align: center; }
-    .hero h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--accent2), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 16px; }
-    .hero p { font-size: 1.2rem; color: var(--muted); max-width: 600px; margin: 0 auto 32px; }
-    .badge { display: inline-block; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 6px 16px; font-size: 0.85rem; color: var(--green); margin-bottom: 24px; }
-    .cta { display: inline-block; background: var(--accent); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 1.1rem; transition: opacity 0.2s; }
-    .cta:hover { opacity: 0.9; }
-    
-    /* Sections */
-    section { padding: 40px 0; }
-    h2 { font-size: 1.5rem; margin-bottom: 20px; color: var(--text); }
-    
-    /* Features */
-    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .feature { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-    .feature h3 { font-size: 1rem; margin-bottom: 8px; color: var(--accent2); }
-    .feature p { font-size: 0.9rem; color: var(--muted); }
-    
-    /* Pricing */
-    .price-card { background: var(--card); border: 2px solid var(--accent); border-radius: 16px; padding: 32px; text-align: center; max-width: 400px; margin: 0 auto; }
-    .price { font-size: 3rem; font-weight: 800; color: var(--accent2); }
-    .price-sub { color: var(--muted); margin-top: 4px; }
-    .price-detail { margin-top: 16px; text-align: left; }
-    .price-detail li { color: var(--muted); padding: 4px 0; list-style: none; }
-    .price-detail li::before { content: "✓ "; color: var(--green); }
-    
-    /* Code */
-    .code-block { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; color: #c9d1d9; line-height: 1.5; margin: 12px 0; }
-    .code-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    
-    /* Footer */
-    footer { padding: 40px 0; text-align: center; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 40px; }
-    footer a { color: var(--accent2); text-decoration: none; }
+    :root {
+      --bg: #0a0a0a;
+      --panel: rgba(255, 255, 255, 0.03);
+      --line: rgba(232, 232, 232, 0.2);
+      --text: #e8e8e8;
+      --muted: #888888;
+      --buy: #a8e6cf;
+      --avoid: #ff8b94;
+      --hold: #ffd3b6;
+      --info: #b5c7d3;
+      --dev: #c5b3e6;
+      --warn: #ffaaa5;
+      --shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 18px 50px rgba(0,0,0,0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, rgba(197,179,230,0.08), transparent 35%), var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 20px 0 64px;
+    }
+
+    .hero,
+    .panel,
+    .price-card,
+    .code-block {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .hero {
+      padding: 24px;
+      display: grid;
+      gap: 22px;
+      margin-bottom: 18px;
+    }
+
+    .topline {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      padding: 8px 12px;
+      border: 1px dashed rgba(255,255,255,0.18);
+      border-radius: 999px;
+      color: var(--buy);
+      background: rgba(255,255,255,0.02);
+      font-size: 0.84rem;
+    }
+
+    .chalk-title,
+    .section-title,
+    .card h3,
+    .price-name,
+    .footer-brand {
+      font-family: 'Caveat', cursive;
+      letter-spacing: 0.5px;
+    }
+
+    .chalk-title {
+      font-size: clamp(3rem, 8vw, 5.8rem);
+      line-height: 0.92;
+      margin: 0;
+      text-shadow: 0 0 12px rgba(232,232,232,0.06);
+    }
+
+    .sub {
+      color: var(--text);
+      max-width: 840px;
+      font-size: clamp(1rem, 2.4vw, 1.15rem);
+      line-height: 1.8;
+      margin: 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .cta,
+    .ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      font: inherit;
+      white-space: nowrap;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .cta {
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(168,230,207,0.16), rgba(181,199,211,0.10));
+    }
+
+    .ghost {
+      background: rgba(255,255,255,0.03);
+      color: var(--hold);
+    }
+
+    .cta:hover,
+    .ghost:hover,
+    .footer-links a:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.28);
+    }
+
+    .hero-note {
+      color: var(--hold);
+      font-size: 0.92rem;
+    }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .panel {
+      padding: 20px;
+    }
+
+    .section-head {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 0.95;
+      margin: 0;
+      color: var(--info);
+    }
+
+    .section-copy {
+      margin: 0;
+      color: var(--muted);
+      max-width: 760px;
+      line-height: 1.8;
+    }
+
+    .steps,
+    .features,
+    .pricing {
+      display: grid;
+      gap: 16px;
+    }
+
+    .steps {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .features {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .pricing {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .card,
+    .price-card {
+      border: 1px dashed rgba(255,255,255,0.18);
+      border-radius: 16px;
+      padding: 18px;
+      min-height: 100%;
+      background: rgba(255,255,255,0.015);
+    }
+
+    .step-no {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .card h3,
+    .price-name {
+      margin: 0 0 10px;
+      font-size: 1.9rem;
+      line-height: 1;
+    }
+
+    .card p,
+    .price-copy {
+      margin: 0;
+      color: var(--text);
+      line-height: 1.8;
+      font-size: 0.95rem;
+    }
+
+    .feature-icon,
+    .price-tag {
+      font-size: 1.4rem;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .buy { color: var(--buy); }
+    .hold { color: var(--hold); }
+    .avoid { color: var(--avoid); }
+    .dev { color: var(--dev); }
+    .info { color: var(--info); }
+    .warn { color: var(--warn); }
+
+    .price-tag {
+      font-size: 2.2rem;
+      font-weight: 500;
+      color: var(--buy);
+    }
+
+    .price-card.highlight {
+      border-color: rgba(168,230,207,0.35);
+      box-shadow: 0 0 0 1px rgba(168,230,207,0.08), 0 18px 50px rgba(0,0,0,0.35);
+    }
+
+    .api-layout {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .code-block {
+      padding: 18px;
+      overflow-x: auto;
+      font-size: 0.92rem;
+      line-height: 1.8;
+      color: var(--text);
+      background: rgba(255,255,255,0.02);
+    }
+
+    pre {
+      margin: 0;
+      font-family: 'IBM Plex Mono', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    code {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--hold);
+    }
+
+    .api-notes {
+      display: grid;
+      gap: 14px;
+    }
+
+    .mini-note {
+      border: 1px dashed rgba(255,255,255,0.16);
+      border-radius: 16px;
+      padding: 16px;
+      background: rgba(255,255,255,0.015);
+    }
+
+    .mini-note strong {
+      color: var(--buy);
+    }
+
+    footer.panel {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .footer-brand {
+      font-size: 1.8rem;
+      color: var(--hold);
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .footer-links a {
+      color: var(--muted);
+      border-bottom: 1px dashed transparent;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+      border-bottom-color: rgba(255,255,255,0.24);
+    }
+
+    @media (max-width: 900px) {
+      .steps,
+      .pricing,
+      .api-layout,
+      .features {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .wrap {
+        width: min(100% - 16px, 1120px);
+        padding-top: 16px;
+      }
+
+      .hero,
+      .panel,
+      .price-card,
+      .code-block {
+        border-radius: 18px;
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .cta,
+      .ghost {
+        width: 100%;
+      }
+
+      footer.panel {
+        align-items: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
-
-<div class="container">
-  <div class="hero">
-    <div class="badge">🔒 Pay with USDC — No API key needed</div>
-    <h1>Crypto Research API</h1>
-    <p>Neural web search for crypto, blockchain, and AI. Built for agents. $0.01 per query.</p>
-    <a href="https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147" class="cta">Buy 100 Queries — $1 USDC</a>
-  </div>
-
-  <section>
-    <h2>What You Get</h2>
-    <div class="features">
-      <div class="feature">
-        <h3>🔍 Neural Search</h3>
-        <p>Exa AI-powered semantic search across the entire web. Better than keyword search for research queries.</p>
+  <main class="wrap">
+    <section class="hero">
+      <div class="topline">🧠 Grok 4.20 · Live X Search · Web Search · Chalkboard Mode</div>
+      <div>
+        <h1 class="chalk-title">Alpha Scanner</h1>
+        <p class="sub">Deep alpha analysis for any crypto project. Market data, on-chain metrics, sentiment, development activity — analyzed by Grok 4.20 with live X and web search.</p>
       </div>
-      <div class="feature">
-        <h3>📄 URL Extraction</h3>
-        <p>Extract clean, readable text from any URL. Articles, docs, blog posts — up to 5000 chars.</p>
+      <div class="hero-actions">
+        <a class="cta" href="/alpha.html">Try Alpha Scanner →</a>
       </div>
-      <div class="feature">
-        <h3>🤖 MCP Compatible</h3>
-        <p>Streamable HTTP MCP server. Any AI agent (Claude, OpenClaw, Cursor) can discover and use tools automatically.</p>
+      <div class="hero-note">Quick scan is free. Full analysis powered by Grok 4.20.</div>
+    </section>
+
+    <section class="section panel">
+      <div class="section-head">
+        <h2 class="section-title">How it works</h2>
+        <p class="section-copy">Una pipeline semplice: inserisci un progetto, raccogliamo i segnali, poi Grok sintetizza tutto in una verdict board leggibile.</p>
       </div>
-      <div class="feature">
-        <h3>💰 USDC Payments</h3>
-        <p>Pay with crypto. No API keys, no subscriptions. Buy credits, use them, done.</p>
+      <div class="steps">
+        <article class="card">
+          <div class="step-no">Step 01</div>
+          <h3 class="hold">🔍 Enter a project</h3>
+          <p>Type any crypto project name: solana, aave, hyperliquid...</p>
+        </article>
+        <article class="card">
+          <div class="step-no">Step 02</div>
+          <h3 class="buy">⚡ We collect data</h3>
+          <p>5 data sources in parallel: CoinGecko, DeFiLlama, Exa, GitHub, Messari</p>
+        </article>
+        <article class="card">
+          <div class="step-no">Step 03</div>
+          <h3 class="dev">🧠 AI synthesizes</h3>
+          <p>Grok 4.20 searches X and the web live, then delivers a scored verdict</p>
+        </article>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section>
-    <h2>Pricing</h2>
-    <div class="price-card">
-      <div class="price">$0.01</div>
-      <div class="price-sub">per query</div>
-      <ul class="price-detail">
-        <li>100 queries = $1 USDC</li>
-        <li>Pay via Nevermined (USDC on Base)</li>
-        <li>No subscription, no expiry</li>
-        <li>REST API + MCP protocol</li>
-      </ul>
-      <br>
-      <a href="https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147" class="cta" style="font-size: 0.95rem; padding: 10px 24px;">Get Credits →</a>
-    </div>
-  </section>
+    <section class="section panel">
+      <div class="section-head">
+        <h2 class="section-title">What you get</h2>
+        <p class="section-copy">Una griglia lavagna con i segnali che contano davvero per capire se un progetto ha edge, momentum o problemi strutturali.</p>
+      </div>
+      <div class="features">
+        <article class="card">
+          <span class="feature-icon">📊</span>
+          <h3 class="info">5-Dimension Scoring</h3>
+          <p>Market strength, on-chain health, social momentum, dev activity, tokenomics risk</p>
+        </article>
+        <article class="card">
+          <span class="feature-icon">🐋</span>
+          <h3 class="buy">X Sentiment</h3>
+          <p>Real-time sentiment from crypto Twitter via Grok's native X Search</p>
+        </article>
+        <article class="card">
+          <span class="feature-icon">📈</span>
+          <h3 class="hold">Market Data</h3>
+          <p>Price, market cap, FDV, volume, ATH/ATL from CoinGecko</p>
+        </article>
+        <article class="card">
+          <span class="feature-icon">🔗</span>
+          <h3 class="dev">On-Chain Metrics</h3>
+          <p>TVL, fees, revenue, chain breakdown from DeFiLlama</p>
+        </article>
+        <article class="card">
+          <span class="feature-icon">🛡️</span>
+          <h3 class="avoid">Risk Analysis</h3>
+          <p>Moat assessment, risks, catalysts, competitor comparison</p>
+        </article>
+        <article class="card">
+          <span class="feature-icon">🤖</span>
+          <h3 class="info">MCP Compatible</h3>
+          <p>Use via API or connect directly from any AI agent</p>
+        </article>
+      </div>
+    </section>
 
-  <section>
-    <h2>Quick Start — REST API</h2>
-    <div class="code-label">Search</div>
-    <div class="code-block">curl -H "payment-signature: YOUR_TOKEN" \
-  "https://x402-research.onrender.com/research?q=bitcoin+etf+2026"</div>
-    
-    <div class="code-label">Extract URL</div>
-    <div class="code-block">curl -H "payment-signature: YOUR_TOKEN" \
-  "https://x402-research.onrender.com/fetch?url=https://example.com"</div>
-  </section>
+    <section class="section panel">
+      <div class="section-head">
+        <h2 class="section-title">Pricing</h2>
+        <p class="section-copy">Parti gratis con quick scan. Quando ti serve reasoning vero con X e web search live, passi al full analysis.</p>
+      </div>
+      <div class="pricing">
+        <article class="price-card">
+          <div class="price-name hold">Quick Scan</div>
+          <div class="price-tag">FREE</div>
+          <p class="price-copy">Algorithmic scoring, no AI synthesis</p>
+        </article>
+        <article class="price-card highlight">
+          <div class="price-name buy">Full Analysis</div>
+          <div class="price-tag">$0.50</div>
+          <p class="price-copy">Grok 4.20 reasoning + X Search + Web Search</p>
+        </article>
+        <article class="price-card">
+          <div class="price-name dev">100 Pack</div>
+          <div class="price-tag">$25</div>
+          <p class="price-copy">Bulk analysis credits</p>
+        </article>
+      </div>
+      <div class="hero-actions" style="margin-top: 18px;">
+        <a class="cta" href="/alpha.html">Start scanning →</a>
+      </div>
+    </section>
 
-  <section>
-    <h2>MCP Setup (for AI Agents)</h2>
-    <p style="color: var(--muted); margin-bottom: 16px;">Add to your MCP client config:</p>
-    <div class="code-block">{
-  "mcpServers": {
-    "clawnkers-research": {
-      "type": "streamableHttp",
-      "url": "https://x402-research.onrender.com/mcp"
-    }
-  }
-}</div>
-    <p style="color: var(--muted); margin-top: 12px;">Tools available: <code style="color: var(--accent2);">crypto_research</code>, <code style="color: var(--accent2);">url_extract</code></p>
-  </section>
+    <section class="section panel">
+      <div class="section-head">
+        <h2 class="section-title">API / MCP</h2>
+        <p class="section-copy">Per dev e agent builders: REST semplice per chiamate dirette, oppure MCP per integrazione tool-native dentro altri agenti.</p>
+      </div>
+      <div class="api-layout">
+        <div class="code-block">
+          <pre><code>GET /alpha?project=solana        # Full AI analysis
+GET /alpha/quick?project=sol     # Free algorithmic scan
+MCP: /mcp (tool: alpha_research) # For AI agents</code></pre>
+        </div>
+        <div class="api-notes">
+          <div class="mini-note">
+            <strong>Full mode</strong>
+            <div class="muted" style="margin-top: 8px;">Collector data + Grok synthesis + live X/web research for final verdict.</div>
+          </div>
+          <div class="mini-note">
+            <strong>Quick mode</strong>
+            <div class="muted" style="margin-top: 8px;">Fast free scan when you want a first-pass score before paying for full reasoning.</div>
+          </div>
+          <div class="mini-note">
+            <strong>MCP tool</strong>
+            <div class="muted" style="margin-top: 8px;">Expose Alpha Scanner directly to AI agents through <code>/mcp</code>.</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <section>
-    <h2>Python SDK</h2>
-    <div class="code-block">from payments_py import Payments, PaymentOptions
-
-payments = Payments.get_instance(
-    PaymentOptions(nvm_api_key="YOUR_NVM_KEY", environment="live")
-)
-
-# Get access token
-token = payments.x402.get_x402_access_token(PLAN_ID, AGENT_ID)
-
-# Use it
-import requests
-r = requests.get(
-    "https://x402-research.onrender.com/research",
-    params={"q": "defi yields 2026"},
-    headers={"payment-signature": token.access_token}
-)
-print(r.json())</div>
-  </section>
-</div>
-
-<footer>
-  <p>Built by <a href="https://github.com/JimmyClanker">Clawnkers</a> 🦊 — Powered by <a href="https://nevermined.io">Nevermined</a> + <a href="https://exa.ai">Exa AI</a></p>
-  <p style="margin-top: 8px;"><a href="https://github.com/JimmyClanker/x402-research">GitHub</a> · <a href="https://nevermined.app/checkout/plan/54250839092590488094557289937292598069305499079785004548382308387019941581147">Buy Credits</a></p>
-</footer>
-
+    <footer class="panel">
+      <div class="footer-brand">Built by Clawnkers 🦊</div>
+      <div class="footer-links">
+        <a href="https://github.com/JimmyClanker/x402-research">GitHub</a>
+        <a href="/api/health">API docs</a>
+        <a href="/alpha.html">Alpha Scanner</a>
+      </div>
+    </footer>
+  </main>
 </body>
 </html>
