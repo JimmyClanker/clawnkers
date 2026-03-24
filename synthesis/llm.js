@@ -22,9 +22,32 @@ function pickVerdict(score) {
 }
 
 function normalizeList(value, fallback = []) {
-  return Array.isArray(value)
-    ? value.map((item) => String(item).trim()).filter(Boolean)
-    : fallback;
+  if (!Array.isArray(value)) return fallback;
+
+  const seen = new Set();
+  const items = [];
+
+  for (const item of value) {
+    const normalized = String(item).trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(normalized);
+  }
+
+  return items.length ? items : fallback;
+}
+
+function normalizeVerdict(value, fallbackScore = 0) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+
+  return FALLBACK_VERDICTS.some((item) => item.verdict === normalized)
+    ? normalized
+    : pickVerdict(fallbackScore);
 }
 
 function extractOutputText(payload) {
@@ -106,8 +129,9 @@ export function fallbackReport(projectName, rawData, scores, error = null) {
 }
 
 function normalizeReport(payload, projectName, rawData, scores) {
+  const overallScore = Number(scores?.overall?.score || 0);
   return {
-    verdict: String(payload?.verdict || pickVerdict(Number(scores?.overall?.score || 0))),
+    verdict: normalizeVerdict(payload?.verdict, overallScore),
     analysis_text:
       String(payload?.analysis_text || '').trim() || fallbackReport(projectName, rawData, scores).analysis_text,
     moat: String(payload?.moat || '').trim() || 'n/a',

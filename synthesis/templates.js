@@ -29,6 +29,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
   const text = [
     `🧠 Alpha Scanner Report — ${projectName}`,
     `📌 Verdict: ${json.verdict}`,
+    `🕒 Generated at: ${json.generated_at}`,
+    `🧩 Data completeness: ${scores?.overall?.completeness ?? 'n/a'}%`,
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -64,6 +66,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     <article>
       <h1>🧠 Alpha Scanner Report — ${escapeHtml(projectName)}</h1>
       <p><strong>Verdict:</strong> ${escapeHtml(json.verdict)}</p>
+      <p><strong>Generated at:</strong> ${escapeHtml(json.generated_at)}</p>
+      <p><strong>Data completeness:</strong> ${escapeHtml(scores?.overall?.completeness ?? 'n/a')}%</p>
       <h2>📊 Scores</h2>
       <ul>
         <li>${escapeHtml(renderScoreLine('Market strength', scores?.market_strength))}</li>

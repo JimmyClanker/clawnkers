@@ -48,16 +48,20 @@ function scoreSocialMomentum(social = {}) {
   const mentions = safeNumber(social.mentions);
   const bullish = safeNumber(social?.sentiment_counts?.bullish);
   const bearish = safeNumber(social?.sentiment_counts?.bearish);
+  const neutral = safeNumber(social?.sentiment_counts?.neutral);
   const narratives = Array.isArray(social.key_narratives) ? social.key_narratives.length : 0;
+  const totalSignals = bullish + bearish + neutral;
+  const sentimentSpread = bullish - bearish;
+  const confidence = totalSignals > 0 ? Math.min(totalSignals / 6, 1) : 0;
 
   let raw = 4;
-  raw += Math.min(mentions / 3, 2.5);
-  raw += Math.max(Math.min((bullish - bearish) / 2, 2), -2);
+  raw += Math.min(Math.log2(mentions + 1) * 0.9, 2.5);
+  raw += Math.max(Math.min(sentimentSpread * 0.6 * confidence, 2), -2);
   raw += Math.min(narratives * 0.25, 1.5);
 
   return {
     score: clampScore(raw),
-    reasoning: `Mentions ${mentions}, sentiment spread ${bullish - bearish}, narratives ${narratives}.`,
+    reasoning: `Mentions ${mentions}, sentiment spread ${sentimentSpread}, confidence ${confidence.toFixed(2)}, narratives ${narratives}.`,
   };
 }
 

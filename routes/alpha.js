@@ -33,6 +33,7 @@ function createCacheHelpers(db) {
   ensureSchema(db);
 
   const getStmt = db.prepare('SELECT report_json, created_at FROM alpha_reports WHERE project_name = ?');
+  const deleteStmt = db.prepare('DELETE FROM alpha_reports WHERE project_name = ?');
   const upsertStmt = db.prepare(`
     INSERT INTO alpha_reports (project_name, report_json, created_at)
     VALUES (?, ?, ?)
@@ -49,16 +50,21 @@ function createCacheHelpers(db) {
       const ageMs = Date.now() - new Date(row.created_at).getTime();
       if (Number.isNaN(ageMs) || ageMs > ttlMs) return null;
 
-      const payload = JSON.parse(row.report_json);
-      payload.cache = {
-        ...(payload.cache || {}),
-        hit: true,
-        key: cacheKey,
-        age_ms: ageMs,
-        ttl_ms: ttlMs,
-        created_at: row.created_at,
-      };
-      return payload;
+      try {
+        const payload = JSON.parse(row.report_json);
+        payload.cache = {
+          ...(payload.cache || {}),
+          hit: true,
+          key: cacheKey,
+          age_ms: ageMs,
+          ttl_ms: ttlMs,
+          created_at: row.created_at,
+        };
+        return payload;
+      } catch {
+        deleteStmt.run(cacheKey);
+        return null;
+      }
     },
     write(cacheKey, payload) {
       const createdAt = new Date().toISOString();

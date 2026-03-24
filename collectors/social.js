@@ -24,6 +24,11 @@ function countKeywords(text, keywords) {
 }
 
 function extractNarratives(items, projectName) {
+  const projectTokens = String(projectName || '')
+    .split(/\s+/)
+    .map((token) => normalizeToken(token))
+    .filter(Boolean);
+
   const stopwords = new Set([
     'the',
     'and',
@@ -32,8 +37,10 @@ function extractNarratives(items, projectName) {
     'that',
     'this',
     'crypto',
-    'projectName',
+    'token',
+    'coin',
     normalizeToken(projectName),
+    ...projectTokens,
   ]);
 
   const counts = new Map();
@@ -109,13 +116,18 @@ export async function collectSocial(projectName, exaService) {
       { bullish: 0, bearish: 0, neutral: 0 }
     );
 
+    const recentNews = [...uniqueNews]
+      .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+      .slice(0, 5)
+      .map(({ title, url, date }) => ({ title, url, date }));
+
     return {
       ...fallback,
       mentions: uniqueNews.length,
       sentiment: decideSentiment(sentimentCounts),
       sentiment_counts: sentimentCounts,
       key_narratives: extractNarratives(uniqueNews, projectName),
-      recent_news: uniqueNews.slice(0, 5).map(({ title, url, date }) => ({ title, url, date })),
+      recent_news: recentNews,
       error: settled.every((entry) => entry.status === 'rejected') ? 'All Exa queries failed' : null,
     };
   } catch (error) {
