@@ -22,14 +22,34 @@
       --dev: #c5b3e6;
       --warn: #ffaaa5;
       --shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 18px 50px rgba(0,0,0,0.35);
+      --panel-strong: rgba(255, 255, 255, 0.05);
+      --glow: 0 0 22px rgba(232,232,232,0.06);
+      --grid-line: rgba(255,255,255,0.08);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: radial-gradient(circle at top, rgba(197,179,230,0.08), transparent 35%), var(--bg);
+      background:
+        radial-gradient(circle at top, rgba(197,179,230,0.08), transparent 35%),
+        radial-gradient(circle at 20% 20%, rgba(181,199,211,0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,0.015), transparent 22%),
+        var(--bg);
       color: var(--text);
       font-family: 'IBM Plex Mono', monospace;
       min-height: 100vh;
+      position: relative;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+      opacity: 0.18;
+      mix-blend-mode: screen;
     }
     a { color: var(--hold); }
     .wrap {
@@ -38,11 +58,20 @@
       padding: 24px 0 64px;
     }
     .hero, .panel {
-      background: var(--panel);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
       border: 1px solid var(--line);
       border-radius: 20px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(6px);
+      box-shadow: var(--shadow), var(--glow);
+      backdrop-filter: blur(8px);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after, .panel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.04), transparent 35%, transparent 65%, rgba(168,230,207,0.03));
+      pointer-events: none;
     }
     .hero {
       padding: 24px;
@@ -88,6 +117,14 @@
       cursor: pointer;
       text-decoration: none;
       white-space: nowrap;
+      transition: transform 0.18s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+      z-index: 1;
+    }
+    button:hover, .ghost:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.28);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.28);
     }
     button { background: linear-gradient(135deg, rgba(168,230,207,0.16), rgba(181,199,211,0.1)); }
     .status {
@@ -153,12 +190,29 @@
       0% { transform: translateX(-100%); }
       100% { transform: translateX(100%); }
     }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fillBar {
+      from { width: 0; }
+      to { width: var(--target-width, 0%); }
+    }
     .grid {
       display: grid;
       grid-template-columns: 1.2fr 0.8fr;
       gap: 18px;
     }
     .panel { padding: 20px; }
+    .hero, .panel, .card, .sentiment-box, .verdict, .score-row, .table tr {
+      animation: fadeUp 0.45s ease both;
+    }
+    .panel:hover, .card:hover, .sentiment-box:hover {
+      border-color: rgba(255,255,255,0.26);
+      transform: translateY(-2px);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 16px 34px rgba(0,0,0,0.24);
+    }
     .hidden { display: none !important; }
     .header-row, .footer-row {
       display: flex;
@@ -177,16 +231,22 @@
       justify-items: end;
       gap: 8px;
     }
+    .verdict-meta {
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
     .verdict {
       font-size: clamp(1.6rem, 4vw, 2.4rem);
       padding: 14px 24px;
-      border-radius: 22px;
+      border-radius: 999px;
       border: 1px dashed currentColor;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      background: rgba(255,255,255,0.03);
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 0 24px currentColor;
+      letter-spacing: 0.08em;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 24px rgba(255,255,255,0.08);
     }
     .overall-score {
       font-family: 'Caveat', cursive;
@@ -210,22 +270,49 @@
     .score-list { display: grid; gap: 12px; }
     .score-row {
       display: grid;
-      grid-template-columns: 130px 1fr 54px;
-      gap: 10px;
+      grid-template-columns: 120px 1fr 72px;
+      gap: 12px;
       align-items: center;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px dashed rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.02);
+    }
+    .score-label {
+      display: grid;
+      gap: 2px;
+    }
+    .score-label strong {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .score-label span {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
     .bar {
-      height: 10px;
+      position: relative;
+      height: 12px;
       border: 1px solid rgba(255,255,255,0.16);
       border-radius: 999px;
       overflow: hidden;
-      background: rgba(255,255,255,0.04);
+      background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.08));
     }
     .bar > span {
       display: block;
       height: 100%;
+      width: var(--target-width, 0%);
       border-radius: inherit;
-      transition: width 0.25s ease, background 0.25s ease;
+      box-shadow: 0 0 14px rgba(255,255,255,0.14);
+      animation: fillBar 1s ease both;
+      transform-origin: left center;
+    }
+    .score-value {
+      text-align: right;
+      font-weight: 500;
+      color: var(--text);
     }
     .mini-grid {
       display: grid;
@@ -234,9 +321,21 @@
     }
     .card {
       border: 1px dashed rgba(255,255,255,0.18);
-      border-radius: 16px;
-      padding: 14px;
+      border-radius: 18px;
+      padding: 16px;
       min-height: 100%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.8;
     }
     .card h3 {
       margin: 0 0 10px;
@@ -281,15 +380,48 @@
       background: rgba(255,139,148,0.05);
     }
     svg { width: 100%; height: auto; display: block; overflow: visible; }
+    @media (max-width: 980px) {
+      .wrap { width: min(100% - 18px, 1120px); }
+      .grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+    }
     @media (max-width: 900px) {
-      .grid, .two-col, .mini-grid { grid-template-columns: 1fr; }
+      .mini-grid { grid-template-columns: 1fr; }
+      .hero { padding: 20px; }
+      .sub { margin-bottom: 16px; }
     }
     @media (max-width: 720px) {
       .toolbar { grid-template-columns: 1fr; }
-      .score-row { grid-template-columns: 1fr; }
-      .wrap { width: min(100% - 16px, 1120px); }
+      .score-row { grid-template-columns: 1fr; gap: 6px; }
+      .wrap { width: min(100% - 14px, 1120px); padding-top: 14px; }
       .header-row { align-items: flex-start; }
-      .verdict-wrap { justify-items: start; }
+      .verdict-wrap { justify-items: start; width: 100%; }
+      .verdict { width: 100%; text-align: center; }
+      .overall-score { font-size: 1.55rem; }
+      .table, .table tbody, .table tr, .table th, .table td { display: block; width: 100%; }
+      .table tr {
+        padding: 10px 0;
+        border-bottom: 1px dashed rgba(255,255,255,0.14);
+      }
+      .table th, .table td {
+        border-bottom: 0;
+        padding: 0;
+      }
+      .table th {
+        width: auto;
+        margin-bottom: 4px;
+        color: var(--info);
+      }
+      .table td {
+        color: var(--text);
+      }
+    }
+    @media (max-width: 560px) {
+      .hero, .panel { border-radius: 18px; }
+      .project-name { line-height: 0.95; }
+      .card, .sentiment-box { padding: 12px; }
+      .status { min-height: 74px; }
+      .chalk-loading { font-size: 1.65rem; }
     }
   </style>
 </head>
@@ -469,9 +601,9 @@
     }
 
     function renderRadar(scores) {
-      const size = 320;
+      const size = 340;
       const center = size / 2;
-      const radius = 106;
+      const radius = 108;
       const levels = 5;
       const keys = SCORE_META.map(([key]) => key);
       const labels = SCORE_META.map(([, label]) => label);
@@ -483,31 +615,47 @@
       });
       const polygon = points.map(([x, y]) => `${x},${y}`).join(' ');
       const grid = Array.from({ length: levels }, (_, i) => {
-        const levelRadius = radius * ((i + 1) / levels);
+        const level = i + 1;
+        const levelRadius = radius * (level / levels);
         const levelPoints = labels.map((_, index) => {
           const angle = (-Math.PI / 2) + (index * Math.PI * 2 / labels.length);
           return `${center + Math.cos(angle) * levelRadius},${center + Math.sin(angle) * levelRadius}`;
         }).join(' ');
-        return `<polygon points="${levelPoints}" fill="none" stroke="rgba(232,232,232,0.14)" stroke-dasharray="4 6" />`;
+        const tickY = center - levelRadius + 4;
+        return `
+          <polygon points="${levelPoints}" fill="none" stroke="rgba(232,232,232,${0.08 + level * 0.02})" stroke-dasharray="4 6" />
+          <text x="${center + 10}" y="${tickY}" fill="rgba(232,232,232,0.36)" font-size="10">${level * 2}</text>
+        `;
       }).join('');
       const axes = labels.map((label, index) => {
         const angle = (-Math.PI / 2) + (index * Math.PI * 2 / labels.length);
         const x = center + Math.cos(angle) * radius;
         const y = center + Math.sin(angle) * radius;
-        const tx = center + Math.cos(angle) * (radius + 34);
-        const ty = center + Math.sin(angle) * (radius + 34);
+        const tx = center + Math.cos(angle) * (radius + 42);
+        const ty = center + Math.sin(angle) * (radius + 42);
         const anchor = Math.cos(angle) > 0.25 ? 'start' : Math.cos(angle) < -0.25 ? 'end' : 'middle';
         return `
           <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="rgba(232,232,232,0.16)" />
-          <text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="13" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>
+          <circle cx="${x}" cy="${y}" r="2.5" fill="rgba(232,232,232,0.35)" />
+          <text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="12.5" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>
         `;
       }).join('');
       return `
         <svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Radar chart">
+          <defs>
+            <filter id="radar-glow">
+              <feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur>
+              <feMerge>
+                <feMergeNode in="blur"></feMergeNode>
+                <feMergeNode in="SourceGraphic"></feMergeNode>
+              </feMerge>
+            </filter>
+          </defs>
           ${grid}
           ${axes}
-          <polygon points="${polygon}" fill="rgba(168,230,207,0.22)" stroke="#a8e6cf" stroke-width="2" />
-          ${points.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#ffd3b6" />`).join('')}
+          <circle cx="${center}" cy="${center}" r="3" fill="rgba(255,255,255,0.35)" />
+          <polygon points="${polygon}" fill="rgba(168,230,207,0.16)" stroke="#a8e6cf" stroke-width="2.5" filter="url(#radar-glow)" />
+          ${points.map(([x, y], index) => `<g><circle cx="${x}" cy="${y}" r="6" fill="rgba(10,10,10,0.9)" stroke="${SCORE_META[index][2]}" stroke-width="2" /><circle cx="${x}" cy="${y}" r="2.5" fill="${SCORE_META[index][2]}" /></g>`).join('')}
         </svg>
       `;
     }
@@ -515,11 +663,13 @@
     function renderScoreBars(scores) {
       return SCORE_META.map(([key, label]) => {
         const value = Number(scores?.[key]?.score || 0);
+        const width = `${Math.max(0, Math.min(100, value * 10))}%`;
+        const tone = value >= 8 ? 'High conviction' : value >= 6 ? 'Constructive' : value >= 4 ? 'Mixed setup' : 'Fragile';
         return `
           <div class="score-row">
-            <div>${label}</div>
-            <div class="bar"><span style="width:${Math.max(0, Math.min(100, value * 10))}%; background:${barColor(value)}"></span></div>
-            <div>${value.toFixed(1)}/10</div>
+            <div class="score-label"><strong>${label}</strong><span>${tone}</span></div>
+            <div class="bar"><span style="--target-width:${width}; background:${barColor(value)}"></span></div>
+            <div class="score-value">${value.toFixed(1)}/10</div>
           </div>
         `;
       }).join('');
@@ -546,7 +696,7 @@
       return rows.map(([label, key, value]) => `
         <tr>
           <th>${escapeHtml(label)}</th>
-          <td>${escapeHtml(formatMetricValue(label, key, value))}</td>
+          <td data-label="${escapeHtml(label)}">${escapeHtml(formatMetricValue(label, key, value))}</td>
         </tr>
       `).join('');
     }
@@ -573,6 +723,7 @@
                 <h1 class="project-name">${escapeHtml(payload?.project_name || 'Unknown')}</h1>
               </div>
               <div class="verdict-wrap">
+                <div class="verdict-meta">Research verdict</div>
                 <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
                 <div class="overall-score ${verdictClass(verdict)}">${avgScore !== null ? `${avgScore.toFixed(1)}/10` : 'n/a'}</div>
               </div>

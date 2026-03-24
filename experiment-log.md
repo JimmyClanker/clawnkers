@@ -82,3 +82,43 @@
 - **Files:** `routes/alpha.js`, `synthesis/templates.js`, `collectors/tokenomics.js`
 - **Test:** `node --test test/*.test.js` → 15/15 pass
 - **Result:** kept. Better operator visibility on degraded runs and slightly wider tokenomics lookup coverage.
+
+## Experiment 12 — Subtle chalkboard motion + hover polish
+- **Hypothesis:** the page felt static; gentle reveal/hover effects can make the chalkboard UI feel more premium without breaking the minimalist style.
+- **Change:** added layered chalkboard texture, panel sheen, fade-up entrance animation, and light hover elevation for buttons/panels/cards.
+- **Files:** `public/alpha.html`
+- **Validation:** inline script parsed via `vm.Script`; CSS/HTML syntax stayed valid.
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. More polished visual rhythm with very low UI risk.
+
+## Experiment 13 — Responsive report layout and mobile market board
+- **Hypothesis:** the desktop-first layout compressed too hard on phones, especially verdict/header blocks and the metric table.
+- **Change:** refined breakpoints, stacked major grids earlier, made verdict/header blocks mobile-friendly, and converted the market board into a readable card-like stacked table on small screens.
+- **Files:** `public/alpha.html`
+- **Validation:** inline script parsed via `vm.Script`; responsive CSS remained syntactically valid.
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Better mobile readability without changing the API or data model.
+
+## Experiment 14 — Radar chart readability upgrade
+- **Hypothesis:** the radar was visually on-theme but hard to read quickly; better scale cues and point styling would make scoring easier to interpret.
+- **Change:** enlarged the chart slightly, added clearer grid/tick labels, endpoint dots, a center anchor, glow treatment, and stronger per-axis point markers.
+- **Files:** `public/alpha.html`
+- **Validation:** inline script parsed via `vm.Script`; generated SVG markup stayed valid.
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. The score radar should scan faster while preserving the chalkboard look.
+
+## Experiment 15 — Animated score bars with clearer hierarchy
+- **Hypothesis:** the score rows lacked hierarchy and felt utilitarian; adding microcopy and animated fill would improve scanability.
+- **Change:** turned score rows into mini cards, added label/tone hierarchy, and animated bar fill using CSS custom properties while keeping the same score data.
+- **Files:** `public/alpha.html`
+- **Validation:** inline script parsed via `vm.Script`; CSS animation syntax remained valid.
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Scores now read faster and look more intentional.
+
+## Experiment 16 — Verdict badge/cards polish + HTML report template upgrade
+- **Hypothesis:** the main verdict and exported HTML report still felt more functional than premium; bringing the same design language to both surfaces would improve perceived quality.
+- **Change:** redesigned the live verdict as a more deliberate badge, upgraded insight cards with accent rails/background depth, and rebuilt the exported HTML report with a stronger chalkboard layout, header, and section cards.
+- **Files:** `public/alpha.html`, `synthesis/templates.js`
+- **Validation:** `public/alpha.html` inline JS parsed via `vm.Script`; `synthesis/templates.js` imported successfully.
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. UI and exported report now feel visually consistent and more professional.
