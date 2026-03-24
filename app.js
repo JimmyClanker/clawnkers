@@ -9,6 +9,9 @@ import { createPaymentsService } from './services/payments.js';
 import { createRestRouter } from './routes/rest.js';
 import { createMcpRouter } from './routes/mcp.js';
 import { createAlphaRouter } from './routes/alpha.js';
+import { paymentMiddleware, x402ResourceServer } from '@x402/express';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { HTTPFacilitatorClient } from '@x402/core/server';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,6 +107,43 @@ export function createApp({
     console.log('Payment middleware active for /research and /fetch');
   } else if (!config.nvmApiKey) {
     console.warn('⚠️  NVM_API_KEY not set — payment gating DISABLED (dev mode)');
+  }
+
+  // x402 payment gating for /alpha full ($1.00 USDC on Base)
+  const X402_PAY_TO = config.x402PayTo || '0x4bDE6B11Df6C0F0f5351e6fB0E7Bdc40eAa0cb4D';
+  const X402_ENABLED = config.x402Enabled !== false;
+
+  if (X402_ENABLED) {
+    try {
+      const facilitatorClient = new HTTPFacilitatorClient({ url: 'https://x402.org/facilitator' });
+      // Base Sepolia testnet (eip155:84532) — x402 public facilitator only supports testnet for now
+      // Switch to eip155:8453 (Base mainnet) when facilitator adds mainnet support
+      const X402_NETWORK = config.x402Network || 'eip155:84532';
+      const resourceServer = new x402ResourceServer(facilitatorClient)
+        .register(X402_NETWORK, new ExactEvmScheme());
+
+      app.use(
+        paymentMiddleware(
+          {
+            'GET /alpha': {
+              accepts: {
+                scheme: 'exact',
+                price: '$1.00',
+                network: X402_NETWORK,
+                payTo: X402_PAY_TO,
+              },
+              description: 'Deep alpha analysis — 5 data sources + Grok 4.20 AI synthesis with live X and web search',
+            },
+          },
+          resourceServer,
+        ),
+      );
+      console.log(`x402 payment gating active: /alpha → $1.00 USDC on ${X402_NETWORK} → ${X402_PAY_TO}`);
+    } catch (err) {
+      console.warn(`⚠️ x402 init failed (endpoints open): ${err.message}`);
+    }
+  } else {
+    console.log('x402 disabled — /alpha open');
   }
 
   app.use(createRestRouter({ config, exaService: exa, signalsService: signals }));

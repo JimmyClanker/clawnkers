@@ -36,6 +36,9 @@ export function loadConfig(env = process.env) {
     exaCacheMaxEntries: EXA_CACHE_MAX_ENTRIES,
     maxBatchSignals: MAX_BATCH_SIGNALS,
     maxMcpSessions: MAX_MCP_SESSIONS,
+    x402PayTo: env.X402_PAY_TO || PAY_TO,
+    x402Enabled: env.X402_ENABLED !== 'false',
+    x402Network: env.X402_NETWORK || 'eip155:84532',
   };
 
   validateConfig(config);

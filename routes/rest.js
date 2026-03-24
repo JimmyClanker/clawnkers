@@ -80,7 +80,10 @@ export function createRestRouter({ config, exaService, signalsService }) {
       },
       alpha: {
         xai_configured: Boolean(config.xaiApiKey),
-        rate_limit: '10 requests / minute',
+        payment: config.x402Enabled ? 'x402 — $1.00 USDC on Base' : 'open',
+        quick_scan: 'free',
+        rate_limit_full: '3 requests / minute',
+        rate_limit_quick: '10 requests / minute',
         cache_ttl_full: '1 hour',
         cache_ttl_quick: '15 minutes',
       },

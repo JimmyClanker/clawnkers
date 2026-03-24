@@ -99,6 +99,7 @@ function createTestApp({ configOverrides = {}, collectAllFn } = {}) {
     exaCacheMaxEntries: 200,
     maxBatchSignals: 100,
     maxMcpSessions: 50,
+    x402Enabled: false,
     ...configOverrides,
   };
 
