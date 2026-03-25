@@ -181,6 +181,7 @@ export async function collectMarket(projectName) {
       symbol: coinData?.symbol || firstCoin.symbol || null,
       name: coinData?.name || firstCoin.name || projectName,
       price,
+      current_price: price, // Round 8 (AutoResearch batch): alias for cross-collector consistency
       market_cap: marketCap,
       fully_diluted_valuation: marketData?.fully_diluted_valuation?.usd ?? null,
       total_volume: totalVolume,

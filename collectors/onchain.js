@@ -303,6 +303,20 @@ export async function collectOnchain(projectName) {
       }
     }
 
+    // Round 5 (AutoResearch batch): Derive fees_30d and revenue_30d from 7d data if missing
+    const fees30dDerived = fees7d != null ? fees7d * (30 / 7) : null;
+    const revenue30dDerived = revenue7d != null ? revenue7d * (30 / 7) : null;
+
+    // Round 5 (AutoResearch batch): Protocol maturity tier based on TVL + fees
+    let protocolMaturity = null;
+    if (currentTvl != null && fees7d != null) {
+      const annualFees = fees7d * 52;
+      if (currentTvl > 1_000_000_000 && annualFees > 10_000_000) protocolMaturity = 'tier1';
+      else if (currentTvl > 100_000_000 || annualFees > 1_000_000) protocolMaturity = 'tier2';
+      else if (currentTvl > 10_000_000 || annualFees > 100_000) protocolMaturity = 'tier3';
+      else protocolMaturity = 'emerging';
+    }
+
     return {
       ...fallback,
       slug,
@@ -312,7 +326,9 @@ export async function collectOnchain(projectName) {
       chains: protocol?.chains || match.protocol?.chains || [],
       category: protocol?.category || match.protocol?.category || null,
       fees_7d: fees7d,
+      fees_30d: fees30dDerived,
       revenue_7d: revenue7d,
+      revenue_30d: revenue30dDerived,
       revenue_to_fees_ratio: revenueToFeesRatio,
       treasury_balance: treasuryBalance,
       chain_tvl: chainTvl,
@@ -320,6 +336,7 @@ export async function collectOnchain(projectName) {
       revenue_efficiency: revenueEfficiency != null ? Math.round(revenueEfficiency * 100) / 100 : null,
       tvl_stickiness: tvlStickiness,
       tvl_data_quality: tvlDataQuality,
+      protocol_maturity: protocolMaturity,
       error: null,
     };
   } catch (error) {

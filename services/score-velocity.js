@@ -73,6 +73,27 @@ export function computeScoreVelocity(db, projectName) {
     else if (velocity < -0.2) direction = 'declining';
     else direction = 'stable';
 
+    // Round 14 (AutoResearch batch): per-dimension velocity for the two most recent scans
+    const dimVelocity = {};
+    const DIMS = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health', 'distribution', 'risk'];
+    if (rows.length >= 2) {
+      const s0 = JSON.parse(rows[0].scores_json ?? '{}');
+      const s1 = JSON.parse(rows[1].scores_json ?? '{}');
+      const daysBetween2 = Math.max(0.1, (new Date(rows[0].scanned_at) - new Date(rows[1].scanned_at)) / 86400000);
+      for (const dim of DIMS) {
+        const v0 = safeN(s0[dim]?.score ?? s0[dim]);
+        const v1 = safeN(s1[dim]?.score ?? s1[dim]);
+        if (v0 !== null && v1 !== null) {
+          const dv = (v0 - v1) / daysBetween2;
+          dimVelocity[dim] = {
+            delta: parseFloat((v0 - v1).toFixed(2)),
+            velocity_per_day: parseFloat(dv.toFixed(3)),
+            direction: dv > 0.2 ? 'improving' : dv < -0.2 ? 'declining' : 'stable',
+          };
+        }
+      }
+    }
+
     return {
       velocity: parseFloat(velocity.toFixed(3)),
       direction,
@@ -80,6 +101,7 @@ export function computeScoreVelocity(db, projectName) {
       prev_score: prevScore,
       days_between: parseFloat(daysBetween.toFixed(1)),
       sample_size: rows.length,
+      dimension_velocity: Object.keys(dimVelocity).length > 0 ? dimVelocity : null,
       note: `Score ${prevScore.toFixed(1)} → ${currentScore.toFixed(1)} over ${daysBetween.toFixed(1)} days (${velocity >= 0 ? '+' : ''}${velocity.toFixed(3)}/day).`,
     };
   } catch (err) {

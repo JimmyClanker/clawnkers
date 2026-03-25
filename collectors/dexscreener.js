@@ -132,6 +132,16 @@ export async function collectDexScreener(projectName) {
     // Round 39: count pairs with meaningful liquidity (>$50K)
     const decentPairsCount = pairs.filter((p) => Number(p?.liquidity?.usd ?? 0) >= 50_000).length;
 
+    // Round 11 (AutoResearch batch): DEX diversity score — how spread across DEXs?
+    const dexDiversityScore = dexNames.size >= 5 ? 'high' : dexNames.size >= 3 ? 'moderate' : dexNames.size >= 2 ? 'low' : 'concentrated';
+
+    // Round 11 (AutoResearch batch): Liquidity depth category for risk assessment
+    let liquidityCategory = null;
+    if (totalLiquidity >= 10_000_000) liquidityCategory = 'deep';
+    else if (totalLiquidity >= 1_000_000) liquidityCategory = 'adequate';
+    else if (totalLiquidity >= 100_000) liquidityCategory = 'shallow';
+    else if (totalLiquidity > 0) liquidityCategory = 'very_shallow';
+
     return {
       ...fallback,
       dex_volume_24h: totalVolume24h > 0 ? totalVolume24h : null,
@@ -151,6 +161,8 @@ export async function collectDexScreener(projectName) {
       pump_dump_signal: pumpDumpSignal,
       avg_liquidity_per_pair: avgLiquidityPerPair,
       decent_pairs_count: decentPairsCount,
+      dex_diversity_score: dexDiversityScore,
+      liquidity_category: liquidityCategory,
       error: null,
     };
   } catch (error) {

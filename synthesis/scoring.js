@@ -218,10 +218,30 @@ function scoreOnchainHealth(onchain = {}) {
     raw += revCapture;
   }
 
+  // Round 6 (AutoResearch batch): protocol maturity tier bonus
+  const maturity = onchain.protocol_maturity;
+  if (maturity === 'tier1') raw += 0.6;
+  else if (maturity === 'tier2') raw += 0.35;
+  else if (maturity === 'tier3') raw += 0.15;
+  // 'emerging' → no bonus, not penalized
+
   return {
     score: clampScore(raw),
-    reasoning: `TVL trend 7d ${trend7d.toFixed(2)}%, 30d ${trend30d.toFixed(2)}%, fees_7d ${fees.toFixed(0)}, chains ${chainCount}${multichainBonus > 0 ? ` (+${multichainBonus} multichain bonus)` : ''}${tvlStickiness ? `, TVL ${tvlStickiness}` : ''}${activeAddresses7d > 0 ? `, active_addr_7d ${activeAddresses7d}` : ''}${revenueToFees !== null ? `, rev/fees ${(revenueToFees * 100).toFixed(0)}%` : ''}.`,
+    reasoning: `TVL trend 7d ${trend7d.toFixed(2)}%, 30d ${trend30d.toFixed(2)}%, fees_7d ${fees.toFixed(0)}, chains ${chainCount}${multichainBonus > 0 ? ` (+${multichainBonus} multichain bonus)` : ''}${tvlStickiness ? `, TVL ${tvlStickiness}` : ''}${activeAddresses7d > 0 ? `, active_addr_7d ${activeAddresses7d}` : ''}${revenueToFees !== null ? `, rev/fees ${(revenueToFees * 100).toFixed(0)}%` : ''}${maturity ? `, maturity: ${maturity}` : ''}.`,
   };
+}
+
+// Round 29 (AutoResearch batch): narrative momentum adjustment — called from calculateScores
+function applyNarrativeMomentumBonus(socialScore, narrativeMomentum = null) {
+  if (!narrativeMomentum) return socialScore;
+  const { narrative_alignment, narrative_count } = narrativeMomentum;
+  let adj = 0;
+  if (narrative_alignment === 'bullish') {
+    adj = narrative_count >= 3 ? 0.5 : narrative_count >= 2 ? 0.3 : 0.15;
+  } else if (narrative_alignment === 'bearish') {
+    adj = -0.3;
+  }
+  return Math.min(10, Math.max(1, parseFloat((socialScore + adj).toFixed(1))));
 }
 
 function scoreSocialMomentum(social = {}) {
@@ -248,14 +268,31 @@ function scoreSocialMomentum(social = {}) {
   const botRatio = rawMentions > 0 ? botFilteredCount / rawMentions : 0;
   const signalQualityMultiplier = Math.max(0.5, 1 - botRatio);
 
+  // Round 10 (AutoResearch batch): institutional and upgrade mentions boost
+  const institutionalMentions = safeNumber(social.institutional_mentions ?? 0);
+  const upgradeMentions = safeNumber(social.upgrade_mentions ?? 0);
+  const partnershipMentions = safeNumber(social.partnership_mentions ?? 0);
+
   let raw = 4;
   raw += Math.min(Math.log2(filteredMentions + 1) * 0.9, 2.5) * signalQualityMultiplier;
   raw += Math.max(Math.min(sentimentScore * 2.5 * confidence, 2), -2);
   raw += Math.min(narratives * 0.25, 1.5);
 
+  // Institutional mention bonus (authoritative signal)
+  if (institutionalMentions >= 3) raw += 0.4;
+  else if (institutionalMentions >= 1) raw += 0.2;
+
+  // Upgrade/mainnet mentions (catalyst forward-looking signal)
+  if (upgradeMentions >= 2) raw += 0.3;
+  else if (upgradeMentions >= 1) raw += 0.15;
+
+  // Partnership mentions
+  if (partnershipMentions >= 3) raw += 0.25;
+  else if (partnershipMentions >= 1) raw += 0.1;
+
   return {
     score: clampScore(raw),
-    reasoning: `Filtered mentions ${filteredMentions} (${botFilteredCount} bots filtered), sentiment score ${sentimentScore.toFixed(2)}, confidence ${confidence.toFixed(2)}, signal quality ${(signalQualityMultiplier * 100).toFixed(0)}%, narratives ${narratives}.`,
+    reasoning: `Filtered mentions ${filteredMentions} (${botFilteredCount} bots filtered), sentiment score ${sentimentScore.toFixed(2)}, confidence ${confidence.toFixed(2)}, signal quality ${(signalQualityMultiplier * 100).toFixed(0)}%, narratives ${narratives}${institutionalMentions > 0 ? `, institutional ${institutionalMentions}` : ''}${upgradeMentions > 0 ? `, upgrades ${upgradeMentions}` : ''}.`,
   };
 }
 
@@ -299,6 +336,12 @@ function scoreDevelopment(github = {}) {
 
   // Round 29: CI bonus — having CI workflows = professional dev practice
   if (github.has_ci === true) raw += 0.3;
+
+  // Round 25 (AutoResearch batch): repo health tier bonus
+  const repoHealthTier = github.repo_health_tier;
+  if (repoHealthTier === 'excellent') raw += 0.4;
+  else if (repoHealthTier === 'good') raw += 0.2;
+  else if (repoHealthTier === 'poor') raw -= 0.3;
 
   // Round 33: Star velocity — rapidly growing star count is a health indicator
   // Use watchers as a proxy if forks are very few (niche but real)
@@ -456,6 +499,13 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
     else if (fdvRatio > 5) raw -= 0.7;
   }
 
+  // Round 12 (AutoResearch batch): DEX liquidity category bonus/penalty
+  const liquidityCategory = dexData.liquidity_category;
+  if (liquidityCategory === 'deep') raw += 0.6;
+  else if (liquidityCategory === 'adequate') raw += 0.3;
+  else if (liquidityCategory === 'shallow') raw -= 0.2;
+  else if (liquidityCategory === 'very_shallow') raw -= 0.8;
+
   // Round 24: revenue_efficiency bonus — protocols generating fees relative to TVL are less risky
   const revEfficiency = safeNumber(onchain.revenue_efficiency ?? 0);
   if (revEfficiency > 100) raw += 0.5;   // >$100/week per $1M TVL = good efficiency
@@ -571,6 +621,9 @@ export function calculateScores(data) {
 
   // Round 9: Reddit supplement to social momentum
   social_momentum.score = applyRedditSupplement(social_momentum.score, data?.reddit);
+
+  // Round 29 (AutoResearch batch): narrative momentum supplement
+  social_momentum.score = applyNarrativeMomentumBonus(social_momentum.score, data?.narrative_momentum ?? null);
 
   // Round 11: Risk as 7th dimension
   const risk = scoreRisk(

@@ -68,19 +68,77 @@ function extractOutputText(payload) {
   return chunks.join('\n').trim();
 }
 
+function buildFactRegistry(rawData = {}) {
+  const facts = [];
+  const push = (key, value) => {
+    if (value == null) return;
+    if (typeof value === 'number' && !Number.isFinite(value)) return;
+    facts.push({ key, value });
+  };
+
+  push('market.current_price', rawData?.market?.current_price ?? rawData?.market?.price);
+  push('market.market_cap', rawData?.market?.market_cap);
+  push('market.total_volume', rawData?.market?.total_volume);
+  push('market.ath_distance_pct', rawData?.market?.ath_distance_pct);
+  push('onchain.tvl', rawData?.onchain?.tvl);
+  push('onchain.tvl_change_7d', rawData?.onchain?.tvl_change_7d);
+  push('onchain.tvl_change_30d', rawData?.onchain?.tvl_change_30d);
+  push('onchain.fees_7d', rawData?.onchain?.fees_7d);
+  push('onchain.revenue_7d', rawData?.onchain?.revenue_7d);
+  push('social.filtered_mentions', rawData?.social?.filtered_mentions ?? rawData?.social?.mentions);
+  push('social.sentiment_score', rawData?.social?.sentiment_score);
+  push('github.commits_90d', rawData?.github?.commits_90d);
+  push('github.contributors', rawData?.github?.contributors);
+  push('tokenomics.pct_circulating', rawData?.tokenomics?.pct_circulating);
+  push('dex.dex_liquidity_usd', rawData?.dex?.dex_liquidity_usd);
+  push('dex.dex_price_usd', rawData?.dex?.dex_price_usd);
+  push('dex.buy_sell_ratio', rawData?.dex?.buy_sell_ratio);
+  push('dex.dex_pair_count', rawData?.dex?.dex_pair_count);
+  push('market.price_change_24h', rawData?.market?.price_change_percentage_24h);
+  push('market.price_change_7d', rawData?.market?.price_change_percentage_7d_in_currency);
+  push('market.price_change_30d', rawData?.market?.price_change_percentage_30d_in_currency);
+  push('market.fdv', rawData?.market?.fully_diluted_valuation ?? rawData?.market?.fdv);
+  push('market.market_cap_rank', rawData?.market?.market_cap_rank);
+  push('onchain.treasury_balance', rawData?.onchain?.treasury_balance);
+  push('onchain.revenue_to_fees_ratio', rawData?.onchain?.revenue_to_fees_ratio);
+  push('reddit.post_count', rawData?.reddit?.post_count);
+  push('reddit.sentiment', rawData?.reddit?.sentiment);
+  push('holders.top10_concentration_pct', rawData?.holders?.top10_concentration_pct);
+  push('ecosystem.chain_count', rawData?.ecosystem?.chain_count);
+  push('ecosystem.primary_chain', rawData?.ecosystem?.primary_chain);
+  push('contract.verified', rawData?.contract?.verified);
+
+  return facts;
+}
+
 function buildPrompt(projectName, rawData, scores) {
   const overallScore = scores?.overall?.score ?? 0;
+  const factRegistry = buildFactRegistry(rawData);
 
   return [
     '## ROLE',
     'You are a senior crypto alpha analyst. Your job: produce actionable, evidence-based reports for sophisticated investors. No fluff, no generic disclaimers.',
 
+    '## CRITICAL: ANTI-HALLUCINATION RULES',
+    'These rules are ABSOLUTE and override everything else:',
+    '1. EVERY factual claim MUST be backed by either: (a) a specific field from RAW_DATA below, (b) a specific X Search result you found, or (c) a specific Web Search result with URL.',
+    '2. If X Search or Web Search returns NO relevant results for a topic, write "No recent data found" — NEVER invent details, names, dates, or events.',
+    '3. NEVER invent: funding round amounts, partnership announcements, exchange listings, protocol upgrades, TVL numbers, price targets, or any specific facts not in the provided data.',
+    '4. NEVER invent KOL names, Twitter accounts, or attribute opinions to specific people unless you found them via X Search.',
+    '5. If you cannot verify a catalyst or risk with data, prefix it with "[Unverified]" or omit it entirely.',
+    '6. For competitor_comparison: ONLY compare metrics that exist in RAW_DATA or that you verified via search. Do not invent TVL, fees, or market cap numbers for competitors.',
+    '7. For x_sentiment_summary: If X Search returned nothing meaningful, write "Limited X/Twitter data available for this project." Do NOT fabricate community sentiment.',
+    '8. Numbers in your analysis (TVL, market cap, volume, etc.) MUST match RAW_DATA exactly. Do not round creatively or use different numbers.',
+    '9. When in doubt, say LESS. A shorter, accurate report is infinitely better than a longer, hallucinated one.',
+
     '## INSTRUCTIONS',
-    '1. Use the attached RAW_DATA and SCORES as your quantitative foundation.',
-    '2. Use X Search to find: recent whale wallet activity, KOL opinions, narrative trends, community sentiment in the last 7-30 days.',
-    '3. Use Web Search to check: audits/security incidents, exchange listing news, protocol upgrades, funding rounds, regulatory developments, competitor moves.',
-    '4. Synthesize ALL sources into a coherent thesis.',
-    '5. If data is missing or cannot be verified, state the gap explicitly — do NOT fabricate.',
+    '1. Use the attached RAW_DATA and SCORES as your PRIMARY and AUTHORITATIVE data source. These are verified from CoinGecko, DeFiLlama, GitHub, Messari, DexScreener, Reddit, and Etherscan.',
+    '2. Use X Search to find RECENT discussion (last 7-30 days). Report ONLY what you actually find. If no results, say so.',
+    '3. Use Web Search to check for RECENT news. Report ONLY what you actually find with source URLs. If no results, say so.',
+    '4. Synthesize into a coherent thesis, but ONLY use verified information.',
+    '5. Clearly separate FACTS (from data) from OPINIONS (your analysis). Your opinions are welcome but must be labeled as such.',
+    '6. For every non-trivial sentence in analysis_text, include inline provenance tags like [source: RAW_DATA.market.market_cap] or [source: web:<url>] or [source: x_search:<query/topic>].',
+    '7. If a claim has no provenance tag, delete it.',
 
     '## SCORING CALIBRATION',
     `The algorithmic score is ${overallScore}/10. Use this as a starting point but adjust based on qualitative factors:`,
@@ -93,14 +151,18 @@ function buildPrompt(projectName, rawData, scores) {
     '## OUTPUT FORMAT',
     'Return ONLY valid JSON. Required fields:',
     '- verdict: "STRONG BUY" | "BUY" | "HOLD" | "AVOID" | "STRONG AVOID"',
-    '- analysis_text: 3-4 paragraphs. Para 1: summary thesis. Para 2: on-chain/fundamental evidence. Para 3: market/sentiment context. Para 4: near-term outlook.',
-    '- moat: competitive advantage in 1-2 sentences. Be specific (e.g., "Only DEX with native cross-chain liquidity on Base+Arbitrum").',
-    '- risks: array of 3-5 specific risk strings. Format: "Risk type: specific detail."',
-    '- catalysts: array of 3-5 specific upcoming catalysts. Format: "Catalyst type: specific detail + expected timeline if known."',
-    '- competitor_comparison: paragraph naming 2-3 direct competitors with tickers. Compare TVL, fees, growth rate, and market cap.',
-    '- x_sentiment_summary: 2-3 sentences on current X/Twitter narrative, key accounts discussing it, and community tone.',
-    '- key_findings: array of 4-6 key findings. Each finding should be a single, specific, data-backed insight.',
-    '- liquidity_assessment: 1-2 sentences on trading liquidity, slippage risk, and ease of entry/exit at the current market cap.',
+    '- analysis_text: 3-4 paragraphs. Para 1: summary thesis with key numbers FROM RAW_DATA. Para 2: on-chain/fundamental evidence citing specific RAW_DATA fields. Para 3: market/sentiment context from search results (or "limited data" if none found). Para 4: near-term outlook based on verified catalysts only.',
+    '- moat: competitive advantage in 1-2 sentences. Must be based on RAW_DATA or verified search results.',
+    '- risks: array of 3-5 risk strings. Format: "Risk type: specific detail [source: RAW_DATA field or search]." Only include risks you can substantiate.',
+    '- catalysts: array of 2-4 upcoming catalysts. ONLY include catalysts you found via Web/X Search with evidence. Prefix unverified ones with "[Unverified]". It is OK to have fewer catalysts if data is limited.',
+    '- competitor_comparison: Compare ONLY with metrics you have data for. If no competitor data available, write "Insufficient data for competitor comparison."',
+    '- x_sentiment_summary: Summarize ONLY what X Search actually returned. If nothing relevant found, write "Limited X/Twitter data available."',
+    '- key_findings: array of 3-5 key findings. Each MUST reference a specific data point from RAW_DATA or a search result.',
+    '- liquidity_assessment: Based on RAW_DATA volume, market cap, and DEX liquidity. Do not invent slippage estimates.',
+    '- data_gaps: array of strings listing what data was missing or could not be verified. This helps the reader assess report reliability.',
+    '- facts_verified: array of 4-8 strings. ONLY hard facts, each with a [source: ...] tag.',
+    '- opinions: array of 2-5 strings. Analytical interpretations; if not directly proven, prefix with [Opinion].',
+    '- section_confidence: object with numbers (0-100): { fundamentals, market_sentiment, outlook, overall } based on evidence quality.',
 
     ...(rawData?.sector_comparison
       ? [
@@ -180,6 +242,40 @@ function buildPrompt(projectName, rawData, scores) {
         ]
       : []),
 
+    // Round 28 (AutoResearch batch): narrative momentum context
+    ...(rawData?.narrative_momentum?.active_narratives?.length > 0
+      ? [
+          `## NARRATIVE MOMENTUM (${rawData.narrative_momentum.narrative_alignment.toUpperCase()})`,
+          rawData.narrative_momentum.detail,
+          `Active macro narratives: ${rawData.narrative_momentum.active_narratives.map((n) => n.replace(/_/g, ' ')).join(', ')}.`,
+        ]
+      : []),
+
+    // Round 18 (AutoResearch batch): trend reversal signal
+    ...(rawData?.trend_reversal && rawData.trend_reversal.pattern !== 'none'
+      ? [
+          `## TREND REVERSAL SIGNAL: ${rawData.trend_reversal.pattern.toUpperCase()} (${rawData.trend_reversal.confidence} confidence)`,
+          rawData.trend_reversal.detail,
+          rawData.trend_reversal.signals.length > 0
+            ? `Supporting signals: ${rawData.trend_reversal.signals.map((s) => `- ${s}`).join('; ')}`
+            : '',
+        ].filter(Boolean)
+      : []),
+
+    // Round 7 (AutoResearch batch): protocol maturity context
+    ...(rawData?.onchain?.protocol_maturity
+      ? [
+          `## PROTOCOL MATURITY: ${rawData.onchain.protocol_maturity.toUpperCase()}`,
+          rawData.onchain.protocol_maturity === 'tier1'
+            ? 'This is a top-tier DeFi protocol by TVL and fees. Compare to blue-chip competitors (Uniswap, Aave, Compound-class).'
+            : rawData.onchain.protocol_maturity === 'tier2'
+              ? 'This is a mid-tier protocol with meaningful but not dominant traction. Compare to established but non-market-leader peers.'
+              : rawData.onchain.protocol_maturity === 'tier3'
+                ? 'This is a smaller protocol with limited traction. Emerging category or niche play — higher risk.'
+                : 'Early-stage protocol. Insufficient TVL/fees data to establish tier. Treat as speculative.',
+        ]
+      : []),
+
     // Round 36: volatility regime context
     ...(rawData?.volatility && rawData.volatility.regime !== 'calm'
       ? [
@@ -191,8 +287,17 @@ function buildPrompt(projectName, rawData, scores) {
         ]
       : []),
 
+    '## FINAL REMINDER (READ THIS LAST)',
+    'Before outputting your response, verify:',
+    '1. Every number you cite matches FACT_REGISTRY or RAW_DATA exactly.',
+    '2. Every claim has a [source: ...] tag.',
+    '3. If you wrote something you cannot trace to data or search results, DELETE IT.',
+    '4. "I don\'t have data for this" is ALWAYS better than making something up.',
+    '5. Shorter and accurate > longer and fabricated.',
+
     `PROJECT: ${projectName}`,
     `ALGORITHMIC_SCORES: ${JSON.stringify(scores, null, 2)}`,
+    `FACT_REGISTRY: ${JSON.stringify(factRegistry, null, 2)}`,
     `RAW_DATA: ${JSON.stringify(rawData, null, 2)}`,
   ].join('\n\n');
 }
@@ -285,6 +390,15 @@ function normalizeReport(payload, projectName, rawData, scores) {
     competitor_comparison: String(payload?.competitor_comparison || '').trim() || 'n/a',
     x_sentiment_summary: String(payload?.x_sentiment_summary || '').trim() || 'n/a',
     key_findings: normalizeList(payload?.key_findings, ['n/a']),
+    data_gaps: normalizeList(payload?.data_gaps, []),
+    facts_verified: normalizeList(payload?.facts_verified, []),
+    opinions: normalizeList(payload?.opinions, []),
+    section_confidence: {
+      fundamentals: Number(payload?.section_confidence?.fundamentals ?? 50),
+      market_sentiment: Number(payload?.section_confidence?.market_sentiment ?? 50),
+      outlook: Number(payload?.section_confidence?.outlook ?? 50),
+      overall: Number(payload?.section_confidence?.overall ?? 50),
+    },
     // Round 7: liquidity assessment
     liquidity_assessment: String(payload?.liquidity_assessment || '').trim() || null,
     // Round 60: short headline (first sentence of analysis_text) for feed/preview use
@@ -295,6 +409,159 @@ function normalizeReport(payload, projectName, rawData, scores) {
       return firstSentence ? firstSentence.trim() : text.slice(0, 120) + (text.length > 120 ? '...' : '');
     })(),
   };
+}
+
+function hasSourceTag(text) {
+  return /\[source:\s*[^\]]+\]/i.test(String(text || ''));
+}
+
+function clampPct(value, fallback = 50) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+/**
+ * Post-LLM validation: cross-check report claims against raw collector data.
+ * Flags or sanitizes hallucinated content.
+ */
+function validateReport(report, rawData) {
+  const warnings = [];
+
+  // 0. Normalize section confidence and enforce provenance fields
+  report.section_confidence = {
+    fundamentals: clampPct(report?.section_confidence?.fundamentals),
+    market_sentiment: clampPct(report?.section_confidence?.market_sentiment),
+    outlook: clampPct(report?.section_confidence?.outlook),
+    overall: clampPct(report?.section_confidence?.overall),
+  };
+
+  if (!Array.isArray(report.facts_verified)) report.facts_verified = [];
+  if (!Array.isArray(report.opinions)) report.opinions = [];
+
+  report.facts_verified = report.facts_verified
+    .map((f) => String(f || '').trim())
+    .filter(Boolean)
+    .map((f) => (hasSourceTag(f) ? f : `${f} [source: missing]`));
+
+  report.key_findings = (report.key_findings || []).map((k) => {
+    const text = String(k || '').trim();
+    if (!text) return text;
+    return hasSourceTag(text) ? text : `${text} [source: missing]`;
+  });
+
+  report.risks = (report.risks || []).map((r) => {
+    const text = String(r || '').trim();
+    if (!text) return text;
+    return hasSourceTag(text) ? text : `${text} [source: missing]`;
+  });
+
+  // 1. Check if x_sentiment_summary seems fabricated (mentions specific accounts but social data is empty)
+  const socialData = rawData?.social;
+  const hasSocialData = socialData && !socialData.error && (socialData.mentions > 0 || socialData.filtered_mentions > 0);
+  if (!hasSocialData && report.x_sentiment_summary && report.x_sentiment_summary !== 'n/a') {
+    // If no social collector data AND the summary looks substantive (not a "no data" message)
+    const looksSubstantive = report.x_sentiment_summary.length > 80 &&
+      !report.x_sentiment_summary.toLowerCase().includes('limited') &&
+      !report.x_sentiment_summary.toLowerCase().includes('no data') &&
+      !report.x_sentiment_summary.toLowerCase().includes('no recent');
+    if (looksSubstantive || /@[a-z0-9_]{2,}/i.test(report.x_sentiment_summary)) {
+      warnings.push('x_sentiment_summary may contain unverified claims (no social collector data available)');
+      report.x_sentiment_summary = 'Limited X/Twitter data available for this project.';
+    }
+  }
+
+  // 2. Validate market cap / price numbers in analysis_text against raw data
+  const market = rawData?.market;
+  if (market && report.analysis_text) {
+    const reportedMcap = report.analysis_text.match(/market\s*cap[^$]*\$([0-9,.]+)\s*(billion|million|B|M)/i);
+    if (reportedMcap && market.market_cap) {
+      const reportedValue = parseFloat(reportedMcap[1].replace(/,/g, ''));
+      const unit = reportedMcap[2].toLowerCase();
+      const multiplier = (unit === 'billion' || unit === 'b') ? 1e9 : 1e6;
+      const reportedActual = reportedValue * multiplier;
+      const realMcap = market.market_cap;
+      const deviation = Math.abs(reportedActual - realMcap) / realMcap;
+      if (deviation > 0.25) {
+        warnings.push(`Market cap in analysis ($${reportedValue}${unit}) deviates ${(deviation * 100).toFixed(0)}% from RAW_DATA ($${(realMcap / 1e9).toFixed(2)}B)`);
+      }
+    }
+  }
+
+  // 2b. Validate TVL numbers
+  const onchain = rawData?.onchain;
+  if (onchain?.tvl && report.analysis_text) {
+    const reportedTvl = report.analysis_text.match(/TVL[^$]*\$([0-9,.]+)\s*(billion|million|B|M)/i);
+    if (reportedTvl) {
+      const reportedValue = parseFloat(reportedTvl[1].replace(/,/g, ''));
+      const unit = reportedTvl[2].toLowerCase();
+      const multiplier = (unit === 'billion' || unit === 'b') ? 1e9 : 1e6;
+      const reportedActual = reportedValue * multiplier;
+      const realTvl = onchain.tvl;
+      const deviation = Math.abs(reportedActual - realTvl) / realTvl;
+      if (deviation > 0.25) {
+        warnings.push(`TVL in analysis ($${reportedValue}${unit}) deviates ${(deviation * 100).toFixed(0)}% from RAW_DATA ($${(realTvl / 1e9).toFixed(2)}B)`);
+      }
+    }
+  }
+
+  // 3. Check for common hallucination patterns
+  const hallucinationPatterns = [
+    /partnership with (google|microsoft|apple|amazon|meta)/i,
+    /raised \$\d+.*(series [A-Z]|seed|funding)/i,  // funding claims need verification
+    /listed on (binance|coinbase|kraken).*recently/i,  // listing claims
+  ];
+
+  if (report.analysis_text) {
+    for (const pattern of hallucinationPatterns) {
+      const match = report.analysis_text.match(pattern);
+      if (match) {
+        warnings.push(`Potential unverified claim detected: "${match[0]}"`);
+      }
+    }
+  }
+
+  // 4. If catalysts reference specific dates/events, flag if not from search
+  if (Array.isArray(report.catalysts)) {
+    report.catalysts = report.catalysts.map((c) => {
+      const item = String(c || '').trim();
+      if (!item) return item;
+      let out = item;
+      // Flag catalysts with very specific dates that might be hallucinated
+      if (/Q[1-4]\s*20\d{2}|January|February|March|April|May|June|July|August|September|October|November|December\s+20\d{2}/i.test(out) && !out.includes('[Verified]')) {
+        if (!out.startsWith('[')) out = '[Unverified timeline] ' + out;
+      }
+      if (!hasSourceTag(out)) {
+        warnings.push(`Catalyst missing provenance tag: "${out}"`);
+        out = `${out} [source: missing]`;
+      }
+      return out;
+    });
+  }
+
+  // 5. Ensure data_gaps field exists
+  if (!report.data_gaps) {
+    report.data_gaps = [];
+    const collectors = ['market', 'onchain', 'social', 'github', 'tokenomics', 'dex', 'reddit', 'holders', 'ecosystem', 'contract'];
+    for (const col of collectors) {
+      if (!rawData?.[col] || rawData[col]?.error) {
+        report.data_gaps.push(`${col}: data not available`);
+      }
+    }
+  }
+
+  // Attach validation metadata
+  report._validation = {
+    warnings,
+    validated_at: new Date().toISOString(),
+    data_sources_available: Object.keys(rawData || {}).filter(k => rawData[k] && !rawData[k]?.error),
+  };
+
+  if (warnings.length > 0) {
+    console.log(`[validate-report] ${warnings.length} warning(s): ${warnings.join('; ')}`);
+  }
+
+  return report;
 }
 
 async function requestXai({ apiKey, model, input, tools = [], timeoutMs = DEFAULT_TIMEOUT_MS }) {
@@ -311,6 +578,7 @@ async function requestXai({ apiKey, model, input, tools = [], timeoutMs = DEFAUL
         tools,
         text: { format: { type: 'json_object' } },
         max_output_tokens: 4000,
+        temperature: 0,
       }),
       signal,
     })
@@ -332,8 +600,18 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
   const overallScore = scores?.overall?.score ?? 0;
   const prompt = [
     '## ROLE',
-    'You are a senior crypto alpha analyst. Produce a concise but actionable quick-scan report. No tools available — rely entirely on attached data.',
-    // NOTE: null/undefined entries are filtered at join time
+    'You are a senior crypto alpha analyst. Produce a concise but actionable quick-scan report. No tools available — rely ENTIRELY on attached data.',
+
+    '## CRITICAL: ANTI-HALLUCINATION RULES',
+    '1. You have NO tools — no web search, no X search. You can ONLY use RAW_DATA and SCORES provided below.',
+    '2. NEVER invent facts, numbers, events, partnerships, funding rounds, or KOL opinions.',
+    '3. EVERY claim must reference a specific data point from RAW_DATA.',
+    '4. If data for a field is missing, write "Insufficient data" — do NOT fill in plausible-sounding information.',
+    '5. For catalysts: only mention catalysts inferable from the data (e.g., "active development suggests upcoming releases"). Do NOT invent specific events or dates.',
+    '6. For competitor_comparison: only compare if you have data. Otherwise write "No competitor data available in this scan."',
+    '7. For x_sentiment_summary: only use data from social collector. If no social data, write "No social data available."',
+    '8. A shorter, accurate report is ALWAYS better than a longer, hallucinated one.',
+    '9. Add [source: RAW_DATA.<field>] tags to factual statements so readers can audit claims.',
 
     '## SCORING CALIBRATION',
     `Algorithmic score: ${overallScore}/10. Adjust verdict based on data quality and signal strength:`,
@@ -349,11 +627,15 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
     '- analysis_text: 2-3 paragraphs (thesis → evidence → outlook)',
     '- moat: specific competitive advantage (1-2 sentences, avoid generics like "first mover")',
     '- risks: array of 3-5 risks, format: "Risk type: specific detail"',
-    '- catalysts: array of 3-5 catalysts, format: "Catalyst type: specific detail"',
-    '- competitor_comparison: name 2-3 direct competitors with tickers. For each competitor include: TVL or market cap, key differentiator, and whether they are outperforming or underperforming vs the subject.',
-    '- x_sentiment_summary: infer likely sentiment from price action, social data, and narrative. Mention any KOLs or communities known to follow this project.',
-    '- key_findings: array of 4-6 data-backed insights, each self-contained. At least 2 must reference specific numbers from the data.',
-    '- liquidity_assessment: 1-2 sentences on trading liquidity, slippage risk, and ease of entry/exit at the current market cap.',
+    '- catalysts: array of 1-3 catalysts ONLY inferable from data (e.g., active dev = likely updates). Do NOT invent events. Prefix uncertain ones with "[Inferred]".',
+    '- competitor_comparison: OPTIONAL. Only if sector_comparison data exists in RAW_DATA. If no sector data → OMIT this field entirely (do not write it).',
+    '- x_sentiment_summary: OPTIONAL. Summarize ONLY social collector data from RAW_DATA. If social.mentions is 0 or social has error → OMIT this field entirely.',
+    '- key_findings: array of 3-5 data-backed insights. Each MUST cite a specific number from RAW_DATA.',
+    '- liquidity_assessment: based on volume and market_cap from RAW_DATA only.',
+    '- data_gaps: array of strings listing which data sources were missing or had errors.',
+    '- facts_verified: array of 3-6 strings with explicit [source: RAW_DATA.<field>] tags.',
+    '- opinions: array of 1-3 strings prefixed with [Opinion].',
+    '- section_confidence: object with numbers (0-100): { fundamentals, market_sentiment, outlook, overall }.',
 
     // Round 37: quick report also includes volatility regime
     ...(rawData?.volatility && rawData.volatility.regime !== 'calm'
@@ -404,7 +686,7 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
       }
       console.log(`[quick-llm] Grok response length: ${text.length}`);
       const parsed = JSON.parse(text);
-      const report = normalizeReport(parsed, projectName, rawData, scores);
+      const report = validateReport(normalizeReport(parsed, projectName, rawData, scores), rawData);
       console.log(`[quick-llm] x_sentiment: ${report.x_sentiment_summary?.substring(0, 60)}`);
       return report;
     } catch (err) {
@@ -441,7 +723,8 @@ export async function generateReport(projectName, rawData, scores, { apiKey: exp
       timeoutMs: DEFAULT_TIMEOUT_MS,
     });
     const text = extractOutputText(payload);
-    return normalizeReport(JSON.parse(text), projectName, rawData, scores);
+    const report = normalizeReport(JSON.parse(text), projectName, rawData, scores);
+    return validateReport(report, rawData);
   } catch (error) {
     return fallbackReport(
       projectName,

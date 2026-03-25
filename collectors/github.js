@@ -215,6 +215,24 @@ export async function collectGithub(projectName) {
       }
     }
 
+    // Round 24 (AutoResearch batch): repo health composite signal
+    const stars = repoData?.stargazers_count ?? 0;
+    const forks = repoData?.forks_count ?? 0;
+    const hasDescription = Boolean(repoData?.description);
+    const hasLicense = Boolean(repoData?.license?.spdx_id || repoData?.license?.name);
+    const repoHealthScore = (
+      (stars > 100 ? 1 : 0) +
+      (forks > 20 ? 1 : 0) +
+      (hasDescription ? 1 : 0) +
+      (hasLicense ? 1 : 0) +
+      (hasCI ? 1 : 0) +
+      (commits90d > 50 ? 1 : 0)
+    );
+    const repoHealthTier = repoHealthScore >= 5 ? 'excellent' : repoHealthScore >= 3 ? 'good' : repoHealthScore >= 2 ? 'moderate' : 'poor';
+
+    // Round 24 (AutoResearch batch): fork-to-star ratio as ecosystem integration signal
+    const forkStarRatio = stars > 0 ? forks / stars : null;
+
     return {
       ...fallback,
       repo_url: repoData?.html_url || topRepo?.html_url || `https://github.com/${owner}/${repo}`,
@@ -242,6 +260,9 @@ export async function collectGithub(projectName) {
       dependency_count: dependencyCount,
       has_ci: hasCI,
       latest_release: latestRelease,
+      repo_health_tier: repoHealthTier,
+      repo_health_score: repoHealthScore,
+      fork_star_ratio: forkStarRatio != null ? Math.round(forkStarRatio * 1000) / 1000 : null,
       error: null,
     };
   } catch (error) {

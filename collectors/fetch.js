@@ -2,6 +2,19 @@ const DEFAULT_TIMEOUT_MS = 12000;
 const DEFAULT_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 800;
 
+// Round 4 (AutoResearch batch): rotate user-agents to reduce bot-filter false positives
+const USER_AGENTS = [
+  'AlphaScanner/2.0 (research; +https://clawnkers.com)',
+  'CryptoResearch/1.5 (+https://clawnkers.com/alphascan)',
+  'Mozilla/5.0 (compatible; AlphaBot/1.0; +https://clawnkers.com)',
+];
+let _uaIdx = 0;
+function nextUserAgent() {
+  const ua = USER_AGENTS[_uaIdx % USER_AGENTS.length];
+  _uaIdx++;
+  return ua;
+}
+
 // Round 46: Simple in-memory negative cache to avoid hammering APIs that consistently fail
 // Key: url domain, Value: { fails: number, cooldownUntil: number }
 const domainFailCache = new Map();
@@ -62,7 +75,7 @@ export async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, 
       const response = await fetch(url, {
         headers: {
           accept: 'application/json',
-          'user-agent': 'AlphaScanner/1.0',
+          'user-agent': nextUserAgent(),
           // Round 13: prevent CDN/proxy from serving stale data
           'cache-control': 'no-cache',
           pragma: 'no-cache',

@@ -1,93 +1,418 @@
 {
-  "bitcoin": { "owner": "bitcoin", "repo": "bitcoin" },
-  "ethereum": { "owner": "ethereum", "repo": "go-ethereum" },
-  "tether": { "owner": "tether", "repo": "tether-usdt-ledger" },
-  "ripple": { "owner": "XRPLF", "repo": "rippled" },
-  "bnb": { "owner": "bnb-chain", "repo": "bnb-chain" },
-  "solana": { "owner": "anza-xyz", "repo": "agave" },
-  "usd-coin": { "owner": "circlefin", "repo": "stablecoin-evm" },
-  "dogecoin": { "owner": "dogecoin", "repo": "dogecoin" },
-  "cardano": { "owner": "IntersectMBO", "repo": "cardano-node" },
-  "tron": { "owner": "tronprotocol", "repo": "java-tron" },
-  "lido-dao": { "owner": "lidofinance", "repo": "core" },
-  "wrapped-bitcoin": { "owner": "BitGo", "repo": "eth-multisig-v4" },
-  "hyperliquid": { "owner": "hyperliquid-dex", "repo": "hyperliquid-python-sdk" },
-  "chainlink": { "owner": "smartcontractkit", "repo": "chainlink" },
-  "wrapped-steth": { "owner": "lidofinance", "repo": "core" },
-  "stellar": { "owner": "stellar", "repo": "stellar-core" },
-  "sui": { "owner": "MystenLabs", "repo": "sui" },
-  "bitcoin-cash": { "owner": "bitcoin-cash-node", "repo": "bitcoin-cash-node" },
-  "hedera": { "owner": "hashgraph", "repo": "hedera-services" },
-  "avalanche-2": { "owner": "ava-labs", "repo": "avalanchego" },
-  "shiba-inu": { "owner": "shytoshikusama", "repo": "shibarium-tech" },
-  "leo-token": { "owner": "bitfinexcom", "repo": "wallets" },
-  "toncoin": { "owner": "ton-blockchain", "repo": "ton" },
-  "litecoin": { "owner": "litecoin-project", "repo": "litecoin" },
-  "polkadot": { "owner": "paritytech", "repo": "polkadot-sdk" },
-  "usds": { "owner": "makerdao", "repo": "dss" },
-  "monero": { "owner": "monero-project", "repo": "monero" },
-  "bitget-token": { "owner": "BitgetLimited", "repo": "v3-bitget-api-sdk" },
-  "weth": { "owner": "gnosis", "repo": "canonical-weth" },
-  "pepe": { "owner": "pepepalu", "repo": "pepecoin" },
-  "ethena-usde": { "owner": "ethena-labs", "repo": "code4arena-contest" },
-  "pi-network": { "owner": "minepi", "repo": "pi-platform-docs" },
-  "whitebit": { "owner": "whitebit-exchange", "repo": "api-docs" },
-  "uniswap": { "owner": "Uniswap", "repo": "v4-core" },
-  "aptos": { "owner": "aptos-labs", "repo": "aptos-core" },
-  "near": { "owner": "near", "repo": "nearcore" },
-  "bittensor": { "owner": "opentensor", "repo": "bittensor" },
-  "ondo-finance": { "owner": "ondo-finance", "repo": "ondo-v1" },
-  "internet-computer": { "owner": "dfinity", "repo": "ic" },
-  "aave": { "owner": "aave", "repo": "aave-v3-core" },
-  "ethereum-classic": { "owner": "ethereumclassic", "repo": "core-geth" },
-  "render-token": { "owner": "rendernetwork", "repo": "RNPIPs" },
-  "polygon-ecosystem-token": { "owner": "0xPolygon", "repo": "polygon-sdk" },
-  "vechain": { "owner": "vechain", "repo": "thor" },
-  "algorand": { "owner": "algorand", "repo": "go-algorand" },
-  "kaspa": { "owner": "kaspanet", "repo": "rusty-kaspa" },
-  "filecoin": { "owner": "filecoin-project", "repo": "lotus" },
-  "cosmos": { "owner": "cosmos", "repo": "gaia" },
-  "arbitrum": { "owner": "OffchainLabs", "repo": "nitro" },
-  "official-trump": { "owner": "GetTrumpMemes", "repo": "trump-token" },
-  "curve-dao-token": { "owner": "curvefi", "repo": "curve-contract" },
-  "curve": { "owner": "curvefi", "repo": "curve-contract" },
-  "compound": { "owner": "compound-finance", "repo": "compound-protocol" },
-  "maker": { "owner": "makerdao", "repo": "dss" },
-  "yearn-finance": { "owner": "yearn", "repo": "yearn-vaults" },
-  "synthetix": { "owner": "Synthetixio", "repo": "synthetix" },
-  "optimism": { "owner": "ethereum-optimism", "repo": "optimism" },
-  "op": { "owner": "ethereum-optimism", "repo": "optimism" },
-  "base": { "owner": "base-org", "repo": "node" },
-  "starknet": { "owner": "starkware-libs", "repo": "starknet-specs" },
-  "injective-protocol": { "owner": "InjectiveLabs", "repo": "injective-chain-releases" },
-  "injective": { "owner": "InjectiveLabs", "repo": "injective-chain-releases" },
-  "celestia": { "owner": "celestiaorg", "repo": "celestia-node" },
-  "pendle": { "owner": "pendle-finance", "repo": "pendle-core-v2-public" },
-  "eigenlayer": { "owner": "Layr-Labs", "repo": "eigenlayer-contracts" },
-  "eigenlayer-restaked-eth": { "owner": "Layr-Labs", "repo": "eigenlayer-contracts" },
-  "fluid-protocol": { "owner": "Instadapp", "repo": "fluid-contracts-public" },
-  "morpho": { "owner": "morpho-org", "repo": "morpho-blue" },
-  "sky": { "owner": "makerdao", "repo": "endgame-plan" },
-  "spark": { "owner": "marsfoundation", "repo": "sparklend-v1-core" },
-  "kamino": { "owner": "Kamino-Finance", "repo": "klend-sdk" },
-  "drift": { "owner": "drift-labs", "repo": "protocol-v2" },
-  "pancakeswap": { "owner": "pancakeswap", "repo": "pancake-v4-core" },
-  "sushiswap": { "owner": "sushiswap", "repo": "sushiswap" },
-  "balancer": { "owner": "balancer", "repo": "balancer-v3-monorepo" },
-  "gmx": { "owner": "gmx-io", "repo": "gmx-contracts" },
-  "dydx": { "owner": "dydxprotocol", "repo": "v4-chain" },
-  "jupiter-exchange-solana": { "owner": "jup-ag", "repo": "jupiter-core" },
-  "jupiter": { "owner": "jup-ag", "repo": "jupiter-core" },
-  "raydium": { "owner": "raydium-io", "repo": "raydium-sdk-V2" },
-  "jito": { "owner": "jito-foundation", "repo": "jito-solana" },
-  "pyth-network": { "owner": "pyth-network", "repo": "pyth-sdk-solana" },
-  "wormhole": { "owner": "wormhole-foundation", "repo": "wormhole" },
-  "layerzero": { "owner": "LayerZero-Labs", "repo": "LayerZero-v2" },
-  "across-protocol": { "owner": "across-protocol", "repo": "contracts" },
-  "stargate-finance": { "owner": "stargate-protocol", "repo": "stargate" },
-  "mantle": { "owner": "mantlenetworkio", "repo": "mantle-v2-monorepo" },
-  "scroll": { "owner": "scroll-tech", "repo": "scroll" },
-  "zksync": { "owner": "matter-labs", "repo": "zksync-era" },
-  "polygon": { "owner": "maticnetwork", "repo": "heimdall" },
-  "matic-network": { "owner": "maticnetwork", "repo": "heimdall" }
+  "bitcoin": {
+    "owner": "bitcoin",
+    "repo": "bitcoin"
+  },
+  "ethereum": {
+    "owner": "ethereum",
+    "repo": "go-ethereum"
+  },
+  "tether": {
+    "owner": "tether",
+    "repo": "tether-usdt-ledger"
+  },
+  "ripple": {
+    "owner": "XRPLF",
+    "repo": "rippled"
+  },
+  "bnb": {
+    "owner": "bnb-chain",
+    "repo": "bnb-chain"
+  },
+  "solana": {
+    "owner": "anza-xyz",
+    "repo": "agave"
+  },
+  "usd-coin": {
+    "owner": "circlefin",
+    "repo": "stablecoin-evm"
+  },
+  "dogecoin": {
+    "owner": "dogecoin",
+    "repo": "dogecoin"
+  },
+  "cardano": {
+    "owner": "IntersectMBO",
+    "repo": "cardano-node"
+  },
+  "tron": {
+    "owner": "tronprotocol",
+    "repo": "java-tron"
+  },
+  "lido-dao": {
+    "owner": "lidofinance",
+    "repo": "core"
+  },
+  "wrapped-bitcoin": {
+    "owner": "BitGo",
+    "repo": "eth-multisig-v4"
+  },
+  "hyperliquid": {
+    "owner": "hyperliquid-dex",
+    "repo": "hyperliquid-python-sdk"
+  },
+  "chainlink": {
+    "owner": "smartcontractkit",
+    "repo": "chainlink"
+  },
+  "wrapped-steth": {
+    "owner": "lidofinance",
+    "repo": "core"
+  },
+  "stellar": {
+    "owner": "stellar",
+    "repo": "stellar-core"
+  },
+  "sui": {
+    "owner": "MystenLabs",
+    "repo": "sui"
+  },
+  "bitcoin-cash": {
+    "owner": "bitcoin-cash-node",
+    "repo": "bitcoin-cash-node"
+  },
+  "hedera": {
+    "owner": "hashgraph",
+    "repo": "hedera-services"
+  },
+  "avalanche-2": {
+    "owner": "ava-labs",
+    "repo": "avalanchego"
+  },
+  "shiba-inu": {
+    "owner": "shytoshikusama",
+    "repo": "shibarium-tech"
+  },
+  "leo-token": {
+    "owner": "bitfinexcom",
+    "repo": "wallets"
+  },
+  "toncoin": {
+    "owner": "ton-blockchain",
+    "repo": "ton"
+  },
+  "litecoin": {
+    "owner": "litecoin-project",
+    "repo": "litecoin"
+  },
+  "polkadot": {
+    "owner": "paritytech",
+    "repo": "polkadot-sdk"
+  },
+  "usds": {
+    "owner": "makerdao",
+    "repo": "dss"
+  },
+  "monero": {
+    "owner": "monero-project",
+    "repo": "monero"
+  },
+  "bitget-token": {
+    "owner": "BitgetLimited",
+    "repo": "v3-bitget-api-sdk"
+  },
+  "weth": {
+    "owner": "gnosis",
+    "repo": "canonical-weth"
+  },
+  "pepe": {
+    "owner": "pepepalu",
+    "repo": "pepecoin"
+  },
+  "ethena-usde": {
+    "owner": "ethena-labs",
+    "repo": "code4arena-contest"
+  },
+  "pi-network": {
+    "owner": "minepi",
+    "repo": "pi-platform-docs"
+  },
+  "whitebit": {
+    "owner": "whitebit-exchange",
+    "repo": "api-docs"
+  },
+  "uniswap": {
+    "owner": "Uniswap",
+    "repo": "v4-core"
+  },
+  "aptos": {
+    "owner": "aptos-labs",
+    "repo": "aptos-core"
+  },
+  "near": {
+    "owner": "near",
+    "repo": "nearcore"
+  },
+  "bittensor": {
+    "owner": "opentensor",
+    "repo": "bittensor"
+  },
+  "ondo-finance": {
+    "owner": "ondo-finance",
+    "repo": "ondo-v1"
+  },
+  "internet-computer": {
+    "owner": "dfinity",
+    "repo": "ic"
+  },
+  "aave": {
+    "owner": "aave",
+    "repo": "aave-v3-core"
+  },
+  "ethereum-classic": {
+    "owner": "ethereumclassic",
+    "repo": "core-geth"
+  },
+  "render-token": {
+    "owner": "rendernetwork",
+    "repo": "RNPIPs"
+  },
+  "polygon-ecosystem-token": {
+    "owner": "0xPolygon",
+    "repo": "polygon-sdk"
+  },
+  "vechain": {
+    "owner": "vechain",
+    "repo": "thor"
+  },
+  "algorand": {
+    "owner": "algorand",
+    "repo": "go-algorand"
+  },
+  "kaspa": {
+    "owner": "kaspanet",
+    "repo": "rusty-kaspa"
+  },
+  "filecoin": {
+    "owner": "filecoin-project",
+    "repo": "lotus"
+  },
+  "cosmos": {
+    "owner": "cosmos",
+    "repo": "gaia"
+  },
+  "arbitrum": {
+    "owner": "OffchainLabs",
+    "repo": "nitro"
+  },
+  "official-trump": {
+    "owner": "GetTrumpMemes",
+    "repo": "trump-token"
+  },
+  "curve-dao-token": {
+    "owner": "curvefi",
+    "repo": "curve-contract"
+  },
+  "curve": {
+    "owner": "curvefi",
+    "repo": "curve-contract"
+  },
+  "compound": {
+    "owner": "compound-finance",
+    "repo": "compound-protocol"
+  },
+  "maker": {
+    "owner": "makerdao",
+    "repo": "dss"
+  },
+  "yearn-finance": {
+    "owner": "yearn",
+    "repo": "yearn-vaults"
+  },
+  "synthetix": {
+    "owner": "Synthetixio",
+    "repo": "synthetix"
+  },
+  "optimism": {
+    "owner": "ethereum-optimism",
+    "repo": "optimism"
+  },
+  "op": {
+    "owner": "ethereum-optimism",
+    "repo": "optimism"
+  },
+  "base": {
+    "owner": "base-org",
+    "repo": "node"
+  },
+  "starknet": {
+    "owner": "starkware-libs",
+    "repo": "starknet-specs"
+  },
+  "injective-protocol": {
+    "owner": "InjectiveLabs",
+    "repo": "injective-chain-releases"
+  },
+  "injective": {
+    "owner": "InjectiveLabs",
+    "repo": "injective-chain-releases"
+  },
+  "celestia": {
+    "owner": "celestiaorg",
+    "repo": "celestia-node"
+  },
+  "pendle": {
+    "owner": "pendle-finance",
+    "repo": "pendle-core-v2-public"
+  },
+  "eigenlayer": {
+    "owner": "Layr-Labs",
+    "repo": "eigenlayer-contracts"
+  },
+  "eigenlayer-restaked-eth": {
+    "owner": "Layr-Labs",
+    "repo": "eigenlayer-contracts"
+  },
+  "fluid-protocol": {
+    "owner": "Instadapp",
+    "repo": "fluid-contracts-public"
+  },
+  "morpho": {
+    "owner": "morpho-org",
+    "repo": "morpho-blue"
+  },
+  "sky": {
+    "owner": "makerdao",
+    "repo": "endgame-plan"
+  },
+  "spark": {
+    "owner": "marsfoundation",
+    "repo": "sparklend-v1-core"
+  },
+  "kamino": {
+    "owner": "Kamino-Finance",
+    "repo": "klend-sdk"
+  },
+  "drift": {
+    "owner": "drift-labs",
+    "repo": "protocol-v2"
+  },
+  "pancakeswap": {
+    "owner": "pancakeswap",
+    "repo": "pancake-v4-core"
+  },
+  "sushiswap": {
+    "owner": "sushiswap",
+    "repo": "sushiswap"
+  },
+  "balancer": {
+    "owner": "balancer",
+    "repo": "balancer-v3-monorepo"
+  },
+  "gmx": {
+    "owner": "gmx-io",
+    "repo": "gmx-contracts"
+  },
+  "dydx": {
+    "owner": "dydxprotocol",
+    "repo": "v4-chain"
+  },
+  "jupiter-exchange-solana": {
+    "owner": "jup-ag",
+    "repo": "jupiter-core"
+  },
+  "jupiter": {
+    "owner": "jup-ag",
+    "repo": "jupiter-core"
+  },
+  "raydium": {
+    "owner": "raydium-io",
+    "repo": "raydium-sdk-V2"
+  },
+  "jito": {
+    "owner": "jito-foundation",
+    "repo": "jito-solana"
+  },
+  "pyth-network": {
+    "owner": "pyth-network",
+    "repo": "pyth-sdk-solana"
+  },
+  "wormhole": {
+    "owner": "wormhole-foundation",
+    "repo": "wormhole"
+  },
+  "layerzero": {
+    "owner": "LayerZero-Labs",
+    "repo": "LayerZero"
+  },
+  "across-protocol": {
+    "owner": "across-protocol",
+    "repo": "contracts-v3"
+  },
+  "stargate-finance": {
+    "owner": "stargate-protocol",
+    "repo": "stargate"
+  },
+  "mantle": {
+    "owner": "mantlenetworkio",
+    "repo": "mantle-v2-monorepo"
+  },
+  "scroll": {
+    "owner": "scroll-tech",
+    "repo": "scroll"
+  },
+  "zksync": {
+    "owner": "matter-labs",
+    "repo": "zksync-era"
+  },
+  "polygon": {
+    "owner": "maticnetwork",
+    "repo": "heimdall"
+  },
+  "matic-network": {
+    "owner": "maticnetwork",
+    "repo": "heimdall"
+  },
+  "aerodrome-finance": {
+    "owner": "aerodrome-finance",
+    "repo": "contracts"
+  },
+  "velodrome-finance": {
+    "owner": "velodrome-finance",
+    "repo": "contracts"
+  },
+  "pendle-finance": {
+    "owner": "pendle-finance",
+    "repo": "pendle-core-v2-public"
+  },
+  "eigenlayer-protocol": {
+    "owner": "Layr-Labs",
+    "repo": "eigenlayer-contracts"
+  },
+  "drift-protocol": {
+    "owner": "drift-labs",
+    "repo": "protocol-v2"
+  },
+  "jito-staked-sol": {
+    "owner": "jito-foundation",
+    "repo": "jito-solana"
+  },
+  "jito-foundation": {
+    "owner": "jito-foundation",
+    "repo": "jito-solana"
+  },
+  "orca": {
+    "owner": "orca-so",
+    "repo": "whirlpools"
+  },
+  "sonic": {
+    "owner": "sonic-chain",
+    "repo": "sonic"
+  },
+  "bera": {
+    "owner": "berachain",
+    "repo": "polaris"
+  },
+  "berachain": {
+    "owner": "berachain",
+    "repo": "polaris"
+  },
+  "monad": {
+    "owner": "monad-labs",
+    "repo": "monad"
+  },
+  "hyperlane": {
+    "owner": "hyperlane-xyz",
+    "repo": "hyperlane-monorepo"
+  }
 }

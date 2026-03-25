@@ -153,6 +153,26 @@ export function scoreReportQuality(rawData, scores, analysis) {
     score -= Math.round((50 - freshness) / 10) * 2; // up to -10 points
   }
 
+  // ── 9. Round 15 (AutoResearch batch): Social data quality check ──
+  const socialData = rawData?.social ?? {};
+  if (!socialData.error && socialData.filtered_mentions === 0 && !socialData.sentiment) {
+    issues.push('Social data returned zero mentions — sentiment analysis unreliable.');
+    score -= 8;
+  } else if (socialData.bot_filtered_count > 0 && socialData.mentions > 0) {
+    const botPct = (socialData.bot_filtered_count / socialData.mentions) * 100;
+    if (botPct > 60) {
+      issues.push(`${botPct.toFixed(0)}% of social mentions were bot-filtered — remaining signal quality is low.`);
+      score -= 5;
+    }
+  }
+
+  // ── 10. Round 15 (AutoResearch batch): LLM analysis depth check ──
+  const analysisText = rawData?.llm_analysis?.analysis_text ?? rawData?.analysis_text ?? '';
+  if (analysisText && analysisText.length < 200) {
+    issues.push('LLM analysis text is very short (<200 chars) — may indicate fallback or low-quality output.');
+    score -= 10;
+  }
+
   // Clamp score
   score = Math.max(0, Math.min(100, score));
 

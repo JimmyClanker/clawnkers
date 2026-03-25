@@ -246,6 +246,23 @@ export async function collectSocial(projectName, exaService) {
       return /regulatory|sec|cftc|ban|comply|compliance|lawsuit|fine|sanction|seizure/.test(text);
     }).length;
 
+    // Round 9 (AutoResearch batch): partnership mentions (positive catalyst)
+    const partnershipMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /partnership|integration|collaboration|joins|adopts|announced.*with|working.*with|listing|deployed.*on/.test(text);
+    }).length;
+
+    // Round 9 (AutoResearch batch): upgrade/mainnet/launch mentions (catalyst signal)
+    const upgradeMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /\bv[2-9]\b|v\d+\.\d+|mainnet|launch|upgrade|update|migration|live on|goes live|deployed/.test(text);
+    }).length;
+
+    // Round 9 (AutoResearch batch): sentiment dominance — are bulls clearly in control?
+    const sentimentDominance = totalSentiment > 0
+      ? Math.max(sentimentCounts.bullish, sentimentCounts.bearish, sentimentCounts.neutral) / totalSentiment
+      : null;
+
     return {
       ...fallback,
       mentions: rawItems.length,
@@ -254,12 +271,15 @@ export async function collectSocial(projectName, exaService) {
       sentiment: decideSentiment(sentimentCounts),
       sentiment_score: Math.round(sentimentScore * 100) / 100,
       sentiment_counts: sentimentCounts,
+      sentiment_dominance: sentimentDominance != null ? Math.round(sentimentDominance * 100) / 100 : null,
       key_narratives: extractNarratives(uniqueNews, projectName),
       recent_news: recentNews,
       unlock_mentions: unlockMentions,
       exploit_mentions: exploitMentions,
       institutional_mentions: institutionalMentions,
       regulatory_mentions: regulatoryMentions,
+      partnership_mentions: partnershipMentions,
+      upgrade_mentions: upgradeMentions,
       error: settled.every((entry) => entry.status === 'rejected') ? 'All Exa queries failed' : null,
     };
   } catch (error) {

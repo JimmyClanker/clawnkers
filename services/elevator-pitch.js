@@ -94,7 +94,22 @@ export function generateElevatorPitch(projectName, rawData, scores, analysis) {
   const verdict = analysis?.verdict ?? 'HOLD';
   const sentence4 = verdictLine(verdict);
 
-  const pitch = [sentence1, sentence2, sentence3, sentence4].join(' ');
+  // Round 22 (AutoResearch batch): Add trend reversal context if strong signal
+  const trendReversal = rawData?.trend_reversal;
+  let sentence5 = null;
+  if (trendReversal && trendReversal.pattern !== 'none' && trendReversal.confidence !== 'low') {
+    const patternLabels = {
+      bullish_reversal: '📈 A potential bullish reversal is forming.',
+      bearish_reversal: '📉 Warning: bearish reversal pattern detected.',
+      accumulation: '🔍 Accumulation signals suggest smart money building positions.',
+      distribution: '⚠️ Distribution pattern suggests potential selling pressure ahead.',
+    };
+    sentence5 = patternLabels[trendReversal.pattern] ?? null;
+  }
+
+  const sentences = [sentence1, sentence2, sentence3, sentence4];
+  if (sentence5) sentences.push(sentence5);
+  const pitch = sentences.join(' ');
 
   return { pitch };
 }

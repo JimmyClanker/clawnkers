@@ -315,6 +315,44 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     }
   }
 
+  // 28. Round 1 (AutoResearch batch): No social mentions at all — ghost project
+  const mentions = safeN(social.mentions ?? social.filtered_mentions ?? 0);
+  if (mentions === 0 && !social.error) {
+    flags.push({
+      flag: 'zero_social_mentions',
+      severity: 'warning',
+      detail: 'No social mentions detected — project may be unknown, abandoned, or too niche for signal collection.',
+    });
+  }
+
+  // 29. Round 9 (AutoResearch batch): Very high inflation (>100% annualized)
+  const inflationRate = safeN(tokenomics.inflation_rate ?? 0);
+  if (inflationRate > 100) {
+    flags.push({
+      flag: 'hyperinflationary',
+      severity: 'critical',
+      detail: `Annualized inflation rate is ${inflationRate.toFixed(0)}% — extreme dilution will erode token value unless matched by equally strong demand.`,
+    });
+  } else if (inflationRate > 50) {
+    flags.push({
+      flag: 'high_inflation',
+      severity: 'warning',
+      detail: `Annualized inflation rate is ${inflationRate.toFixed(0)}% — significant dilution pressure on existing holders.`,
+    });
+  }
+
+  // 30. Round 19 (AutoResearch batch): Very low exchange count for established project
+  const exchangeCount = safeN(market.exchange_count ?? 0);
+  const ageMs2 = genesisDate ? Date.now() - new Date(genesisDate).getTime() : 0;
+  const ageMonths2 = ageMs2 / (1000 * 60 * 60 * 24 * 30.44);
+  if (exchangeCount > 0 && exchangeCount <= 2 && ageMonths2 > 12 && safeN(market.market_cap) > 5_000_000) {
+    flags.push({
+      flag: 'very_low_exchange_count',
+      severity: 'warning',
+      detail: `Only listed on ${exchangeCount} exchange(s) despite $${(safeN(market.market_cap) / 1e6).toFixed(1)}M market cap and ${ageMonths2.toFixed(0)} months age — liquidity fragility risk.`,
+    });
+  }
+
   // Deduplicate flags by flag key (keep highest severity)
   const severityOrder = { critical: 3, warning: 2, info: 1 };
   const flagMap = new Map();

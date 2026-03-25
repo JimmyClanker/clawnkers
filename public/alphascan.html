@@ -1413,6 +1413,21 @@
           ${rr?.expected_value!=null?`<div style="font-size:0.82rem;color:#7e7e7e;">Kelly: ${rr.kelly_fraction!=null?(rr.kelly_fraction*100).toFixed(1)+'%':'n/a'} · EV: ${escapeHtml(String(rr.expected_value))} · TP1 prob: ${rr.probability_tp1!=null?(rr.probability_tp1*100).toFixed(0)+'%':'n/a'}</div>`:''}
         </section>`;})()}
 
+        ${(()=>{
+          const dg = analysis?.data_gaps || payload?.data_gaps || [];
+          const vw = payload?._validation?.warnings || [];
+          const ds = payload?._validation?.data_sources_available || [];
+          const rq = payload?.report_quality;
+          if (!dg.length && !vw.length && !rq) return '';
+          return `<section class="panel" style="margin-top:18px;border-color:rgba(251,191,36,0.2);">
+            <div class="section-label">📋 Data Reliability</div>
+            ${rq ? `<div style="margin-bottom:8px;font-size:0.85rem;">Report quality: <strong style="color:${rq.grade==='A'?'#22c55e':rq.grade==='B'?'#86efac':rq.grade==='C'?'#fbbf24':rq.grade==='D'?'#f97316':'#ef4444'}">${escapeHtml(rq.grade)}</strong> (${rq.quality_score ?? rq.score}/100)</div>` : ''}
+            ${ds.length ? `<div style="font-size:0.78rem;color:#86efac;margin-bottom:4px;">✅ Data sources: ${ds.map(s=>escapeHtml(s)).join(', ')}</div>` : ''}
+            ${dg.length ? `<div style="font-size:0.78rem;color:#fbbf24;margin-bottom:4px;">⚠ Data gaps: ${dg.map(g=>escapeHtml(g)).join(', ')}</div>` : ''}
+            ${vw.length ? `<div style="font-size:0.78rem;color:#f97316;margin-top:4px;">🔍 Validation notes: ${vw.map(w=>escapeHtml(w)).join('; ')}</div>` : ''}
+          </section>`;
+        })()}
+
         <section class="panel" style="margin-top:18px;">
           <div class="footer-row">
             <div class="footnote">Generated: ${escapeHtml(payload?.generated_at||'n/a')}</div>

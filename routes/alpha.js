@@ -17,6 +17,8 @@ import { assessVolatility } from '../services/volatility-guard.js';
 import { detectPriceAlerts } from '../services/price-alerts.js';
 import { computeScoreVelocity } from '../services/score-velocity.js';
 import { getDimensionDistribution } from '../services/percentile-store.js';
+import { detectTrendReversal } from '../services/trend-reversal.js';
+import { detectNarrativeMomentum } from '../services/narrative-momentum.js';
 
 function safeParseJSON(str) {
   try { return str ? JSON.parse(str) : null; } catch { return null; }
@@ -238,31 +240,36 @@ async function runAnalysis({ projectName, exaService, mode, config, collectAllFn
   rawData.red_flags = redFlags;
   rawData.alpha_signals = alphaSignals;
 
+  // IMPORTANT: compute derived context BEFORE LLM generation so prompts can use it.
+  const volatilityAssessment = assessVolatility(rawData);
+  rawData.volatility = volatilityAssessment;
+
+  const priceAlerts = detectPriceAlerts(rawData);
+  rawData.price_alerts = priceAlerts;
+
+  const trendReversal = detectTrendReversal(rawData);
+  rawData.trend_reversal = trendReversal;
+
+  const narrativeMomentum = detectNarrativeMomentum(rawData);
+  rawData.narrative_momentum = narrativeMomentum;
+
   const analysis =
     mode === 'quick'
       ? await generateQuickReport(projectName, rawData, scores, { apiKey: config?.xaiApiKey })
       : await generateReport(projectName, rawData, scores, { apiKey: config?.xaiApiKey });
 
-  // Trade setup + risk/reward
+  // Round 30 (AutoResearch batch): run independent sync services in one pass,
+  // and competitor detection (async) in parallel with post-collection sync work.
   const tradeSetup = generateTradeSetup(rawData, scores);
   const riskReward = assessRiskReward(rawData, scores, tradeSetup);
-
-  // Report quality
   const reportQuality = scoreReportQuality(rawData, scores, analysis);
-
-  // Competitor detection (async, non-blocking)
-  let competitors = { competitors: [], comparison_summary: 'Skipped.' };
-  try {
-    competitors = await detectCompetitors(projectName, rawData);
-  } catch (_) { /* non-critical */ }
-
-  // Elevator pitch
   const elevatorPitch = generateElevatorPitch(projectName, rawData, scores, analysis);
-
-  // Round 12: Investment thesis (bull/bear/neutral)
   const thesis = generateThesis(projectName, rawData, scores, redFlags, alphaSignals);
 
-  // What changed vs previous scan
+  // Competitor detection (async, non-blocking) — start in parallel with sync work
+  const competitorPromise = detectCompetitors(projectName, rawData).catch(() => ({ competitors: [], comparison_summary: 'Skipped.' }));
+
+  // What changed vs previous scan (sync)
   let changes = { has_previous: false, changes: [] };
   if (db) {
     try {
@@ -270,16 +277,17 @@ async function runAnalysis({ projectName, exaService, mode, config, collectAllFn
     } catch (_) { /* non-critical */ }
   }
 
+  // Await competitor detection (started above in parallel)
+  let competitors;
+  try {
+    competitors = await competitorPromise;
+  } catch (_) {
+    competitors = { competitors: [], comparison_summary: 'Skipped.' };
+  }
+
   // Compute scan_version before storing
   const scanVersion = db ? getScanVersion(db, projectName) : null;
 
-  // Round 35: volatility regime assessment (computed before buildResponse so it flows into rawData for LLM)
-  const volatilityAssessment = assessVolatility(rawData);
-  rawData.volatility = volatilityAssessment;
-
-  // Round 47: price alert detection
-  const priceAlerts = detectPriceAlerts(rawData);
-  rawData.price_alerts = priceAlerts;
 
   // Round 28: TVL leadership signal — if project TVL > all detected competitors, note it
   if (
@@ -304,9 +312,11 @@ async function runAnalysis({ projectName, exaService, mode, config, collectAllFn
 
   const response = buildResponse({ projectName, rawData, scores, analysis, mode });
 
-  // Attach volatility + price alerts + score velocity to response (after buildResponse)
+  // Attach volatility + price alerts + score velocity + trend reversal to response
   response.volatility = volatilityAssessment;
   response.price_alerts = priceAlerts;
+  response.trend_reversal = trendReversal;
+  response.narrative_momentum = narrativeMomentum;
 
   // Round 52: score velocity
   if (db) {
@@ -636,6 +646,11 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
           overall_score: r.scores?.overall?.score ?? null,
           key_metrics: r.key_metrics,
           elevator_pitch: r.elevator_pitch ?? null,
+          // Round 19 (AutoResearch batch): include trend + volatility in batch output
+          trend_reversal: r.trend_reversal ? { pattern: r.trend_reversal.pattern, confidence: r.trend_reversal.confidence } : null,
+          volatility_regime: r.volatility?.regime ?? 'calm',
+          critical_flags: (r.red_flags ?? []).filter((f) => f.severity === 'critical').length,
+          strong_signals: (r.alpha_signals ?? []).filter((s) => s.strength === 'strong').length,
           cache: r.cache,
         };
       }
@@ -1011,6 +1026,66 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
     } catch (err) {
       console.error('[alpha/leaderboard]', err.message);
       return res.status(500).json({ error: 'Failed to build leaderboard' });
+    }
+  });
+
+  // ── Round 20 (AutoResearch batch): Active signals endpoint — aggregate alpha signals ──
+  router.get('/alpha/signals', (req, res) => {
+    const windowHours = Math.min(Number(req.query.window_hours) || 48, 168);
+    const minStrength = req.query.min_strength || 'moderate'; // 'weak'|'moderate'|'strong'
+    const strengthOrder = { strong: 3, moderate: 2, weak: 1 };
+    const minStrengthVal = strengthOrder[minStrength] ?? 2;
+
+    try {
+      const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+      const rows = signalsService.db.prepare(`
+        SELECT sh.project_name, sh.scanned_at, sh.report_json
+        FROM scan_history sh
+        INNER JOIN (
+          SELECT project_name, MAX(scanned_at) AS latest
+          FROM scan_history WHERE scanned_at >= ?
+          GROUP BY project_name
+        ) latest ON sh.project_name = latest.project_name AND sh.scanned_at = latest.latest
+        ORDER BY sh.scanned_at DESC LIMIT 50
+      `).all(cutoff);
+
+      const allSignals = [];
+      for (const row of rows) {
+        const report = safeParseJSON(row.report_json) ?? {};
+        const signals = Array.isArray(report.alpha_signals) ? report.alpha_signals : [];
+        for (const sig of signals) {
+          const sv = strengthOrder[sig.strength] ?? 1;
+          if (sv >= minStrengthVal) {
+            allSignals.push({
+              project: row.project_name,
+              scanned_at: row.scanned_at,
+              signal: sig.signal,
+              strength: sig.strength,
+              detail: sig.detail,
+              overall_score: report.scores?.overall?.score ?? null,
+              verdict: report.verdict ?? null,
+            });
+          }
+        }
+      }
+
+      // Sort: strong first, then by project score
+      allSignals.sort((a, b) => {
+        const sv = (strengthOrder[b.strength] ?? 0) - (strengthOrder[a.strength] ?? 0);
+        if (sv !== 0) return sv;
+        return (b.overall_score ?? 0) - (a.overall_score ?? 0);
+      });
+
+      return res.json({
+        signals: allSignals.slice(0, 50),
+        count: allSignals.length,
+        window_hours: windowHours,
+        min_strength: minStrength,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[alpha/signals]', err.message);
+      return res.status(500).json({ error: 'Failed to aggregate signals' });
     }
   });
 

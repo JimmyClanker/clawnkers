@@ -126,6 +126,9 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `- Overall Score: ${keyMetrics.overall_score_fmt}`,
     ...(keyMetrics.dex_pressure ? [`- DEX Pressure: ${keyMetrics.dex_pressure} (ratio: ${keyMetrics.dex_buy_sell_ratio ?? 'n/a'})`] : []),
     ...(keyMetrics.tvl_stickiness ? [`- TVL Stickiness: ${keyMetrics.tvl_stickiness}`] : []),
+    // Round 13 (AutoResearch batch): protocol maturity + DEX liquidity depth
+    ...(rawData?.onchain?.protocol_maturity ? [`- Protocol Maturity: ${rawData.onchain.protocol_maturity}`] : []),
+    ...(rawData?.dex?.liquidity_category ? [`- DEX Liquidity: ${rawData.dex.liquidity_category} (${ rawData?.dex?.dex_liquidity_usd ? fmtNumber(rawData.dex.dex_liquidity_usd) : 'n/a' })`] : []),
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,

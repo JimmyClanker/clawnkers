@@ -87,14 +87,20 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   const warnFlags = redFlags.filter((f) => f.severity === 'warning').map((f) => FLAG_PHRASES[f.flag] ?? f.flag);
   const bearFlagText = [...critFlags, ...warnFlags].slice(0, 2).join(' and ');
 
+  // Round 23 (AutoResearch batch): trend reversal augmentation
+  const trendReversal = rawData?.trend_reversal;
+  const trendNote = trendReversal && trendReversal.pattern !== 'none' && trendReversal.confidence !== 'low'
+    ? ` A ${trendReversal.pattern.replace(/_/g, ' ')} pattern (${trendReversal.confidence} confidence) adds technical support.`
+    : '';
+
   // ── Bull case ─────────────────────────────────────────────────────────────
   let bull_case;
   if (strongSignals.length > 0 && strongest.length > 0) {
-    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10)${priceRangeNote}${stickinessNote}.`;
+    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10)${priceRangeNote}${stickinessNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   } else if (strongest.length > 0 && overallScore >= 6) {
-    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals${priceRangeNote}, positioning it for potential upside with an overall score of ${overallScore}/10${stickinessNote}.`;
+    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals${priceRangeNote}, positioning it for potential upside with an overall score of ${overallScore}/10${stickinessNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   } else {
-    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors${priceRangeNote}.`;
+    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors${priceRangeNote}.${trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   }
 
   // ── Bear case ─────────────────────────────────────────────────────────────

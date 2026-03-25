@@ -240,9 +240,40 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
       signals.push({
         signal: 'high_fee_efficiency',
         strength: feesPerMTvl > 50_000 ? 'strong' : 'moderate',
-        detail: `Protocol generates $${(fees7dForEfficiency / 1000).toFixed(0)}K fees/week on $${(tvl / 1_000_000).toFixed(1)}M TVL — capital efficiency of $${feesPerMTvl.toFixed(0)}/M TVL/week.`,
+        detail: `Protocol generates $${(fees7dForEfficiency / 1000).toFixed(0)}K fees/week on $${(tvlForEfficiency / 1_000_000).toFixed(1)}M TVL — capital efficiency of $${feesPerMTvl.toFixed(0)}/M TVL/week.`,
       });
     }
+  }
+
+  // 19. Round 2 (AutoResearch batch): Trending on CoinGecko
+  if (market.is_trending === true) {
+    const topRank = safeN(market.market_cap_rank, 0);
+    signals.push({
+      signal: 'coingecko_trending',
+      strength: topRank > 0 && topRank <= 50 ? 'strong' : 'moderate',
+      detail: `${market.name ?? projectName} is currently trending on CoinGecko — elevated discovery and retail interest.`,
+    });
+  }
+
+  // 20. Round 3 (AutoResearch batch): Strong longer-term trend (200d positive)
+  const c200d = safeN(market.price_change_pct_200d, NaN);
+  const c1y   = safeN(market.price_change_pct_1y, NaN);
+  if (Number.isFinite(c200d) && c200d > 50 && Number.isFinite(c1y) && c1y > 50) {
+    signals.push({
+      signal: 'strong_long_term_trend',
+      strength: c200d > 200 ? 'strong' : 'moderate',
+      detail: `+${c200d.toFixed(0)}% over 200 days and +${c1y.toFixed(0)}% over 1 year — sustained long-term uptrend, not just a short-term spike.`,
+    });
+  }
+
+  // 21. Round 4 (AutoResearch batch): High CEX volume share — institutional distribution
+  const cexVolumePct = safeN(market.cex_volume_pct, NaN);
+  if (Number.isFinite(cexVolumePct) && cexVolumePct >= 75 && safeN(market.total_volume) > 500_000) {
+    signals.push({
+      signal: 'high_cex_volume_share',
+      strength: cexVolumePct >= 90 ? 'strong' : 'moderate',
+      detail: `${cexVolumePct.toFixed(0)}% of trading volume flows through CEXs — strong institutional and retail accessibility.`,
+    });
   }
 
   // Deduplicate signals by signal key (keep first occurrence)
