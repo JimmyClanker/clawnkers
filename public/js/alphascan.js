@@ -677,7 +677,7 @@
             <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Setup Quality</div><div style="font-weight:700;color:${qualColor};">${escapeHtml(ts.setup_quality||'?')}</div></div>
             ${rr?.position_size_suggestion?`<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Position Size</div><div style="font-weight:700;color:#fbbf24;">${escapeHtml(rr.position_size_suggestion)}</div></div>`:''}
           </div>
-          ${rr?.expected_value!=null?`<div style="font-size:0.82rem;color:#7e7e7e;">Kelly: ${rr.kelly_fraction!=null?(rr.kelly_fraction*100).toFixed(1)+'%':'n/a'} · EV: <span style="color:${rr.expected_value>0?'#86efac':rr.expected_value<0?'#f87171':'#7e7e7e'}">${escapeHtml(String(rr.expected_value))}</span>${rr.vol_adjusted_ev!=null&&rr.vol_adjusted_ev!==rr.expected_value?` · vol-adj EV: <span style="color:${rr.vol_adjusted_ev>0?'#86efac':'#f87171'}">${escapeHtml(String(rr.vol_adjusted_ev))}</span>`:''}${rr.ev_label?` <span style="font-size:0.75rem;color:#94a3b8;">(${escapeHtml(rr.ev_label)})</span>`:''} · TP1 prob: ${rr.probability_tp1!=null?(rr.probability_tp1*100).toFixed(0)+'%':'n/a'}</div>`:''}
+
         </section>`;
       }
 
