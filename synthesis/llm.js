@@ -359,7 +359,7 @@ function buildPrompt(projectName, rawData, scores) {
     '- verdict: "STRONG BUY" | "BUY" | "HOLD" | "AVOID" | "STRONG AVOID"',
     '- analysis_text: 3-4 clean paragraphs for HUMAN READERS. Para 1: summary thesis with key metrics. Para 2: on-chain/fundamental evidence. Para 3: market/sentiment context. Para 4: near-term outlook. FORMAT ALL NUMBERS READABLY: use $414.8M not 414828652, use -2.48% not -2.484401525322113%, use $292.6M not 292636115. NO source tags, NO field names like "tvl_change_7d" — write human-readable labels.',
     '- moat: competitive advantage in 1-2 sentences. Must be based on RAW_DATA or verified search results.',
-    '- risks: array of 3-5 risk strings. Format: "Risk type: specific detail [source: RAW_DATA field or search]." Only include risks you can substantiate.',
+    '- risks: array of 3-5 risk strings. Format: "Risk type: specific detail." Only include risks you can substantiate with data. NO source tags.',
     '- catalysts: array of 2-4 upcoming catalysts. ONLY include catalysts you found via Web/X Search with evidence. Prefix unverified ones with "[Unverified]". It is OK to have fewer catalysts if data is limited.',
     '- competitor_comparison: Compare ONLY with metrics you have data for. If no competitor data available, write "Insufficient data for competitor comparison."',
     '- x_sentiment_summary: Summarize ONLY what X Search actually returned. If nothing relevant found, write "Limited X/Twitter data available."',
@@ -496,7 +496,7 @@ function buildPrompt(projectName, rawData, scores) {
     '## FINAL REMINDER (READ THIS LAST)',
     'Before outputting your response, verify:',
     '1. Every number you cite matches FACT_REGISTRY or RAW_DATA exactly.',
-    '2. Every claim has a [source: ...] tag.',
+    '2. Source tags go ONLY in facts_verified. Do NOT put [source: ...] in analysis_text, risks, catalysts, key_findings, moat, or any other user-facing field.',
     '3. If you wrote something you cannot trace to data or search results, DELETE IT.',
     '4. "I don\'t have data for this" is ALWAYS better than making something up.',
     '5. Shorter and accurate > longer and fabricated.',
@@ -744,22 +744,15 @@ export function validateReport(report, rawData) {
   if (!Array.isArray(report.facts_verified)) report.facts_verified = [];
   if (!Array.isArray(report.opinions)) report.opinions = [];
 
+  // facts_verified is the ONLY field where [source: ...] tags are expected
   report.facts_verified = report.facts_verified
     .map((f) => String(f || '').trim())
     .filter(Boolean)
     .map((f) => (hasSourceTag(f) ? f : `${f} [source: missing]`));
 
-  report.key_findings = (report.key_findings || []).map((k) => {
-    const text = String(k || '').trim();
-    if (!text) return text;
-    return hasSourceTag(text) ? text : `${text} [source: missing]`;
-  });
-
-  report.risks = (report.risks || []).map((r) => {
-    const text = String(r || '').trim();
-    if (!text) return text;
-    return hasSourceTag(text) ? text : `${text} [source: missing]`;
-  });
+  // key_findings and risks are user-facing — do NOT add source tags
+  report.key_findings = (report.key_findings || []).map((k) => String(k || '').trim()).filter(Boolean);
+  report.risks = (report.risks || []).map((r) => String(r || '').trim()).filter(Boolean);
 
   // 1. Check if x_sentiment_summary seems fabricated (mentions specific accounts but social data is empty)
   const socialData = rawData?.social;
@@ -836,10 +829,7 @@ export function validateReport(report, rawData) {
       if (/Q[1-4]\s*20\d{2}|January|February|March|April|May|June|July|August|September|October|November|December\s+20\d{2}/i.test(out) && !out.includes('[Verified]')) {
         if (!out.startsWith('[')) out = '[Unverified timeline] ' + out;
       }
-      if (!hasSourceTag(out)) {
-        warnings.push(`Catalyst missing provenance tag: "${out}"`);
-        out = `${out} [source: missing]`;
-      }
+      // Catalysts are user-facing — do NOT add source tags
       return out;
     });
   }

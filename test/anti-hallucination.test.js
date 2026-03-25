@@ -214,31 +214,32 @@ test('validateReport detects hallucination patterns (fake partnerships, funding)
   );
 });
 
-test('validateReport adds [source: missing] to findings without provenance', () => {
+test('validateReport: source tags only on facts_verified, NOT on user-facing fields', () => {
   const rawData = makeRawData();
   const report = makeReport({
     key_findings: ['Market cap is growing fast', 'TVL up 10% [source: RAW_DATA.onchain.tvl_change_7d]'],
+    risks: ['Smart contract risk: unaudited code'],
     facts_verified: ['Price went up yesterday'],
   });
 
   const validated = validateReport(report, rawData);
 
-  // First finding should get [source: missing]
+  // key_findings is user-facing — should NOT get [source: missing]
   assert.ok(
-    validated.key_findings[0].includes('[source: missing]'),
-    `Expected source tag on untagged finding: "${validated.key_findings[0]}"`
+    !validated.key_findings[0].includes('[source: missing]'),
+    `User-facing key_findings should NOT get source tags: "${validated.key_findings[0]}"`
   );
 
-  // Second finding already has source — should NOT get duplicate tag
+  // risks is user-facing — should NOT get [source: missing]
   assert.ok(
-    !validated.key_findings[1].includes('[source: missing]'),
-    `Should not add missing tag to already-tagged finding: "${validated.key_findings[1]}"`
+    !validated.risks[0].includes('[source: missing]'),
+    `User-facing risks should NOT get source tags: "${validated.risks[0]}"`
   );
 
-  // facts_verified should also get source: missing
+  // facts_verified is the ONLY field that should get [source: missing]
   assert.ok(
     validated.facts_verified[0].includes('[source: missing]'),
-    `Expected source tag on untagged fact: "${validated.facts_verified[0]}"`
+    `facts_verified should get source tag: "${validated.facts_verified[0]}"`
   );
 });
 
