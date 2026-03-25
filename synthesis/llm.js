@@ -802,21 +802,45 @@ export function validateReport(report, rawData) {
 
   // 2b. Validate TVL numbers — match "TVL of $X" or "$X TVL" patterns only (not "TVL and $Y" which is a separate value)
   const onchain = rawData?.onchain;
-  if (onchain?.tvl && report.analysis_text) {
-    // Only match direct TVL value patterns: "$X TVL", "TVL of $X", "TVL: $X", "TVL at $X"
+  if (report.analysis_text) {
     const reportedTvl = report.analysis_text.match(/\$([0-9,.]+)\s*(billion|million|B|M)\s+TVL|TVL\s+(?:of|at|:|stands at|is|totals|reached|hit)?\s*\$([0-9,.]+)\s*(billion|million|B|M)/i);
     if (reportedTvl) {
-      // Pick the right capture groups depending on which pattern matched
       const rawVal = reportedTvl[1] ?? reportedTvl[3];
       const rawUnit = reportedTvl[2] ?? reportedTvl[4];
       const reportedValue = parseFloat(rawVal.replace(/,/g, ''));
       const unit = rawUnit.toLowerCase();
       const multiplier = (unit === 'billion' || unit === 'b') ? 1e9 : 1e6;
       const reportedActual = reportedValue * multiplier;
-      const realTvl = onchain.tvl;
-      const deviation = Math.abs(reportedActual - realTvl) / realTvl;
-      if (deviation > 0.25) {
-        warnings.push(`TVL in analysis ($${reportedValue}${unit}) deviates ${(deviation * 100).toFixed(0)}% from RAW_DATA ($${(realTvl / 1e9).toFixed(2)}B)`);
+
+      if (!onchain?.tvl) {
+        // LLM invented a TVL when raw data has none — hallucination!
+        warnings.push(`TVL ($${reportedValue}${rawUnit}) mentioned but RAW_DATA has no TVL — removing hallucinated TVL`);
+        report.analysis_text = report.analysis_text.replace(/[^.]*\$[0-9,.]+\s*(billion|million|B|M)\s+TVL[^.]*\./gi, '').replace(/[^.]*TVL\s+(?:of|at|:|stands at|is|totals|reached|hit)?\s*\$[0-9,.]+\s*(billion|million|B|M)[^.]*\./gi, '').trim();
+      } else {
+        const realTvl = onchain.tvl;
+        const deviation = Math.abs(reportedActual - realTvl) / realTvl;
+        if (deviation > 0.25) {
+          warnings.push(`TVL in analysis ($${reportedValue}${unit}) deviates ${(deviation * 100).toFixed(0)}% from RAW_DATA ($${(realTvl / 1e9).toFixed(2)}B)`);
+        }
+      }
+    }
+  }
+
+  // 2c. Validate circulating supply percentage — catch "0% circulating" when data says otherwise
+  if (report.analysis_text) {
+    const reportedCirc = report.analysis_text.match(/(\d+(?:\.\d+)?)\s*%\s*circulating/i);
+    if (reportedCirc) {
+      const reportedPct = parseFloat(reportedCirc[1]);
+      const realPct = rawData?.tokenomics?.pct_circulating;
+      if (realPct != null && realPct > 0 && Math.abs(reportedPct - realPct) > 15) {
+        warnings.push(`Circulating supply in analysis (${reportedPct}%) deviates from RAW_DATA (${realPct.toFixed(1)}%) — correcting`);
+        report.analysis_text = report.analysis_text.replace(
+          new RegExp(`${reportedPct}\\s*%\\s*circulating`, 'gi'),
+          `${realPct.toFixed(1)}% circulating`
+        );
+      } else if (reportedPct === 0 && (realPct == null || realPct === 0)) {
+        // Both null/0 — flag but don't correct
+        warnings.push('Circulating supply reported as 0% — data may be unavailable');
       }
     }
   }
@@ -875,6 +899,21 @@ export function validateReport(report, rawData) {
       warnings.push(`${field} may contain unformatted large number(s)`);
     }
   }
+  // 6b. Validate risks/key_findings for circulating supply hallucination
+  const realPctCirc = rawData?.tokenomics?.pct_circulating;
+  if (realPctCirc != null && realPctCirc > 0) {
+    const fixCircInText = (text) => {
+      const m = text.match(/(\d+(?:\.\d+)?)\s*%\s*circulating/i);
+      if (m && Math.abs(parseFloat(m[1]) - realPctCirc) > 15) {
+        warnings.push(`Risk/finding claims ${m[1]}% circulating but RAW_DATA says ${realPctCirc.toFixed(1)}% — correcting`);
+        return text.replace(new RegExp(`${m[1]}\\s*%\\s*circulating`, 'gi'), `${realPctCirc.toFixed(1)}% circulating`);
+      }
+      return text;
+    };
+    report.risks = (report.risks || []).map((r) => fixCircInText(r));
+    report.key_findings = (report.key_findings || []).map((k) => fixCircInText(k));
+  }
+
   report.risks = (report.risks || []).map((r) => cleanReportText(r));
   report.catalysts = (report.catalysts || []).map((c) => cleanReportText(c));
   report.key_findings = (report.key_findings || []).map((k) => cleanReportText(k));
