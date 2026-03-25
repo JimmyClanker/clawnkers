@@ -190,8 +190,9 @@
     }
 
     // ── Radar chart ─────────────────────────────────────────────────
+    // Round 74: improved radar with clearer labels, score ticks, aria title
     function renderRadar(scores) {
-      const size = 400, center = size/2, radius = 108, levels = 5;
+      const size = 380, center = size/2, radius = 100, levels = 5;
       const keys = SCORE_META.map(([k])=>k), labels = SCORE_META.map(([,l])=>l);
       const values = keys.map(k=>Number(scores?.[k]?.score||0));
       const points = values.map((v,i)=>{
@@ -199,24 +200,43 @@
         const scale = Math.max(0,Math.min(10,v))/10;
         return [center+Math.cos(angle)*radius*scale, center+Math.sin(angle)*radius*scale];
       });
-      const polygon = points.map(([x,y])=>`${x},${y}`).join(' ');
+      const polygon = points.map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+      // Grid levels with score labels only at specific levels
       const grid = Array.from({length:levels},(_,i)=>{
         const l=i+1, lr=radius*(l/levels);
         const lp=labels.map((_,j)=>{
           const a=(-Math.PI/2)+(j*Math.PI*2/labels.length);
-          return `${center+Math.cos(a)*lr},${center+Math.sin(a)*lr}`;
+          return `${(center+Math.cos(a)*lr).toFixed(1)},${(center+Math.sin(a)*lr).toFixed(1)}`;
         }).join(' ');
-        const ty=center-lr+4;
-        return `<polygon points="${lp}" fill="none" stroke="rgba(232,232,232,${0.08+l*0.02})" stroke-dasharray="4 6" /><text x="${center+10}" y="${ty}" fill="rgba(232,232,232,0.36)" font-size="10">${l*2}</text>`;
+        // Show score tick on the top axis (upward direction)
+        const tickX=(center+0.5).toFixed(1);
+        const tickY=(center-lr-3).toFixed(1);
+        const scoreLabel=l*2; // 2,4,6,8,10
+        return `<polygon points="${lp}" fill="none" stroke="rgba(232,232,232,${0.06+l*0.025})" stroke-dasharray="${l===5?'none':'3 5'}" stroke-width="${l===5?'1.5':'1'}" />${l%2===0?`<text x="${tickX}" y="${tickY}" fill="rgba(232,232,232,0.4)" font-size="9.5" text-anchor="middle">${scoreLabel}</text>`:''}`;
       }).join('');
+      // Axes + labels
       const axes = labels.map((label,i)=>{
         const a=(-Math.PI/2)+(i*Math.PI*2/labels.length);
-        const x=center+Math.cos(a)*radius, y=center+Math.sin(a)*radius;
-        const tx=center+Math.cos(a)*(radius+42), ty=center+Math.sin(a)*(radius+42);
+        const x=(center+Math.cos(a)*radius).toFixed(1), y=(center+Math.sin(a)*radius).toFixed(1);
+        const tx=(center+Math.cos(a)*(radius+38)).toFixed(1), ty=(center+Math.sin(a)*(radius+38)).toFixed(1);
         const anchor=Math.cos(a)>0.25?'start':Math.cos(a)<-0.25?'end':'middle';
-        return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="rgba(232,232,232,0.16)" /><circle cx="${x}" cy="${y}" r="2.5" fill="rgba(232,232,232,0.35)" /><text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="12.5" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>`;
+        const score = values[i];
+        const scoreColor = SCORE_META[i][2];
+        return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="rgba(232,232,232,0.12)" stroke-width="1" /><text x="${tx}" y="${ty}" fill="#c8c8c8" font-size="11.5" font-weight="600" text-anchor="${anchor}" dominant-baseline="middle" font-family="Inter,sans-serif">${label}</text>`;
       }).join('');
-      return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Radar chart"><defs><filter id="radar-glow"><feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur><feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter></defs>${grid}${axes}<circle cx="${center}" cy="${center}" r="3" fill="rgba(255,255,255,0.35)" /><polygon points="${polygon}" fill="rgba(212,88,10,0.16)" stroke="#D4580A" stroke-width="2.5" filter="url(#radar-glow)" />${points.map(([x,y],i)=>`<g><circle cx="${x}" cy="${y}" r="6" fill="rgba(10,10,10,0.9)" stroke="${SCORE_META[i][2]}" stroke-width="2" /><circle cx="${x}" cy="${y}" r="2.5" fill="${SCORE_META[i][2]}" /></g>`).join('')}</svg>`;
+      // Aria description
+      const ariaLabel = `Score radar: ${SCORE_META.map(([k,l],i)=>`${l} ${values[i].toFixed(1)}`).join(', ')}`;
+      return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${escapeHtml(ariaLabel)}" style="max-width:100%;margin:0 auto;display:block;">
+        <title>Score Radar Chart</title>
+        <defs>
+          <filter id="radar-glow-r74"><feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur><feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+          <radialGradient id="radarFill" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(212,88,10,0.2)"/><stop offset="100%" stop-color="rgba(212,88,10,0.06)"/></radialGradient>
+        </defs>
+        ${grid}${axes}
+        <circle cx="${center}" cy="${center}" r="2.5" fill="rgba(255,255,255,0.25)" />
+        <polygon points="${polygon}" fill="url(#radarFill)" stroke="#D4580A" stroke-width="2" filter="url(#radar-glow-r74)" />
+        ${points.map(([x,y],i)=>`<g role="img" aria-label="${SCORE_META[i][1]}: ${values[i].toFixed(1)}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="rgba(10,10,10,0.92)" stroke="${SCORE_META[i][2]}" stroke-width="2" /><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${SCORE_META[i][2]}" /></g>`).join('')}
+      </svg>`;
     }
 
 
@@ -224,7 +244,19 @@
       return SCORE_META.map(([key,label])=>{
         const v=Number(scores?.[key]?.score||0), w=`${Math.max(0,Math.min(100,v*10))}%`;
         const tone=v>=8?'High conviction':v>=6?'Constructive':v>=4?'Mixed setup':'Fragile';
-        return `<div class="score-row"><div class="score-label"><strong>${label}</strong><span>${tone}</span></div><div class="bar"><span style="--target-width:${w}; background:${barColor(v)}"></span></div><div class="score-value">${v.toFixed(1)}/10</div></div>`;
+        const toneColor=v>=8?'#86efac':v>=6?'#ffd3b6':v>=4?'#fdba74':'#fca5a5';
+        const barC=barColor(v);
+        // Round 71: score value shown prominently, tone pill on the right
+        return `<div class="score-row">
+          <div class="score-label">
+            <strong>${label}</strong>
+            <span style="color:${toneColor};font-size:0.68rem;">${tone}</span>
+          </div>
+          <div class="bar">
+            <span style="--target-width:${w}; background:${barC}; box-shadow:0 0 8px ${barC}55"></span>
+          </div>
+          <div class="score-value" style="color:${barC};font-family:'IBM Plex Mono',monospace;font-size:0.95rem;">${v.toFixed(1)}</div>
+        </div>`;
       }).join('');
     }
 
@@ -367,14 +399,22 @@
       const projectName = payload?.project_name || 'this project';
       const summary = String(analysis?.project_summary || payload?.project_summary || '').trim();
       const category = String(analysis?.project_category || payload?.project_category || raw?.onchain?.category || '').trim();
+      // Round 72: also surface ticker + chain + website if available
+      const ticker = raw?.market?.symbol ? `<span style="font-family:'IBM Plex Mono',monospace;color:var(--muted);font-size:0.82rem;padding:2px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;">${escapeHtml(raw.market.symbol.toUpperCase())}</span>` : '';
+      const website = raw?.market?.links?.homepage?.[0] || raw?.tokenomics?.links?.homepage || '';
+      const websiteLink = website ? `<a href="${escapeHtml(website)}" target="_blank" rel="noopener" style="font-size:0.78rem;color:var(--muted2);display:inline-flex;align-items:center;gap:4px;">↗ Website</a>` : '';
 
       if (!summary && !category) return '';
 
       return `<div class="project-intro-panel" style="margin:18px 0;">
         <div class="project-intro-card">
-          <div class="project-intro-title">📋 What is ${escapeHtml(projectName)}?</div>
-          ${summary ? `<div class="project-intro-text">${formatAnalysisText(summary)}</div>` : ''}
-          ${category ? `<div class="project-intro-meta">Category: <span class="project-category-badge">${escapeHtml(category)}</span></div>` : ''}
+          <div class="project-intro-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>📋 What is ${escapeHtml(projectName)}?</span>
+            ${ticker}
+            ${websiteLink}
+          </div>
+          ${summary ? `<div class="project-intro-text" style="margin-top:10px;">${formatAnalysisText(summary)}</div>` : ''}
+          ${category ? `<div class="project-intro-meta" style="margin-top:8px;">Category: <span class="project-category-badge">${escapeHtml(category)}</span></div>` : ''}
         </div>
       </div>`;
     }
@@ -726,6 +766,13 @@
       </section>`;
 
       reportBox.innerHTML = panel1 + panel2 + panel3 + panel4 + panel6;
+      // Rescan button — wired via event delegation (no inline handlers)
+      const rescanBtn = document.createElement('button');
+      rescanBtn.textContent = '🔄 Rescan this project';
+      rescanBtn.className = 'rescan-btn';
+      Object.assign(rescanBtn.style, { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:'#c5c5c5', padding:'8px 20px', borderRadius:'8px', fontSize:'0.85rem', cursor:'pointer', marginBottom:'16px', transition:'all 0.15s' });
+      rescanBtn.addEventListener('click', () => runScan(_persistedKey ? 'full' : 'quick'));
+      reportBox.insertBefore(rescanBtn, reportBox.firstChild);
       resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -1049,16 +1096,45 @@
       overlay.className = 'payment-overlay';
       overlay.setAttribute('role', 'presentation');
       overlay.addEventListener('click', (e) => { if (e.target === overlay) removePaymentModal(); });
+      // Round 76: improved modal with step indicator + cleaner layout
       overlay.innerHTML = `
         <div class="payment-card" role="dialog" aria-modal="true" aria-labelledby="pay-title">
-          <div class="payment-title" id="pay-title">🔒 Full Scan</div>
-          <div class="payment-sub">One-time payment · No account required · Instant analysis</div>
-          <div class="payment-row"><span>Project</span><span style="color:var(--text);font-weight:600;">${escapeHtml(project)}</span></div>
-          <div class="payment-row"><span>Price</span><span style="color:#D4580A;font-weight:700;">$1.00 USDC</span></div>
-          <div class="payment-row"><span>Network</span><span><span class="network-badge">Base Mainnet</span></span></div>
-          <div class="payment-row"><span>What you get</span><span style="font-size:0.8rem;">10 sources · Claude Opus 4.6 + Grok Fast · BUY/HOLD/AVOID</span></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <div style="background:rgba(212,88,10,0.12);border:1px solid rgba(212,88,10,0.3);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">🔍</div>
+            <div>
+              <div class="payment-title" id="pay-title" style="font-size:1.5rem;margin:0;">Full Alpha Scan</div>
+              <div class="payment-sub" style="margin:2px 0 0;">One-time · No account · Instant</div>
+            </div>
+          </div>
+          <!-- Step indicator -->
+          <div style="display:flex;align-items:center;gap:0;margin:16px 0 14px;font-size:0.73rem;color:var(--muted);">
+            <div id="pay-step-1" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(212,88,10,0.15);color:#D4580A;font-weight:600;white-space:nowrap;">① Connect</div>
+            <div style="flex:1;height:1px;background:var(--border);margin:0 6px;"></div>
+            <div id="pay-step-2" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:transparent;color:var(--muted);font-weight:500;white-space:nowrap;">② Confirm tx</div>
+            <div style="flex:1;height:1px;background:var(--border);margin:0 6px;"></div>
+            <div id="pay-step-3" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:transparent;color:var(--muted);font-weight:500;white-space:nowrap;">③ Analysis</div>
+          </div>
+          <!-- What you pay for -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="color:var(--muted);font-size:0.82rem;">Project</span>
+              <span style="color:var(--text);font-weight:600;font-size:0.92rem;">${escapeHtml(project)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <span style="color:var(--muted);font-size:0.82rem;">Network</span>
+              <span class="network-badge">Base Mainnet</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">
+              <span style="color:var(--muted);font-size:0.82rem;">Total</span>
+              <span style="color:#D4580A;font-weight:800;font-size:1.1rem;font-family:'IBM Plex Mono',monospace;">$1.00 USDC</span>
+            </div>
+          </div>
+          <!-- Included -->
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+            ${['✓ 10 data sources','✓ Claude Opus 4.6','✓ Grok Fast X Search','✓ BUY/HOLD/AVOID'].map(f=>`<span style="font-size:0.72rem;padding:3px 9px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.15);border-radius:999px;color:#86efac;">${escapeHtml(f)}</span>`).join('')}
+          </div>
           <div class="payment-error" id="payError" style="display:none;"></div>
-          <button class="pay-btn" id="payBtn">Connect Wallet &amp; Pay $1.00</button>
+          <button class="pay-btn" id="payBtn">Connect Wallet &amp; Pay $1.00 USDC</button>
           <button class="pay-cancel" id="payCancelBtn">Cancel — use free quick scan instead</button>
         </div>`;
       document.body.appendChild(overlay);
@@ -1077,19 +1153,33 @@
         if (e.key === 'Escape') removePaymentModal();
       });
 
+      // Round 76: step indicator helper
+      function setPayStep(n) {
+        [1,2,3].forEach(i => {
+          const el = document.getElementById(`pay-step-${i}`);
+          if (!el) return;
+          if (i === n) { el.style.background='rgba(212,88,10,0.15)'; el.style.color='#D4580A'; el.style.fontWeight='600'; }
+          else if (i < n) { el.style.background='rgba(34,197,94,0.1)'; el.style.color='#86efac'; el.style.fontWeight='500'; }
+          else { el.style.background='transparent'; el.style.color='var(--muted)'; el.style.fontWeight='500'; }
+        });
+      }
+
       document.getElementById('payBtn').onclick = async () => {
         const btn = document.getElementById('payBtn');
         const errEl = document.getElementById('payError');
         errEl.style.display = 'none';
         btn.textContent = 'Connecting wallet...';
         btn.disabled = true;
+        setPayStep(1);
         try {
           btn.textContent = 'Confirm in wallet...';
+          setPayStep(2);
           const txHash = await sendUSDCPayment();
           if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
             throw new Error('Invalid transaction hash received from wallet.');
           }
-          btn.textContent = 'Verifying payment...';
+          btn.textContent = 'Analyzing...';
+          setPayStep(3);
           await new Promise(r => setTimeout(r, 5000));
           const safeProject = String(project).slice(0, 100);
           const response = await fetch('/alpha/pay-verify', {

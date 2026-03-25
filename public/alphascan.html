@@ -546,10 +546,21 @@
     .warn { color: var(--warn); }
     .muted { color: var(--muted); }
 
+    /* Round 73: improved analysis text — sans-serif for body, mono for code */
     .analysis {
-      font-family: 'IBM Plex Mono', monospace;
-      color: var(--text); line-height: 1.8; white-space: pre-wrap;
-      font-size: 0.9rem;
+      font-family: 'Inter', sans-serif;
+      color: #d8d8d8; line-height: 1.85; white-space: pre-wrap;
+      font-size: 0.95rem; letter-spacing: 0.01em;
+    }
+    .analysis p { margin-bottom: 14px; }
+    .analysis p:first-child::first-letter {
+      font-size: 1.3em; font-weight: 700;
+      color: var(--green); margin-right: 1px;
+      line-height: 1;
+    }
+    .analysis-error-state {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
     }
     .project-intro-panel {
       padding: 0;
@@ -1041,10 +1052,14 @@
       .payment-card { padding: 24px 18px; }
     }
     @media (max-width: 560px) {
-      .hero-section { padding: 64px 0 56px; }
-      h1.hero-headline { font-size: 2.4rem; }
+      .hero-section { padding: 48px 0 44px; }
+      h1.hero-headline { font-size: 2.2rem; }
       .hero-ctas { flex-direction: column; align-items: center; }
       .how-step { padding: 20px 16px; }
+      /* Round 75: full-width scan buttons on small screens */
+      .toolbar .btn-row { flex-direction: column; gap: 8px; }
+      .toolbar .btn-row .btn-primary,
+      .toolbar .btn-row .btn-secondary { width: 100%; justify-content: center; padding: 16px; }
     }
     /* ── Round 1: Mobile responsive — 375px fixes ── */
     /* ── Bull / Bear panels ── */
@@ -1263,25 +1278,6 @@
   </footer>
 
   <script src="js/alphascan.js"></script>
-  <script>
-    // Round 61: hamburger toggle
-    const hamburgerBtn = document.getElementById('hamburger-btn');
-    const mobileNavMenu = document.getElementById('mobile-nav-menu');
-    if (hamburgerBtn && mobileNavMenu) {
-      hamburgerBtn.addEventListener('click', () => {
-        const isOpen = mobileNavMenu.classList.toggle('open');
-        hamburgerBtn.classList.toggle('open', isOpen);
-        hamburgerBtn.setAttribute('aria-expanded', String(isOpen));
-      });
-      // close on outside click
-      document.addEventListener('click', (e) => {
-        if (!hamburgerBtn.contains(e.target) && !mobileNavMenu.contains(e.target)) {
-          mobileNavMenu.classList.remove('open');
-          hamburgerBtn.classList.remove('open');
-          hamburgerBtn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-  </script>
+  <script src="js/hamburger.js"></script>
 </body>
 </html>
