@@ -157,3 +157,155 @@
 - **Files:** `public/alpha.html`
 - **Test:** `node --test test/*.test.js` → 15/15 pass
 - **Result:** kept. Market board now surfaces repo context inline; direction coloring improves data scanability.
+
+## AutoResearch Batch — 30 Rounds (2026-03-25 02:00 UTC)
+
+### Round 1 — Social Collector: Keyword Expansion + Domain Trust Scoring
+- **Change:** Expanded bullish/bearish keyword lists (+13 each); added `TRUSTED_DOMAINS` set (12 reputable crypto publications); weighted sentiment counts by domain trust score (1.4x for tier-1 sources vs 1.0x baseline); added new `unlock_mentions`/`exploit_mentions` query.
+- **Files:** `collectors/social.js`
+- **Tests:** 15/15 pass
+
+### Round 2 — DexScreener Collector: Buy/Sell Pressure Signal
+- **Change:** Added `buys_24h`, `sells_24h`, `buy_sell_ratio`, and `pressure_signal` ('buy_pressure'|'sell_pressure'|'balanced') by aggregating 24h txn counts across all DEX pairs.
+- **Files:** `collectors/dexscreener.js`
+- **Tests:** 15/15 pass
+
+### Round 3 — Alpha Signals: DEX Pressure + Revenue-Generating Signals
+- **Change:** Added two new alpha signal detectors: `dex_buy_pressure` (buy/sell ratio >= 1.15) and `revenue_generating` (fees_7d > $100K + efficiency > $50/M TVL/wk).
+- **Files:** `services/alpha-signals.js`
+- **Tests:** 15/15 pass
+
+### Round 4 — Red Flags: DEX Sell Pressure + Low Liquidity + Concentration
+- **Change:** Added three new red flags: `dex_sell_pressure` (ratio <= 0.87), `very_low_dex_liquidity` (< $50K), and `single_pool_liquidity_concentration` (> 90% in one pool).
+- **Files:** `services/red-flags.js`
+- **Tests:** 15/15 pass
+
+### Round 5 — Scoring: Risk Dimension Incorporates DEX Buy/Sell Pressure
+- **Change:** Added ±0.5/0.8 adjustment to risk score based on DEX pressure signal; reasonings now includes pressure ratio.
+- **Files:** `synthesis/scoring.js`
+- **Tests:** 15/15 pass
+
+### Round 6 — Onchain Collector: TVL Stickiness Signal
+- **Change:** Added `tvl_stickiness` field ('sticky'|'moderate'|'fleeing') based on 7d/30d TVL change thresholds. Sticky = capital retention, Fleeing = capital exit.
+- **Files:** `collectors/onchain.js`
+- **Tests:** 15/15 pass
+
+### Round 7 — Scoring: Onchain Health Incorporates TVL Stickiness
+- **Change:** Added ±0.4/0.5 adjustment to onchain_health score based on TVL stickiness signal.
+- **Files:** `synthesis/scoring.js`
+- **Tests:** 15/15 pass
+
+### Round 8 — Templates: Surface DEX Pressure + TVL Stickiness in Reports
+- **Change:** `extractKeyMetrics` now includes `dex_pressure`, `dex_buy_sell_ratio`, `tvl_stickiness`; text report surfaces these metrics in Key Metrics section.
+- **Files:** `synthesis/templates.js`
+- **Tests:** 15/15 pass
+
+### Round 9 — Market Collector: ATL Distance % + Price Range Position
+- **Change:** Added `atl_distance_pct` (+% above ATL) and `price_range_position` (0=ATL, 1=ATH) derived from ATL/ATH market data. Previously ATL was returned but distance wasn't computed.
+- **Files:** `collectors/market.js`
+- **Tests:** 15/15 pass
+
+### Round 10 — Scoring: Market Strength Uses Price Range Position
+- **Change:** Added ±0.3/0.6 adjustment based on `price_range_position` — near ATH confirms momentum, near ATL signals capitulation risk.
+- **Files:** `synthesis/scoring.js`
+- **Tests:** 15/15 pass
+
+### Round 11 — GitHub Repos: Added 40+ Well-Known DeFi/L2 Protocol Mappings
+- **Change:** Expanded `github-repos.json` with Curve, Compound, Maker, Yearn, Synthetix, Optimism, Arbitrum, Celestia, Pendle, EigenLayer, Morpho, Kamino, Drift, PancakeSwap, SushiSwap, Balancer, GMX, dYdX, Jupiter, Raydium, Jito, Pyth, Wormhole, LayerZero, Scroll, zkSync, Polygon, and 15+ more.
+- **Files:** `collectors/github-repos.json`
+- **Tests:** 15/15 pass
+
+### Round 12 — Thesis Generator: Price Range + TVL Stickiness Context in Bull/Bear Cases
+- **Change:** Added `priceRangeNote` (near ATH/ATL/range context) and `stickinessNote` to all three thesis cases (bull/bear/neutral) for richer investment narrative.
+- **Files:** `services/thesis-generator.js`
+- **Tests:** 15/15 pass
+
+### Round 13 — LLM Prompt: Buy/Sell Pressure + Price Range Position Context
+- **Change:** Added DEX buy/sell pressure block to full-scan prompt; added `## PRICE RANGE CONTEXT` section with ATH/ATL distances and TVL stickiness for Grok to reference in analysis.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 15/15 pass
+
+### Round 14 — Change Detector: Score Momentum Direction + Verdict Upgrade/Downgrade
+- **Change:** Added `score_momentum` ('improving'|'deteriorating'|'neutral') from comparing up/down score dimension changes; added `verdict_direction` ('upgrade'|'downgrade'|null) using VERDICT_RANK mapping.
+- **Files:** `services/change-detector.js`
+- **Tests:** 15/15 pass
+
+### Round 15 — Alpha Router: New `/alpha/trending` Endpoint
+- **Change:** Added `GET /alpha/trending?window_hours=24&limit=10` returning recently-scanned projects with verdict, score, signal count, and DEX/TVL signals. Useful for monitoring scan activity.
+- **Files:** `routes/alpha.js`
+- **Tests:** 15/15 pass
+
+### Round 16 — Collector Cache: Per-Collector TTLs for DEX/Reddit/Holders/Contract
+- **Change:** Added tuned TTLs for all 10 collectors (DEX: 3min, Reddit: 20min, Holders: 1h, Contract: 1h, Ecosystem: 15min). Added `CACHE_TTL_<COLLECTOR>=<seconds>` env var override system.
+- **Files:** `services/collector-cache.js`
+- **Tests:** 15/15 pass
+
+### Round 17 — Tokenomics Collector: Vesting Info Extraction from Messari
+- **Change:** Added `pluckVestingInfo()` extracting `launch_date`, `vesting_schedule_summary`, and `team_allocation_pct` from Messari profile data. Surfaced as `vesting_info` in tokenomics output.
+- **Files:** `collectors/tokenomics.js`
+- **Tests:** 15/15 pass
+
+### Round 18 — Red Flags: High Team Allocation Warning
+- **Change:** Added `high_team_allocation` flag (warning >25%, critical >40% team/insider allocation) using Messari vesting data when available.
+- **Files:** `services/red-flags.js`
+- **Tests:** 15/15 pass
+
+### Round 19 — Fetch.js: Jitter on Retry Backoff
+- **Change:** Added `jitterMs()` function adding ±25% random jitter to retry backoff delays — reduces thundering herd on shared APIs (CoinGecko, DeFiLlama) when multiple scans fail simultaneously.
+- **Files:** `collectors/fetch.js`
+- **Tests:** 15/15 pass
+
+### Round 20 — Report Quality: Data Freshness Score Component
+- **Change:** Added `computeDataFreshness()` scoring collector freshness (100 for fresh, 70 for cache, 40 for stale-cache, 0 for error). Surfaced as `data_freshness_score` in quality output; deducts up to 10 points from quality_score when < 50.
+- **Files:** `services/report-quality.js`
+- **Tests:** 15/15 pass
+
+### Round 21 — Sector Benchmarks: Volume Efficiency Metric
+- **Change:** Added `volume_efficiency` comparison (project volume/TVL vs sector median) to `compareToSector()` output, with context ('high-velocity'|'low-velocity'|'average-velocity').
+- **Files:** `services/sector-benchmarks.js`
+- **Tests:** 15/15 pass
+
+### Round 22 — Alpha Router: New `/alpha/stats` Endpoint
+- **Change:** Added `GET /alpha/stats` returning total_scans, unique_projects, scans_last_24h, verdict_distribution, and avg_overall_score_7d — useful for monitoring and analytics dashboards.
+- **Files:** `routes/alpha.js`
+- **Tests:** 15/15 pass
+
+### Round 23 — Social Collector: Unlock/Exploit-Specific Query + Mention Tracking
+- **Change:** Added 5th Exa query specifically targeting unlock/vesting/exploit/security mentions; added `unlock_mentions` and `exploit_mentions` counters in return payload.
+- **Files:** `collectors/social.js`
+- **Tests:** 15/15 pass
+
+### Round 24 — Red Flags: Social-Sourced Exploit + Token Unlock Warnings
+- **Change:** Added `exploit_mentions_social` (≥2 mentions = warning, ≥4 = critical) and `token_unlock_news` (≥2 mentions of unlock/vesting = warning) flags from social collector data.
+- **Files:** `services/red-flags.js`
+- **Tests:** 15/15 pass
+
+### Round 25 — LLM Prompt: Volume Efficiency + P/TVL vs Sector in Full-Scan
+- **Change:** Added `## VOLUME & VALUATION EFFICIENCY VS SECTOR` section to buildPrompt() surfacing volume_efficiency and price_to_tvl from sector_comparison for Grok to reference in analysis.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 15/15 pass
+
+### Round 26 — Quick LLM: Retry Chain with Fallback
+- **Change:** Replaced single-attempt + manual retry with a structured attempts array (same model, increasing timeouts: 25s → 35s) with per-attempt error handling; breaks on SyntaxError (corrupt content, not transient); logs all failures.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 15/15 pass
+
+### Round 27 — Alpha Router: New `/alpha/batch` Endpoint
+- **Change:** Added `POST /alpha/batch` accepting JSON `{ projects: ["btc","eth",...] }` (max 5), running quick scans in parallel and returning compact verdict/score/pitch/cache per project. Reuses existing cache + single-flight infrastructure.
+- **Files:** `routes/alpha.js`
+- **Tests:** 15/15 pass
+
+### Round 28 — Templates: Investment Thesis Section in Text/JSON Report
+- **Change:** Added bull/bear/neutral thesis to text report (📈 Investment Thesis section); thesis is now included in the `json` output object when available; HTML report already included it via `rawData`.
+- **Files:** `synthesis/templates.js`
+- **Tests:** 15/15 pass
+
+### Round 29 — Competitor Detection: Fuzzy Project Matching + MCap in Peers
+- **Change:** Improved project self-detection using name+slug+symbol fuzzy matching (not just name); exclude by both name and slug; added `mcap` field to peer entries; included P/TVL and MCap in `comparison_summary`.
+- **Files:** `services/competitor-detection.js`
+- **Tests:** 15/15 pass
+
+### Round 30 — REST: Updated `/api/health` Endpoint Directory
+- **Change:** Updated endpoint directory in `/api/health` to include all new endpoints: `/alpha/batch`, `/alpha/history`, `/alpha/compare`, `/alpha/leaderboard`, `/alpha/trending`, `/alpha/stats`, `/alpha/export`.
+- **Files:** `routes/rest.js`
+- **Tests:** 15/15 pass

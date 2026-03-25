@@ -86,6 +86,22 @@ export function createApp({
   // Per-collector cache (stale-while-revalidate)
   const collectorCache = createCollectorCache(signals.db);
 
+  // ── Round 27: Cache-control for API responses ────────────────────
+  app.use('/alpha', (req, res, next) => {
+    // Alpha scan results can be cached by the requester up to the TTL
+    // quick = 15 min, full = 60 min (conservative: use 5 min for public caching)
+    const isQuick = req.path.includes('/quick');
+    const maxAge = isQuick ? 300 : 900; // 5 min / 15 min
+    res.setHeader('Cache-Control', `public, max-age=${maxAge}, stale-while-revalidate=60`);
+    next();
+  });
+
+  // API endpoints should not be cached
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // ── Round 6: Security headers ────────────────────────────────────
   app.use((req, res, next) => {
     // Prevent clickjacking

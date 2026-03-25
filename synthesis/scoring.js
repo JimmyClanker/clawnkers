@@ -107,6 +107,22 @@ function scoreMarketStrength(market = {}) {
     else if (athDistancePct < -50) raw -= Math.min((Math.abs(athDistancePct) - 50) / 25, 0.8);
   }
 
+  // Round 6: price_momentum_tier bonus — reward consistent multi-TF trends
+  const momentumTier = market.price_momentum_tier;
+  if (momentumTier === 'strong_uptrend') raw += 0.4;
+  else if (momentumTier === 'uptrend') raw += 0.2;
+  else if (momentumTier === 'strong_downtrend') raw -= 0.4;
+  else if (momentumTier === 'downtrend') raw -= 0.2;
+
+  // Round 10: Price range position — where in ATL-ATH range is the price?
+  const priceRangePos = market.price_range_position != null ? safeNumber(market.price_range_position) : null;
+  if (priceRangePos !== null) {
+    if (priceRangePos >= 0.8) raw += 0.3;         // Near ATH — momentum confirmation
+    else if (priceRangePos >= 0.5) raw += 0.1;    // Upper half — constructive
+    else if (priceRangePos <= 0.1) raw -= 0.6;    // Near ATL — capitulation risk
+    else if (priceRangePos <= 0.25) raw -= 0.3;   // Lower quartile — bearish structure
+  }
+
   // Round 13: Time-decay factor — very new projects get a small uncertainty penalty
   let isNewProject = false;
   let age_months = null;
@@ -119,9 +135,30 @@ function scoreMarketStrength(market = {}) {
       raw -= 1.0; // Very new: significant uncertainty
     } else if (age_months < 3) {
       raw -= 0.5; // New: mild uncertainty penalty
+    } else if (age_months > 24) {
+      raw += 0.2; // Proven longevity bonus (2+ years)
     }
     // No bonus for age — longevity is already captured in momentum history
   }
+
+  // Round 34: twitter/telegram followers as social proof for market strength
+  const twitterFollowers = safeNumber(market.twitter_followers ?? 0);
+  const telegramUsers = safeNumber(market.telegram_channel_user_count ?? 0);
+  const totalCommunitySize = twitterFollowers + telegramUsers;
+  if (totalCommunitySize > 500_000) raw += 0.4;
+  else if (totalCommunitySize > 100_000) raw += 0.2;
+  else if (totalCommunitySize > 10_000) raw += 0.1;
+
+  // Round 34: market cap rank bonus — top 100 = institutional attention
+  const marketCapRank = safeNumber(market.market_cap_rank ?? 0);
+  if (marketCapRank > 0 && marketCapRank <= 20) raw += 0.5;
+  else if (marketCapRank > 0 && marketCapRank <= 100) raw += 0.2;
+
+  // Round 58: Exchange count — more CEX listings = legitimacy + liquidity
+  const exchangeCount = safeNumber(market.exchange_count ?? 0);
+  if (exchangeCount >= 20) raw += 0.4;
+  else if (exchangeCount >= 10) raw += 0.2;
+  else if (exchangeCount >= 5) raw += 0.1;
 
   return {
     score: clampScore(raw),
@@ -134,17 +171,56 @@ function scoreMarketStrength(market = {}) {
 function scoreOnchainHealth(onchain = {}) {
   const trend7d = safeNumber(onchain.tvl_change_7d);
   const trend30d = safeNumber(onchain.tvl_change_30d);
-  const fees = safeNumber(onchain.fees_7d);
-  const revenue = safeNumber(onchain.revenue_7d);
+  // Use fees_7d; fall back to fees_30d / 4 if only monthly data available
+  const fees = onchain.fees_7d != null
+    ? safeNumber(onchain.fees_7d)
+    : safeNumber(onchain.fees_30d) / 4;
+  const revenue = onchain.revenue_7d != null
+    ? safeNumber(onchain.revenue_7d)
+    : safeNumber(onchain.revenue_30d) / 4;
 
   let raw = 4;
   raw += Math.max(Math.min((trend7d + trend30d) / 25, 3), -2);
   raw += fees > 0 ? Math.min(Math.log10(fees + 1), 2) : 0;
   raw += revenue > 0 ? Math.min(Math.log10(revenue + 1), 1.5) : 0;
 
+  // Round 18: multichain bonus — reward protocols deployed on multiple chains
+  const chainCount = Array.isArray(onchain.chains) ? onchain.chains.length : 0;
+  let multichainBonus = 0;
+  if (chainCount >= 5) multichainBonus = 0.6;
+  else if (chainCount >= 3) multichainBonus = 0.3;
+  else if (chainCount >= 2) multichainBonus = 0.15;
+  raw += multichainBonus;
+
+  // Round 18: active users signal (if available)
+  const activeUsers = safeNumber(onchain.active_users_24h);
+  if (activeUsers > 10000) raw += 0.5;
+  else if (activeUsers > 1000) raw += 0.25;
+
+  // Round 7: TVL stickiness adjustment
+  const tvlStickiness = onchain.tvl_stickiness;
+  if (tvlStickiness === 'sticky') raw += 0.4;
+  else if (tvlStickiness === 'fleeing') raw -= 0.5;
+
+  // Round 57: Active addresses as a usage signal
+  const activeAddresses7d = safeNumber(onchain.active_addresses_7d ?? onchain.unique_users_7d ?? 0);
+  if (activeAddresses7d > 50_000) raw += 0.6;
+  else if (activeAddresses7d > 10_000) raw += 0.3;
+  else if (activeAddresses7d > 1_000) raw += 0.1;
+
+  // Round 57: revenue-to-fees ratio — value capture quality
+  const revenueToFees = onchain.fees_7d > 0 ? revenue / fees : null;
+  let revCapture = 0;
+  if (revenueToFees !== null) {
+    if (revenueToFees >= 0.5) { revCapture = 0.4; }  // protocol keeps 50%+ = very healthy
+    else if (revenueToFees >= 0.2) { revCapture = 0.2; }
+    else if (revenueToFees > 0) { revCapture = 0.05; } // at least generating some revenue
+    raw += revCapture;
+  }
+
   return {
     score: clampScore(raw),
-    reasoning: `TVL trend 7d ${trend7d.toFixed(2)}%, 30d ${trend30d.toFixed(2)}%, fees_7d ${fees.toFixed(0)}.`,
+    reasoning: `TVL trend 7d ${trend7d.toFixed(2)}%, 30d ${trend30d.toFixed(2)}%, fees_7d ${fees.toFixed(0)}, chains ${chainCount}${multichainBonus > 0 ? ` (+${multichainBonus} multichain bonus)` : ''}${tvlStickiness ? `, TVL ${tvlStickiness}` : ''}${activeAddresses7d > 0 ? `, active_addr_7d ${activeAddresses7d}` : ''}${revenueToFees !== null ? `, rev/fees ${(revenueToFees * 100).toFixed(0)}%` : ''}.`,
   };
 }
 
@@ -221,9 +297,24 @@ function scoreDevelopment(github = {}) {
   else if (commitTrend === 'decelerating') raw -= 0.4;
   else if (commitTrend === 'inactive') raw -= 1.0;
 
+  // Round 29: CI bonus — having CI workflows = professional dev practice
+  if (github.has_ci === true) raw += 0.3;
+
+  // Round 33: Star velocity — rapidly growing star count is a health indicator
+  // Use watchers as a proxy if forks are very few (niche but real)
+  const watchers = safeNumber(github.watchers ?? 0);
+  if (stars > 0 && watchers > 0) {
+    const watcherStarRatio = watchers / stars;
+    if (watcherStarRatio > 0.5 && watchers > 50) raw += 0.2; // many watchers = active maintainer interest
+  }
+
+  // Round 33: multi-language repos signal broader ecosystem integration
+  const languageCount = typeof github.languages === 'object' ? Object.keys(github.languages ?? {}).length : 0;
+  if (languageCount >= 4) raw += 0.15; // polyglot repo = more integrations
+
   return {
     score: clampScore(raw),
-    reasoning: `Contributors ${contributors}, commits_90d ${commits90d}, commits_30d ${commits30d}/${commits30dPrev} (trend: ${commitTrend || 'n/a'}), stars ${stars}, forks ${forks}, issue pressure ${issuePressure.toFixed(2)}, days since last commit ${daysSinceCommit == null ? 'n/a' : daysSinceCommit.toFixed(0)}.`,
+    reasoning: `Contributors ${contributors}, commits_90d ${commits90d}, commits_30d ${commits30d}/${commits30dPrev} (trend: ${commitTrend || 'n/a'}), stars ${stars}, forks ${forks}, watchers ${watchers}, langs ${languageCount}, issue pressure ${issuePressure.toFixed(2)}, days since last commit ${daysSinceCommit == null ? 'n/a' : daysSinceCommit.toFixed(0)}${github.has_ci ? ', CI ✓' : ''}.`,
   };
 }
 
@@ -365,9 +456,23 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
     else if (fdvRatio > 5) raw -= 0.7;
   }
 
+  // Round 24: revenue_efficiency bonus — protocols generating fees relative to TVL are less risky
+  const revEfficiency = safeNumber(onchain.revenue_efficiency ?? 0);
+  if (revEfficiency > 100) raw += 0.5;   // >$100/week per $1M TVL = good efficiency
+  else if (revEfficiency > 20) raw += 0.2;
+
+  // Round 5: DEX buy/sell pressure — net buy pressure = lower risk, sell pressure = higher risk
+  const pressureSignal = dexData.pressure_signal;
+  const buySellRatio = safeNumber(dexData.buy_sell_ratio ?? 1);
+  if (pressureSignal === 'buy_pressure') {
+    raw += Math.min((buySellRatio - 1) * 0.5, 0.5); // max +0.5 for strong buy pressure
+  } else if (pressureSignal === 'sell_pressure') {
+    raw -= Math.min((1 - buySellRatio) * 0.8, 0.8); // max -0.8 for strong sell pressure
+  }
+
   return {
     score: clampScore(raw),
-    reasoning: `Volatility ${volatility.toFixed(1)}%, liquidity ${dexLiquidity > 0 ? `$${dexLiquidity.toFixed(0)}` : `vol/mcap ${mcap > 0 ? (volume / mcap).toFixed(3) : 'n/a'}`}, concentration ${topConcentration > 0 ? `${topConcentration.toFixed(1)}%` : 'n/a'}.`,
+    reasoning: `Volatility ${volatility.toFixed(1)}%, liquidity ${dexLiquidity > 0 ? `$${dexLiquidity.toFixed(0)}` : `vol/mcap ${mcap > 0 ? (volume / mcap).toFixed(3) : 'n/a'}`}, concentration ${topConcentration > 0 ? `${topConcentration.toFixed(1)}%` : 'n/a'}, rev_efficiency ${revEfficiency > 0 ? `$${revEfficiency.toFixed(0)}/M TVL/wk` : 'n/a'}${pressureSignal ? `, DEX ${pressureSignal} (ratio: ${buySellRatio.toFixed(2)})` : ''}.`,
   };
 }
 
@@ -438,6 +543,24 @@ function safeCollector(raw) {
   return raw;
 }
 
+// ─── Round 9: Reddit sentiment supplement ────────────────────────────────────
+/**
+ * Adjust social momentum score using Reddit post count and sentiment.
+ * Small adjustment (+/-0.5) to avoid over-weighting uncurated posts.
+ */
+function applyRedditSupplement(socialScore, reddit = {}) {
+  if (!reddit || reddit.error) return socialScore;
+  const postCount = Number(reddit.post_count ?? 0);
+  const sentiment = reddit.sentiment;
+  if (postCount === 0) return socialScore;
+  let adj = 0;
+  if (sentiment === 'bullish' && postCount >= 5) adj = 0.4;
+  else if (sentiment === 'bullish' && postCount >= 2) adj = 0.2;
+  else if (sentiment === 'bearish' && postCount >= 5) adj = -0.4;
+  else if (sentiment === 'bearish' && postCount >= 2) adj = -0.2;
+  return Math.min(10, Math.max(1, parseFloat((socialScore + adj).toFixed(1))));
+}
+
 export function calculateScores(data) {
   const market_strength   = scoreMarketStrength(safeCollector(data?.market));
   const onchain_health    = scoreOnchainHealth(safeCollector(data?.onchain));
@@ -445,6 +568,9 @@ export function calculateScores(data) {
   const development       = scoreDevelopment(safeCollector(data?.github));
   const tokenomics_health = scoreTokenomicsRisk(safeCollector(data?.tokenomics));
   const distribution      = scoreDistribution(safeCollector(data?.tokenomics), safeCollector(data?.market));
+
+  // Round 9: Reddit supplement to social momentum
+  social_momentum.score = applyRedditSupplement(social_momentum.score, data?.reddit);
 
   // Round 11: Risk as 7th dimension
   const risk = scoreRisk(
@@ -491,6 +617,15 @@ export function calculateScores(data) {
   if (completeness < 1) {
     const penalty = (1 - completeness) * 2;
     overallValue = Math.max(1, overallValue - penalty);
+  }
+
+  // Round 54: confidence-weighted regression to mean — low confidence pulls score toward 5.5
+  // Prevents extreme scores (1 or 10) from appearing authoritative with sparse data
+  const overallConf = confidence.overall_confidence;
+  if (overallConf < 60) {
+    const regressionStrength = (60 - overallConf) / 60; // 0 at 60% conf, 1 at 0% conf
+    const NEUTRAL = 5.5;
+    overallValue = overallValue + (NEUTRAL - overallValue) * regressionStrength * 0.4; // max 40% pull toward neutral
   }
 
   const weightStr = Object.entries(WEIGHTS)

@@ -27,6 +27,8 @@ function createEmptyMarketResult(projectName) {
     ath_distance_pct: null,
     atl: null,
     atl_date: null,
+    atl_distance_pct: null,
+    price_range_position: null, // 0 = at ATL, 1 = at ATH
     // Supply metrics
     circulating_to_max_ratio: null,
     // Volume metrics
@@ -50,6 +52,8 @@ function createEmptyMarketResult(projectName) {
     dex_count: null,
     cex_volume_pct: null,
     top_exchanges: [],
+    // Round 2 ext: multi-TF momentum classification
+    price_momentum_tier: null,
     error: null,
   };
 }
@@ -90,11 +94,19 @@ export async function collectMarket(projectName) {
     const athDistancePct = (price != null && ath != null && ath > 0)
       ? ((price - ath) / ath) * 100
       : null;
+    const atl = marketData?.atl?.usd ?? null;
+    const atlDistancePct = (price != null && atl != null && atl > 0 && price > atl)
+      ? ((price - atl) / atl) * 100
+      : null;
     const circulatingToMaxRatio = (circulatingSupply != null && (maxSupply || totalSupply) > 0)
       ? circulatingSupply / (maxSupply || totalSupply)
       : null;
     const volumeToMcapRatio = (totalVolume != null && marketCap != null && marketCap > 0)
       ? totalVolume / marketCap
+      : null;
+    // Round 9: price range position (0 = at ATL, 1 = at ATH)
+    const priceRangePosition = (price != null && ath != null && atl != null && ath > atl)
+      ? Math.max(0, Math.min(1, (price - atl) / (ath - atl)))
       : null;
 
     // Round 2: trending check
@@ -104,6 +116,19 @@ export async function collectMarket(projectName) {
     );
     const categories = Array.isArray(coinData?.categories) ? coinData.categories : [];
     const genesisDate = coinData?.genesis_date ?? null;
+
+    // Round 2 (extended): price momentum tier — classify multi-timeframe trend
+    const p1h  = marketData?.price_change_percentage_1h_in_currency?.usd ?? 0;
+    const p24h = marketData?.price_change_percentage_24h_in_currency?.usd ?? 0;
+    const p7d  = marketData?.price_change_percentage_7d_in_currency?.usd ?? 0;
+    const p30d = marketData?.price_change_percentage_30d_in_currency?.usd ?? 0;
+    const positiveTfs = [p1h, p24h, p7d, p30d].filter((c) => c > 0).length;
+    let priceMomentumTier;
+    if (positiveTfs === 4) priceMomentumTier = 'strong_uptrend';
+    else if (positiveTfs === 3) priceMomentumTier = 'uptrend';
+    else if (positiveTfs === 2) priceMomentumTier = 'mixed';
+    else if (positiveTfs === 1) priceMomentumTier = 'downtrend';
+    else priceMomentumTier = 'strong_downtrend';
 
     // Round 9: exchange listing counts from tickers
     let exchangeCount = null;
@@ -174,8 +199,10 @@ export async function collectMarket(projectName) {
       ath,
       ath_date: marketData?.ath_date?.usd ?? null,
       ath_distance_pct: athDistancePct,
-      atl: marketData?.atl?.usd ?? null,
+      atl,
       atl_date: marketData?.atl_date?.usd ?? null,
+      atl_distance_pct: atlDistancePct != null ? Math.round(atlDistancePct * 100) / 100 : null,
+      price_range_position: priceRangePosition != null ? Math.round(priceRangePosition * 1000) / 1000 : null,
       circulating_to_max_ratio: circulatingToMaxRatio,
       volume_to_mcap_ratio: volumeToMcapRatio,
       market_cap_rank: coinData?.market_cap_rank ?? null,
@@ -185,6 +212,7 @@ export async function collectMarket(projectName) {
       is_trending: isTrending,
       categories,
       genesis_date: genesisDate,
+      price_momentum_tier: priceMomentumTier,
       // Round 9
       exchange_count: exchangeCount,
       cex_count: cexCount,

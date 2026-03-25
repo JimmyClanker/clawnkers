@@ -1342,6 +1342,7 @@
                 <div class="verdict-meta">Research verdict</div>
                 <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
                 <div class="overall-score ${verdictClass(verdict)}">${avgScore!==null?`${avgScore.toFixed(1)}/10`:'n/a'}</div>
+                ${(()=>{const v=payload?.volatility;if(!v||v.regime==='calm')return'';const c={elevated:'#fbbf24',high:'#f97316',extreme:'#ef4444'}[v.regime]||'#fbbf24';const pct=v.volatility_pct_24h!=null?` (${v.volatility_pct_24h.toFixed(1)}% 24h)`:'';return`<div style="margin-top:6px;padding:4px 12px;background:${c};color:#000;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;display:inline-block;">⚡ ${v.regime}${pct}</div>`})()}
               </div>
             </div>
             <p class="analysis">${escapeHtml(analysis.analysis_text||'No analysis available.')}</p>
@@ -1378,6 +1379,39 @@
           <div class="section-label">Key Findings</div>
           <ul>${renderList(analysis.key_findings)}</ul>
         </section>`:''}
+
+        ${(()=>{const t=payload?.thesis;if(!t)return'';return`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">Investment Thesis</div>
+          <div class="mini-grid">
+            <div class="card" style="border-color:rgba(34,197,94,0.3)"><h3>🐂 Bull Case</h3><div>${escapeHtml(t.bull_case||'n/a')}</div></div>
+            <div class="card" style="border-color:rgba(239,68,68,0.3)"><h3>🐻 Bear Case</h3><div>${escapeHtml(t.bear_case||'n/a')}</div></div>
+            <div class="card" style="border-color:rgba(251,191,36,0.3)"><h3>🔄 Neutral</h3><div>${escapeHtml(t.neutral_case||'n/a')}</div></div>
+          </div>
+        </section>`;})()}
+
+        ${(()=>{const rf=payload?.red_flags;if(!rf||!rf.length)return'';const crit=rf.filter(f=>f.severity==='critical');const warn=rf.filter(f=>f.severity==='warning');if(!crit.length&&!warn.length)return'';return`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">⚠ Risk Flags (${rf.length})</div>
+          ${crit.length?`<div style="margin-bottom:8px;font-size:0.78rem;color:#ef4444;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Critical (${crit.length})</div><ul>${crit.map(f=>`<li style="color:#fca5a5;margin-bottom:4px;"><strong>${escapeHtml(f.flag)}</strong>: ${escapeHtml(f.detail)}</li>`).join('')}</ul>`:''}
+          ${warn.length?`<div style="margin:8px 0 6px;font-size:0.78rem;color:#f97316;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Warnings (${warn.length})</div><ul>${warn.map(f=>`<li style="color:#fdba74;margin-bottom:4px;"><strong>${escapeHtml(f.flag)}</strong>: ${escapeHtml(f.detail)}</li>`).join('')}</ul>`:''}
+        </section>`;})()}
+
+        ${(()=>{const as_=payload?.alpha_signals;if(!as_||!as_.length)return'';return`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">🚀 Alpha Signals (${as_.length})</div>
+          <ul>${as_.map(s=>`<li style="margin-bottom:6px;"><span style="background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;color:#86efac;margin-right:8px;">${escapeHtml(s.strength||'?')}</span><strong>${escapeHtml(s.signal)}</strong>: ${escapeHtml(s.detail)}</li>`).join('')}</ul>
+        </section>`;})()}
+
+        ${(()=>{const ts=payload?.trade_setup;const rr=payload?.risk_reward;if(!ts||!ts.entry_zone?.low)return'';const qualColor={strong:'#22c55e',moderate:'#fbbf24',weak:'#ef4444'}[ts.setup_quality]||'#e8e8e8';return`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">📐 Trade Setup</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Entry Zone</div><div style="font-weight:700;">$${escapeHtml(String(ts.entry_zone.low))} – $${escapeHtml(String(ts.entry_zone.high))}</div></div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Stop Loss</div><div style="font-weight:700;color:#ef4444;">$${escapeHtml(String(ts.stop_loss??'n/a'))}</div></div>
+            ${(ts.take_profit_targets||[]).slice(0,2).map(tp=>`<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">${escapeHtml(tp.label)}</div><div style="font-weight:700;color:#86efac;">$${escapeHtml(String(tp.price))} <span style="font-size:11px;color:#7e7e7e;">(+${escapeHtml(String(tp.pct_gain))}%)</span></div></div>`).join('')}
+            ${ts.risk_reward_ratio!=null?`<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">R/R Ratio</div><div style="font-weight:700;">${escapeHtml(String(ts.risk_reward_ratio))}x</div></div>`:''}
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Setup Quality</div><div style="font-weight:700;color:${qualColor};">${escapeHtml(ts.setup_quality||'?')}</div></div>
+            ${rr?.position_size_suggestion?`<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 16px;min-width:110px;text-align:center;"><div style="color:#7e7e7e;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;">Position Size</div><div style="font-weight:700;color:#fbbf24;">${escapeHtml(rr.position_size_suggestion)}</div></div>`:''}
+          </div>
+          ${rr?.expected_value!=null?`<div style="font-size:0.82rem;color:#7e7e7e;">Kelly: ${rr.kelly_fraction!=null?(rr.kelly_fraction*100).toFixed(1)+'%':'n/a'} · EV: ${escapeHtml(String(rr.expected_value))} · TP1 prob: ${rr.probability_tp1!=null?(rr.probability_tp1*100).toFixed(0)+'%':'n/a'}</div>`:''}
+        </section>`;})()}
 
         <section class="panel" style="margin-top:18px;">
           <div class="footer-row">

@@ -19,7 +19,32 @@ export function initScoreHistory(db) {
       scanned_at TEXT  NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_sh_dim ON score_history(dimension);
+    CREATE INDEX IF NOT EXISTS idx_sh_project ON score_history(project);
   `);
+}
+
+/**
+ * Round 75: Get all historical scores for a dimension as a sorted array.
+ * Used for percentile visualization and distribution charts.
+ * @param {object} db
+ * @param {string} dimension
+ * @returns {number[]} sorted scores ascending
+ */
+export function getDimensionDistribution(db, dimension) {
+  try {
+    initScoreHistory(db);
+    if (!dimension) {
+      // 'overall' is stored in scan_history, not score_history
+      const rows = db.prepare(
+        "SELECT CAST(json_extract(scores_json, '$.overall.score') AS REAL) AS score FROM scan_history WHERE scores_json IS NOT NULL ORDER BY score ASC"
+      ).all();
+      return rows.map((r) => r.score).filter((s) => s != null && Number.isFinite(s));
+    }
+    const rows = db.prepare('SELECT score FROM score_history WHERE dimension = ? ORDER BY score ASC').all(dimension);
+    return rows.map((r) => r.score);
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -15,20 +15,29 @@ function round(v, decimals = 4) {
 
 /**
  * Probability of hitting TP1 based on overall score.
+ * Round 22: adjusted by data confidence — low confidence reduces TP1 probability.
  */
-function probabilityTP1(overallScore) {
-  if (overallScore > 7) return 0.60;
-  if (overallScore >= 5) return 0.40;
-  return 0.25;
+function probabilityTP1(overallScore, confidence = 100) {
+  let base;
+  if (overallScore > 7) base = 0.60;
+  else if (overallScore >= 5) base = 0.40;
+  else base = 0.25;
+  // Confidence discount: at 0% confidence → 50% of base; at 100% confidence → full base
+  const confidenceMultiplier = 0.5 + (confidence / 100) * 0.5;
+  return round(base * confidenceMultiplier, 4);
 }
 
 /**
  * Probability of hitting TP2 (roughly half of TP1 probability, adjusted for score).
+ * Round 22: also confidence-adjusted.
  */
-function probabilityTP2(overallScore) {
-  if (overallScore > 7) return 0.35;
-  if (overallScore >= 5) return 0.20;
-  return 0.10;
+function probabilityTP2(overallScore, confidence = 100) {
+  let base;
+  if (overallScore > 7) base = 0.35;
+  else if (overallScore >= 5) base = 0.20;
+  else base = 0.10;
+  const confidenceMultiplier = 0.5 + (confidence / 100) * 0.5;
+  return round(base * confidenceMultiplier, 4);
 }
 
 /**
@@ -63,8 +72,13 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
   const rrRatio = safeN(tradeSetup?.risk_reward_ratio);
   const notes = [];
 
-  const pTP1 = probabilityTP1(overallScore);
-  const pTP2 = probabilityTP2(overallScore);
+  // Round 22: pass confidence to probability functions
+  const confidence = safeN(scores?.overall?.overall_confidence, 100);
+  const pTP1 = probabilityTP1(overallScore, confidence);
+  const pTP2 = probabilityTP2(overallScore, confidence);
+  if (confidence < 60) {
+    notes.push(`Low data confidence (${confidence}%) — probabilities adjusted downward.`);
+  }
 
   // Kelly criterion based on TP1
   // b = rrRatio (reward relative to 1 unit of risk)
@@ -98,13 +112,28 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
 
   notes.push(`Overall score ${overallScore.toFixed(1)}/10 → TP1 probability ${(pTP1 * 100).toFixed(0)}%, TP2 probability ${(pTP2 * 100).toFixed(0)}%.`);
 
+  // Round 65: Add EV label for quick human parsing
+  let evLabel = 'neutral';
+  if (expectedValue !== null) {
+    if (expectedValue >= 0.3) evLabel = 'strong positive EV';
+    else if (expectedValue >= 0.1) evLabel = 'positive EV';
+    else if (expectedValue >= 0) evLabel = 'marginal EV';
+    else if (expectedValue >= -0.2) evLabel = 'slightly negative EV';
+    else evLabel = 'negative EV';
+  }
+
+  // Round 65: Half-Kelly sizing suggestion (more conservative, common in practice)
+  const halfKellyFraction = round(kellyFraction / 2, 4);
+
   return {
     rr_ratio: rrRatio,
     probability_tp1: pTP1,
     probability_tp2: pTP2,
     kelly_fraction: kellyFraction,
+    half_kelly_fraction: halfKellyFraction,
     position_size_suggestion: positionSizeSuggestion,
     expected_value: expectedValue,
+    ev_label: evLabel,
     notes,
   };
 }

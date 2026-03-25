@@ -25,15 +25,54 @@ function fmtNumber(value, decimals = 2) {
   return `$${n.toFixed(decimals)}`;
 }
 
+// Round 26: format trade setup for text reports
+function renderTradeSetup(tradeSetup) {
+  if (!tradeSetup || !tradeSetup.entry_zone) return null;
+  const ts = tradeSetup;
+  const lines = [
+    `Entry zone: $${ts.entry_zone.low} – $${ts.entry_zone.high}`,
+    `Stop loss: $${ts.stop_loss ?? 'n/a'}`,
+    `TP1: $${ts.take_profit_targets?.[0]?.price ?? 'n/a'} (+${ts.take_profit_targets?.[0]?.pct_gain ?? '?'}%)`,
+    `TP2: $${ts.take_profit_targets?.[1]?.price ?? 'n/a'} (+${ts.take_profit_targets?.[1]?.pct_gain ?? '?'}%)`,
+    `R/R: ${ts.risk_reward_ratio ?? 'n/a'} | Quality: ${ts.setup_quality ?? 'n/a'}`,
+  ];
+  return lines.join(' | ');
+}
+
+function verdictColor(verdict) {
+  switch ((verdict || '').toUpperCase()) {
+    case 'STRONG BUY': return '#22c55e';
+    case 'BUY':        return '#86efac';
+    case 'HOLD':       return '#fbbf24';
+    case 'AVOID':      return '#f87171';
+    case 'STRONG AVOID': return '#ef4444';
+    default:           return '#e8e8e8';
+  }
+}
+
+function volatileRegimeBadge(volatility) {
+  if (!volatility || volatility.regime === 'calm') return '';
+  const colors = { elevated: '#fbbf24', high: '#f97316', extreme: '#ef4444' };
+  const color = colors[volatility.regime] || '#fbbf24';
+  const pct = volatility.volatility_pct_24h != null ? ` (${volatility.volatility_pct_24h.toFixed(1)}% 24h)` : '';
+  return `<span style="display:inline-block;padding:4px 12px;border-radius:999px;background:${color};color:#000;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-left:8px;">⚡ ${volatility.regime}${pct}</span>`;
+}
+
 function extractKeyMetrics(rawData, scores) {
   const market = rawData?.market ?? {};
   const onchain = rawData?.onchain ?? {};
+  const dex = rawData?.dex ?? {};
 
   const price = Number(market.current_price ?? market.price ?? 0);
   const marketCap = Number(market.market_cap ?? 0);
   const tvl = Number(onchain.tvl ?? 0);
   const volume24h = Number(market.total_volume ?? market.volume_24h ?? 0);
   const overallScore = Number(scores?.overall?.score ?? 0);
+
+  // Round 8: DEX pressure + TVL stickiness context
+  const dexPressure = dex.pressure_signal ?? null;
+  const dexBuySellRatio = dex.buy_sell_ratio ?? null;
+  const tvlStickiness = onchain.tvl_stickiness ?? null;
 
   return {
     price: price > 0 ? price : null,
@@ -46,6 +85,9 @@ function extractKeyMetrics(rawData, scores) {
     tvl_fmt: tvl > 0 ? fmtNumber(tvl) : 'n/a',
     volume_24h_fmt: volume24h > 0 ? fmtNumber(volume24h) : 'n/a',
     overall_score_fmt: `${overallScore.toFixed(1)}/10`,
+    dex_pressure: dexPressure,
+    dex_buy_sell_ratio: dexBuySellRatio,
+    tvl_stickiness: tvlStickiness,
   };
 }
 
@@ -60,7 +102,9 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
   const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
+    engine_version: 'r30-2026-03-25', // bump on significant engine changes
     verdict: llmAnalysis?.verdict || 'HOLD',
+    headline: llmAnalysis?.headline ?? null,
     key_metrics: keyMetrics,
     scores,
     llm_analysis: llmAnalysis,
@@ -80,6 +124,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `- TVL: ${keyMetrics.tvl_fmt}`,
     `- 24h Volume: ${keyMetrics.volume_24h_fmt}`,
     `- Overall Score: ${keyMetrics.overall_score_fmt}`,
+    ...(keyMetrics.dex_pressure ? [`- DEX Pressure: ${keyMetrics.dex_pressure} (ratio: ${keyMetrics.dex_buy_sell_ratio ?? 'n/a'})`] : []),
+    ...(keyMetrics.tvl_stickiness ? [`- TVL Stickiness: ${keyMetrics.tvl_stickiness}`] : []),
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -87,6 +133,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `- ${renderScoreLine('Social momentum', scores?.social_momentum)}`,
     `- ${renderScoreLine('Development', scores?.development)}`,
     `- ${renderScoreLine('Tokenomics health', scores?.tokenomics_health)}`,
+    `- ${renderScoreLine('Distribution', scores?.distribution)}`,
+    `- ${renderScoreLine('Risk', scores?.risk)}`,
     `- ${renderScoreLine('Overall', scores?.overall)}`,
     '',
     '🛡️ Moat',
@@ -107,8 +155,19 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     '🥊 Competitor comparison',
     llmAnalysis?.competitor_comparison || 'n/a',
     '',
+    ...(llmAnalysis?.liquidity_assessment ? ['💧 Liquidity assessment', llmAnalysis.liquidity_assessment, ''] : []),
     '📝 Analysis',
     llmAnalysis?.analysis_text || 'n/a',
+    '',
+    // Round 28: Investment thesis section
+    ...(rawData?.thesis
+      ? [
+          '📈 Investment Thesis',
+          `🐂 Bull: ${rawData.thesis.bull_case || 'n/a'}`,
+          `🐻 Bear: ${rawData.thesis.bear_case || 'n/a'}`,
+          `🔄 Neutral: ${rawData.thesis.neutral_case || 'n/a'}`,
+        ]
+      : []),
   ].join('\n');
 
   const html = `
@@ -121,7 +180,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
         </div>
         <div style="text-align:right;min-width:220px;">
           <div style="color:#888888;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">Research verdict</div>
-          <div style="display:inline-block;padding:12px 20px;border-radius:999px;border:1px dashed rgba(232,232,232,0.28);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(255,255,255,0.04);">${escapeHtml(json.verdict)}</div>
+          <div style="display:inline-block;padding:12px 20px;border-radius:999px;border:1px dashed rgba(232,232,232,0.28);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(255,255,255,0.04);color:${verdictColor(json.verdict)};">${escapeHtml(json.verdict)}</div>${volatileRegimeBadge(rawData?.volatility)}
           <div style="margin-top:10px;color:#ffd3b6;">Collector failures: ${escapeHtml(failedCollectors.length ? failedCollectors.join(' | ') : 'none')}</div>
         </div>
       </header>
@@ -160,6 +219,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
           <li>${escapeHtml(renderScoreLine('Social momentum', scores?.social_momentum))}</li>
           <li>${escapeHtml(renderScoreLine('Development', scores?.development))}</li>
           <li>${escapeHtml(renderScoreLine('Tokenomics health', scores?.tokenomics_health))}</li>
+          <li>${escapeHtml(renderScoreLine('Distribution', scores?.distribution))}</li>
+          <li>${escapeHtml(renderScoreLine('Risk', scores?.risk))}</li>
           <li>${escapeHtml(renderScoreLine('Overall', scores?.overall))}</li>
         </ul>
       </section>
@@ -201,6 +262,11 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
       </section>
     </article>
   `;
+
+  // Round 28: Attach thesis to json output if available
+  if (rawData?.thesis && typeof rawData.thesis === 'object') {
+    json.thesis = rawData.thesis;
+  }
 
   return { json, text, html };
 }

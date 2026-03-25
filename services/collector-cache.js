@@ -14,14 +14,33 @@
  */
 
 const COLLECTOR_TTLS_MS = {
-  market: 5 * 60 * 1000,
-  onchain: 15 * 60 * 1000,
-  social: 10 * 60 * 1000,
-  github: 30 * 60 * 1000,
-  tokenomics: 30 * 60 * 1000,
+  market: 5 * 60 * 1000,       // Prices move fast
+  onchain: 15 * 60 * 1000,     // TVL/fees update ~hourly
+  social: 10 * 60 * 1000,      // Narratives shift throughout the day
+  github: 30 * 60 * 1000,      // Commit stats rarely change within minutes
+  tokenomics: 30 * 60 * 1000,  // Supply data is slow-moving
+  dex: 3 * 60 * 1000,          // Round 16: DEX data refreshes very quickly (3 min)
+  reddit: 20 * 60 * 1000,      // Round 16: Reddit posts update every ~20 min
+  holders: 60 * 60 * 1000,     // Round 16: Holder data is very slow-moving (1h)
+  ecosystem: 15 * 60 * 1000,   // Round 16: Ecosystem derived from onchain/dex
+  contract: 60 * 60 * 1000,    // Round 16: Contract status rarely changes (1h)
 };
 
 const STALE_GRACE_MS = 60 * 60 * 1000; // Serve stale for up to 1h while refreshing
+
+// Round 16: Cache TTL override via environment variables
+// Format: CACHE_TTL_<COLLECTOR>=<seconds>
+// e.g., CACHE_TTL_MARKET=120 to set market cache to 2 minutes
+function applyEnvTtlOverrides() {
+  for (const collector of Object.keys(COLLECTOR_TTLS_MS)) {
+    const envKey = `CACHE_TTL_${collector.toUpperCase()}`;
+    const envVal = process.env[envKey];
+    if (envVal && Number.isFinite(Number(envVal)) && Number(envVal) > 0) {
+      COLLECTOR_TTLS_MS[collector] = Number(envVal) * 1000;
+    }
+  }
+}
+applyEnvTtlOverrides();
 
 function ensureSchema(db) {
   db.exec(`

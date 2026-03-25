@@ -110,12 +110,41 @@ export function generateTradeSetup(rawData, scores) {
     setupQuality = 'weak';
   }
 
+  // Round 25: ATH/ATL context notes
+  const athDistancePct = ath != null && ath > 0 && price > 0
+    ? ((price - ath) / ath) * 100
+    : null;
+  const atlDistancePct = atl != null && atl > 0 && price > 0
+    ? ((price - atl) / atl) * 100
+    : null;
+  if (athDistancePct !== null) {
+    if (athDistancePct > -5) notes.push(`Price is very close to ATH ($${formatPrice(ath)}) — breakout zone.`);
+    else if (athDistancePct < -80) notes.push(`Price is ${Math.abs(athDistancePct).toFixed(0)}% below ATH ($${formatPrice(ath)}) — deep drawdown.`);
+  }
+  if (atlDistancePct !== null && atlDistancePct < 20) {
+    notes.push(`Price is only ${atlDistancePct.toFixed(1)}% above ATL ($${formatPrice(atl)}) — near all-time-low risk.`);
+  }
+
+  // Round 63: Risk score label for human-readable summaries
+  const riskLabel = overallScore >= 7.5
+    ? 'low risk'
+    : overallScore >= 5.5
+      ? 'moderate risk'
+      : overallScore >= 4
+        ? 'elevated risk'
+        : 'high risk';
+
+  // Round 63: Recommended position size hint (% of portfolio)
+  const positionSizeHint = overallScore >= 7.5 ? '3-5%' : overallScore >= 5.5 ? '1-3%' : '0.5-1%';
+
   return {
     entry_zone: { low: entryLow, high: entryHigh },
     stop_loss: stopLoss,
     take_profit_targets: takeProfitTargets,
     risk_reward_ratio: rrRatio,
     setup_quality: setupQuality,
+    risk_label: riskLabel,
+    position_size_hint: positionSizeHint,
     notes,
   };
 }

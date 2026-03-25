@@ -20,6 +20,16 @@ function createEmptyOnchainResult(projectName) {
     // Round 4: revenue/fees ratio + treasury
     revenue_to_fees_ratio: null,
     treasury_balance: null,
+    // Round 11: per-chain TVL breakdown
+    chain_tvl: {},
+    // Round 11: active users (if available from DeFiLlama)
+    active_users_24h: null,
+    // Round 21: revenue efficiency (fees_7d per $1M TVL)
+    revenue_efficiency: null,
+    // Round 6: TVL stickiness ('sticky' | 'moderate' | 'fleeing' | null)
+    tvl_stickiness: null,
+    // Round 43: TVL data quality ('active' | 'suspect_static' | null)
+    tvl_data_quality: null,
     error: null,
   };
 }
@@ -250,18 +260,66 @@ export async function collectOnchain(projectName) {
       }
     }
 
+    // Round 11: per-chain TVL breakdown from currentChainTvls
+    const chainTvl = {};
+    if (protocol?.currentChainTvls) {
+      const validChains = new Set((protocol.chains || []).map((c) => c));
+      for (const [chain, val] of Object.entries(protocol.currentChainTvls)) {
+        if (validChains.has(chain) && Number.isFinite(Number(val))) {
+          chainTvl[chain] = Number(val);
+        }
+      }
+    }
+
+    // Round 11: active users from DeFiLlama if available
+    const activeUsers24h = Number.isFinite(Number(protocol?.activeUsers))
+      ? Number(protocol.activeUsers)
+      : null;
+
+    // Round 21: revenue efficiency = weekly fees per $1M TVL
+    const revenueEfficiency = (fees7d != null && currentTvl != null && currentTvl > 0)
+      ? (fees7d / (currentTvl / 1_000_000))
+      : null;
+
+    // Round 6: TVL stickiness — TVL stability signal: if 30d change > -10% and 7d > -5%, capital is sticky
+    const tvl7dChange = computePctChange(currentTvl, tvl7dAgo);
+    const tvl30dChange = computePctChange(currentTvl, tvl30dAgo);
+    let tvlStickiness = null;
+    if (tvl7dChange !== null && tvl30dChange !== null) {
+      if (tvl7dChange >= -5 && tvl30dChange >= -10) tvlStickiness = 'sticky';
+      else if (tvl7dChange < -20 || tvl30dChange < -30) tvlStickiness = 'fleeing';
+      else tvlStickiness = 'moderate';
+    }
+
+    // Round 43: Detect suspiciously stable TVL — TVL that hasn't changed at all in 7d/30d may be stale data
+    let tvlDataQuality = null;
+    if (tvl7dChange !== null && tvl30dChange !== null) {
+      const bothExact0 = tvl7dChange === 0 && tvl30dChange === 0;
+      const bothNearZero = Math.abs(tvl7dChange) < 0.01 && Math.abs(tvl30dChange) < 0.01;
+      if (bothExact0 || bothNearZero) {
+        tvlDataQuality = 'suspect_static'; // TVL suspiciously unchanged
+      } else if (Math.abs(tvl7dChange) > 0.1 || Math.abs(tvl30dChange) > 0.1) {
+        tvlDataQuality = 'active'; // Shows real movement
+      }
+    }
+
     return {
       ...fallback,
       slug,
       tvl: currentTvl,
-      tvl_change_7d: computePctChange(currentTvl, tvl7dAgo),
-      tvl_change_30d: computePctChange(currentTvl, tvl30dAgo),
+      tvl_change_7d: tvl7dChange,
+      tvl_change_30d: tvl30dChange,
       chains: protocol?.chains || match.protocol?.chains || [],
       category: protocol?.category || match.protocol?.category || null,
       fees_7d: fees7d,
       revenue_7d: revenue7d,
       revenue_to_fees_ratio: revenueToFeesRatio,
       treasury_balance: treasuryBalance,
+      chain_tvl: chainTvl,
+      active_users_24h: activeUsers24h,
+      revenue_efficiency: revenueEfficiency != null ? Math.round(revenueEfficiency * 100) / 100 : null,
+      tvl_stickiness: tvlStickiness,
+      tvl_data_quality: tvlDataQuality,
       error: null,
     };
   } catch (error) {

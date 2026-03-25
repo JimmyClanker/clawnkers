@@ -59,6 +59,24 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   const overallScore  = scores.overall?.score ?? 5;
   const completeness  = scores.overall?.completeness ?? 50;
 
+  // Round 12: price range context for thesis
+  const priceRangePos = rawData?.market?.price_range_position;
+  let priceRangeNote = '';
+  if (priceRangePos != null) {
+    if (priceRangePos >= 0.8) priceRangeNote = ' near its all-time high';
+    else if (priceRangePos >= 0.5) priceRangeNote = ' in the upper half of its historical range';
+    else if (priceRangePos <= 0.1) priceRangeNote = ' near its all-time low — extreme risk/reward zone';
+    else if (priceRangePos <= 0.25) priceRangeNote = ' in the lower quartile of its historical range';
+  }
+
+  // Round 12: TVL stickiness context
+  const tvlStickiness = rawData?.onchain?.tvl_stickiness;
+  const stickinessNote = tvlStickiness === 'sticky'
+    ? ' with sticky capital retention'
+    : tvlStickiness === 'fleeing'
+    ? ' but capital is actively fleeing the protocol'
+    : '';
+
   // Top alpha signals
   const strongSignals  = alphaSignals.filter((s) => s.strength === 'strong').map((s) => SIGNAL_PHRASES[s.signal] ?? s.signal);
   const modSignals     = alphaSignals.filter((s) => s.strength === 'moderate').map((s) => SIGNAL_PHRASES[s.signal] ?? s.signal);
@@ -72,11 +90,11 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   // ── Bull case ─────────────────────────────────────────────────────────────
   let bull_case;
   if (strongSignals.length > 0 && strongest.length > 0) {
-    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10).`;
+    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10)${priceRangeNote}${stickinessNote}.`;
   } else if (strongest.length > 0 && overallScore >= 6) {
-    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals, positioning it for potential upside with an overall score of ${overallScore}/10.`;
+    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals${priceRangeNote}, positioning it for potential upside with an overall score of ${overallScore}/10${stickinessNote}.`;
   } else {
-    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors.`;
+    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors${priceRangeNote}.`;
   }
 
   // ── Bear case ─────────────────────────────────────────────────────────────
@@ -102,5 +120,11 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
     neutral_case = `${projectName} scores ${overallScore}/10 and requires improvement across ${weakest.join(' and ')} before a meaningful position is warranted${dataNote}.`;
   }
 
-  return { bull_case, bear_case, neutral_case };
+  // Round 67: One-liner thesis for feeds/cards
+  const verdict = overallScore >= 7.5 ? 'STRONG BUY' : overallScore >= 6 ? 'BUY' : overallScore >= 4.5 ? 'HOLD' : 'AVOID';
+  const oneLiner = overallScore >= 6
+    ? `${projectName} — ${verdict}: ${bullSignalText || strongest[0] || 'fundamentals'} justify entry${priceRangeNote}.`
+    : `${projectName} — ${verdict}: ${bearFlagText || weakest[0] || 'weak fundamentals'} — avoid until conditions improve.`;
+
+  return { bull_case, bear_case, neutral_case, one_liner: oneLiner };
 }

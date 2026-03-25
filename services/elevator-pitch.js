@@ -50,12 +50,17 @@ export function generateElevatorPitch(projectName, rawData, scores, analysis) {
   const github = rawData?.github ?? {};
 
   // Sentence 1: What the project does
-  const description =
-    github.description ||
-    analysis?.moat ||
+  const rawDesc = github.description || analysis?.moat || null;
+  // Normalize: strip trailing dot, lowercase first char, limit to 120 chars
+  const normalizeDesc = (s) => {
+    if (!s) return null;
+    const cleaned = s.replace(/\.$/, '').slice(0, 120);
+    return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
+  };
+  const description = normalizeDesc(rawDesc) ||
     (onchain.category ? `a ${onchain.category} protocol` : null) ||
     'a crypto protocol';
-  const sentence1 = `${projectName} is ${description.charAt(0).toLowerCase()}${description.slice(1)}.`;
+  const sentence1 = `${projectName} is ${description}.`;
 
   // Sentence 2: Key metrics
   const tvlFmt = fmtNum(onchain.tvl);

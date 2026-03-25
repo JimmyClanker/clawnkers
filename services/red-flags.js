@@ -132,5 +132,197 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     }
   }
 
-  return flags;
+  // 11. Round 5: GitHub inactive (commit_trend === 'inactive')
+  if (github.commit_trend === 'inactive') {
+    flags.push({
+      flag: 'github_inactive',
+      severity: 'warning',
+      detail: `GitHub shows 0 commits in the last 30 days — development appears halted.`,
+    });
+  }
+
+  // 12. Round 5: Severe price decline > 50% in 30d
+  const change30d = safeN(market.price_change_pct_30d);
+  if (change30d < -50) {
+    flags.push({
+      flag: 'severe_price_decline',
+      severity: 'critical',
+      detail: `Price has declined ${Math.abs(change30d).toFixed(1)}% over 30 days — potential capitulation or fundamental failure.`,
+    });
+  }
+
+  // 13. Round 5: Stablecoin depeg signal (price < $0.90 for named stablecoins)
+  const tokenName = String(market.name || market.symbol || '').toLowerCase();
+  const isStablecoin = /usd|dai|usdt|usdc|frax|tusd|lusd|susd|busd|crvusd|usde/i.test(tokenName);
+  const price = safeN(market.current_price ?? market.price);
+  if (isStablecoin && price > 0 && (price < 0.96 || price > 1.04)) {
+    flags.push({
+      flag: 'stablecoin_depeg',
+      severity: price < 0.90 || price > 1.10 ? 'critical' : 'warning',
+      detail: `Stablecoin is trading at $${price.toFixed(4)} — ${price < 0.96 ? 'below' : 'above'} normal peg range of $0.96–$1.04.`,
+    });
+  }
+
+  // 14. Round 4: Persistent DEX sell pressure (more sellers than buyers)
+  const dex = rawData.dex ?? rawData.dexData ?? {};
+  if (dex.pressure_signal === 'sell_pressure' && dex.buy_sell_ratio != null) {
+    flags.push({
+      flag: 'dex_sell_pressure',
+      severity: dex.buy_sell_ratio <= 0.7 ? 'warning' : 'info',
+      detail: `DEX buy/sell ratio is ${dex.buy_sell_ratio} — more sellers than buyers in 24h (${dex.sells_24h} sells vs ${dex.buys_24h} buys).`,
+    });
+  }
+
+  // 15. Round 4: Extremely low DEX liquidity (< $50K)
+  const dexLiquidity = safeN(dex.dex_liquidity_usd ?? 0);
+  if (dexLiquidity > 0 && dexLiquidity < 50_000) {
+    flags.push({
+      flag: 'very_low_dex_liquidity',
+      severity: dexLiquidity < 10_000 ? 'critical' : 'warning',
+      detail: `Total DEX liquidity is only $${(dexLiquidity / 1000).toFixed(1)}K — extreme slippage risk on any meaningful position.`,
+    });
+  }
+
+  // 16. Round 4: Extremely high top-pair liquidity concentration (>90%)
+  const topPairLiqPct = safeN(dex.top_pair_liquidity_pct ?? 0);
+  if (topPairLiqPct > 90 && dexLiquidity > 100_000) {
+    flags.push({
+      flag: 'single_pool_liquidity_concentration',
+      severity: 'warning',
+      detail: `${topPairLiqPct.toFixed(0)}% of DEX liquidity is concentrated in one pool — fragile liquidity profile.`,
+    });
+  }
+
+  // 17. Round 18: High team allocation — potential insider sell pressure
+  const vestingInfo = tokenomics.vesting_info;
+  const teamAllocationPct = safeN(vestingInfo?.team_allocation_pct ?? 0);
+  if (teamAllocationPct > 25) {
+    flags.push({
+      flag: 'high_team_allocation',
+      severity: teamAllocationPct > 40 ? 'critical' : 'warning',
+      detail: `Team/insider allocation is ${teamAllocationPct.toFixed(0)}% of supply — elevated sell pressure risk when vesting unlocks.`,
+    });
+  }
+
+  // 18. Round 24: Social-sourced exploit mentions
+  const exploitMentions = safeN(social.exploit_mentions ?? 0);
+  if (exploitMentions >= 2) {
+    flags.push({
+      flag: 'exploit_mentions_social',
+      severity: exploitMentions >= 4 ? 'critical' : 'warning',
+      detail: `${exploitMentions} recent news items mention exploits, hacks, or security vulnerabilities — verify protocol safety before entry.`,
+    });
+  }
+
+  // 19. Round 24: Social-sourced unlock/vesting mentions (potential sell pressure)
+  const unlockMentions = safeN(social.unlock_mentions ?? 0);
+  if (unlockMentions >= 2) {
+    flags.push({
+      flag: 'token_unlock_news',
+      severity: 'warning',
+      detail: `${unlockMentions} recent news items discuss token unlocks or vesting events — potential near-term sell pressure.`,
+    });
+  }
+
+  // 20. Round 32: Revenue-to-fees ratio collapse — protocol not capturing value
+  const revenueToFees = safeN(rawData?.onchain?.revenue_to_fees_ratio ?? null, null);
+  if (revenueToFees !== null && revenueToFees < 0.05 && safeN(onchain.fees_7d) > 100_000) {
+    flags.push({
+      flag: 'low_revenue_capture',
+      severity: 'warning',
+      detail: `Revenue-to-fees ratio is ${(revenueToFees * 100).toFixed(1)}% — protocol generates fees but retains very little value for token holders.`,
+    });
+  }
+
+  // 21. Round 32: No DEX pairs found at all (very low discoverability)
+  // Note: `dex` already declared above at line ~167; reuse it
+  if (dex.error && (dex.error === 'No DEX pairs found' || (dex.dex_pair_count === 0 && !dex.error))) {
+    if (mcap > 0 && mcap < 50_000_000) {
+      flags.push({
+        flag: 'no_dex_pairs',
+        severity: 'warning',
+        detail: 'No DEX trading pairs detected — token may be exchange-only, reducing on-chain tradability and transparency.',
+      });
+    }
+  }
+
+  // 22. Round 32: Declining commit count + no CI = dev quality concerns
+  if (github.commit_trend === 'decelerating' && github.has_ci === false && safeN(github.commits_30d) < 5) {
+    flags.push({
+      flag: 'dev_quality_concern',
+      severity: 'warning',
+      detail: `Decelerating commits (${github.commits_30d ?? 0}/30d) with no CI/CD pipeline detected — development quality and velocity are declining.`,
+    });
+  }
+
+  // 25. Round 42: Regulatory risk from social mentions
+  const regulatoryMentions = safeN(social.regulatory_mentions ?? 0);
+  if (regulatoryMentions >= 2) {
+    flags.push({
+      flag: 'regulatory_risk_mentions',
+      severity: regulatoryMentions >= 4 ? 'critical' : 'warning',
+      detail: `${regulatoryMentions} recent news items mention regulatory risks, SEC/CFTC actions, or legal issues — verify jurisdiction risk before allocating.`,
+    });
+  }
+
+  // 24. Round 40: Pump/dump pattern detection from DEX
+  if (dex.pump_dump_signal === 'possible_pump') {
+    flags.push({
+      flag: 'dex_pump_pattern',
+      severity: 'warning',
+      detail: `DEX shows +${dex.dex_price_change_h1?.toFixed(1) ?? '?'}% in 1h and +${dex.dex_price_change_h24?.toFixed(1) ?? '?'}% in 24h — possible coordinated pump. Chasing this move is extremely high risk.`,
+    });
+  } else if (dex.pump_dump_signal === 'possible_dump') {
+    flags.push({
+      flag: 'dex_dump_pattern',
+      severity: 'critical',
+      detail: `DEX shows ${dex.dex_price_change_h1?.toFixed(1) ?? '?'}% in 1h and ${dex.dex_price_change_h24?.toFixed(1) ?? '?'}% in 24h — possible coordinated dump or protocol failure.`,
+    });
+  }
+
+  // 23. Round 32: Near-ATL risk — price within 20% of all-time low
+  const atlDistancePct = safeN(market.atl_distance_pct ?? null, null);
+  if (atlDistancePct !== null && atlDistancePct < 20 && atlDistancePct >= 0) {
+    flags.push({
+      flag: 'near_all_time_low',
+      severity: atlDistancePct < 5 ? 'critical' : 'warning',
+      detail: `Price is only ${atlDistancePct.toFixed(1)}% above all-time low — capitulation risk; structure is fragile near historical support.`,
+    });
+  }
+
+  // 26. Round 56: Zero revenue despite significant fees — value extraction risk
+  const fees7d = safeN(onchain.fees_7d ?? 0);
+  const revenue7d = safeN(onchain.revenue_7d ?? 0);
+  if (fees7d > 500_000 && revenue7d === 0) {
+    flags.push({
+      flag: 'zero_revenue_capture',
+      severity: 'warning',
+      detail: `Protocol generates $${(fees7d / 1000).toFixed(0)}K in fees but $0 revenue — all value flows to LPs, not token holders.`,
+    });
+  }
+
+  // 27. Round 56: Extreme age imbalance — very old project with very low TVL/volume
+  if (genesisDate) {
+    const ageMs = Date.now() - new Date(genesisDate).getTime();
+    const ageMonths = ageMs / (1000 * 60 * 60 * 24 * 30.44);
+    const tvl = safeN(onchain.tvl ?? 0);
+    if (ageMonths > 24 && tvl < 100_000 && tvl > 0) {
+      flags.push({
+        flag: 'zombie_protocol',
+        severity: 'warning',
+        detail: `Protocol is ${ageMonths.toFixed(0)} months old but only has $${(tvl / 1000).toFixed(0)}K TVL — potential zombie project with no organic growth.`,
+      });
+    }
+  }
+
+  // Deduplicate flags by flag key (keep highest severity)
+  const severityOrder = { critical: 3, warning: 2, info: 1 };
+  const flagMap = new Map();
+  for (const flag of flags) {
+    const existing = flagMap.get(flag.flag);
+    if (!existing || severityOrder[flag.severity] > severityOrder[existing.severity]) {
+      flagMap.set(flag.flag, flag);
+    }
+  }
+  return Array.from(flagMap.values());
 }

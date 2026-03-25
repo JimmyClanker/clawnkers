@@ -26,6 +26,10 @@ function createEmptyGithubResult(projectName) {
     // Round 6: language breakdown + dependency count
     languages: {},
     dependency_count: null,
+    // Round 29: CI detection
+    has_ci: null,
+    // Round 51: latest release
+    latest_release: null,
     error: null,
   };
 }
@@ -120,12 +124,16 @@ export async function collectGithub(projectName) {
       repo = topRepo.name;
     }
 
-    const [repoInfo, commitsInfo, contributorsInfo, languagesInfo, packageJsonInfo] = await Promise.allSettled([
+    const [repoInfo, commitsInfo, contributorsInfo, languagesInfo, packageJsonInfo, workflowsInfo, releasesInfo] = await Promise.allSettled([
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}`),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=1`),
       fetchContributorStats(owner, repo),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/languages`),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/package.json`),
+      // Round 29: check for CI workflows
+      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/.github/workflows`),
+      // Round 51: check latest release for recent activity
+      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/releases?per_page=1`),
     ]);
 
     const repoData = repoInfo.status === 'fulfilled' ? repoInfo.value.data : topRepo;
@@ -135,6 +143,28 @@ export async function collectGithub(projectName) {
 
     // Round 6: language breakdown
     const languagesData = languagesInfo.status === 'fulfilled' ? (languagesInfo.value.data || {}) : {};
+
+    // Round 29: CI detection
+    const hasCI = workflowsInfo.status === 'fulfilled' &&
+      Array.isArray(workflowsInfo.value?.data) &&
+      workflowsInfo.value.data.length > 0;
+
+    // Round 51: latest release data
+    const latestRelease = (() => {
+      if (releasesInfo.status !== 'fulfilled') return null;
+      const releases = releasesInfo.value?.data;
+      const latest = Array.isArray(releases) ? releases[0] : releases;
+      if (!latest?.tag_name) return null;
+      return {
+        tag: latest.tag_name,
+        name: latest.name ?? null,
+        published_at: latest.published_at ?? null,
+        prerelease: latest.prerelease ?? false,
+        days_since_release: latest.published_at
+          ? Math.floor((Date.now() - new Date(latest.published_at).getTime()) / 86400000)
+          : null,
+      };
+    })();
 
     // Round 6: dependency count from package.json (if present)
     let dependencyCount = null;
@@ -210,6 +240,8 @@ export async function collectGithub(projectName) {
       watchers: repoData?.watchers_count ?? null,
       languages: languagesData,
       dependency_count: dependencyCount,
+      has_ci: hasCI,
+      latest_release: latestRelease,
       error: null,
     };
   } catch (error) {

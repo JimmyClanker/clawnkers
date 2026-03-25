@@ -21,13 +21,23 @@ function safeN(v, fb = 0) {
   return Number.isFinite(n) ? n : fb;
 }
 
+// Round 20: Compute a 0-100 data freshness score based on collector source types
+function computeDataFreshness(collectors) {
+  if (!collectors || Object.keys(collectors).length === 0) return null;
+  const sourceWeights = { fresh: 100, cache: 70, 'stale-cache': 40, error: 0 };
+  const entries = Object.values(collectors);
+  if (entries.length === 0) return null;
+  const total = entries.reduce((sum, e) => sum + (sourceWeights[e.source] ?? 0), 0);
+  return Math.round(total / entries.length);
+}
+
 /**
  * Score report quality.
  *
  * @param {object} rawData   - raw collector output
  * @param {object} scores    - calculateScores() result
  * @param {object} analysis  - LLM analysis output
- * @returns {{ quality_score: number, grade: 'A'|'B'|'C'|'D'|'F', issues: string[] }}
+ * @returns {{ quality_score: number, grade: 'A'|'B'|'C'|'D'|'F', issues: string[], data_freshness_score: number|null }}
  */
 export function scoreReportQuality(rawData, scores, analysis) {
   const issues = [];
@@ -121,6 +131,28 @@ export function scoreReportQuality(rawData, scores, analysis) {
     score -= 5;
   }
 
+  // ── 6. Round 14: Check for red flags and alpha signals presence ──
+  const hasRedFlags = Array.isArray(rawData?.red_flags) && rawData.red_flags.length > 0;
+  const hasAlphaSignals = Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length > 0;
+  if (!hasRedFlags && !hasAlphaSignals) {
+    issues.push('No red flags or alpha signals detected — analysis may lack qualitative depth.');
+    score -= 5;
+  }
+
+  // ── 7. Round 14: Trade setup completeness ─────────────────────
+  const tradeSetup = rawData?.trade_setup ?? rawData?.tradeSetup ?? null;
+  if (tradeSetup && tradeSetup.setup_quality === 'weak') {
+    issues.push('Trade setup quality is "weak" — insufficient price data for actionable levels.');
+    score -= 5;
+  }
+
+  // ── 8. Round 20: Data freshness score ───────────────────────────
+  const freshness = computeDataFreshness(collectors);
+  if (freshness !== null && freshness < 50) {
+    issues.push(`Data freshness score is low (${freshness}/100) — most data served from stale cache.`);
+    score -= Math.round((50 - freshness) / 10) * 2; // up to -10 points
+  }
+
   // Clamp score
   score = Math.max(0, Math.min(100, score));
 
@@ -132,9 +164,18 @@ export function scoreReportQuality(rawData, scores, analysis) {
   else if (score >= 45) grade = 'D';
   else grade = 'F';
 
+  // Round 64: Verdict confidence assessment based on score spread and data quality
+  const overallScore = safeN(scores?.overall?.score, 5);
+  const overallConf = safeN(scores?.overall?.overall_confidence, 50);
+  const scoreSpread = overallScore > 7 || overallScore < 4 ? 'polarized' : 'ambiguous';
+  const verdictConfidence = overallConf >= 70 && score >= 70 ? 'high' : overallConf >= 50 && score >= 50 ? 'medium' : 'low';
+
   return {
     quality_score: score,
     grade,
     issues,
+    data_freshness_score: freshness,
+    verdict_confidence: verdictConfidence,
+    score_spread: scoreSpread,
   };
 }

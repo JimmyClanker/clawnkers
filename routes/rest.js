@@ -114,6 +114,16 @@ export function createRestRouter({ config, exaService, signalsService }) {
       endpoints: {
         'GET /alpha/quick?project=<name>': 'Free algorithmic alpha scan — no AI, no payment',
         'POST /alpha/pay-verify': 'Full scan after USDC payment verification',
+        'POST /alpha/batch': 'Batch quick-scan up to 5 projects simultaneously',
+        'GET /alpha/history?project=<name>': 'Scan history for a project with score trend',
+        'GET /alpha/compare?a=<name>&b=<name>': 'Side-by-side score comparison',
+        'GET /alpha/leaderboard?limit=10': 'Top projects by overall score',
+        'GET /alpha/trending?window_hours=24': 'Recently scanned projects',
+        'GET /alpha/stats': 'Scan statistics and verdict distribution',
+        'GET /alpha/export?project=<name>': 'Machine-readable compact export (agent-friendly)',
+        'GET /alpha/digest?window_hours=24': 'Human-readable daily digest of all recent scans',
+        'GET /alpha/sparkline?project=<name>&limit=20': 'Score history for chart rendering (all 7 dimensions)',
+        'GET /alpha/watchlist?projects=btc,eth,sol': 'Portfolio watchlist — scan up to 8 projects, ranked by score',
         'GET /search?q=<query>': 'Token search via CoinGecko + DexScreener fallback',
         'GET /research?q=<query>': 'AI web research via Exa neural search',
         'GET /fetch?url=<url>': 'URL content extraction',
@@ -207,6 +217,33 @@ export function createRestRouter({ config, exaService, signalsService }) {
   router.get('/api/signals', (req, res) => {
     const result = signalsService.getSignals(req.query);
     res.json({ ...result, timestamp: new Date().toISOString() });
+  });
+
+  // ── Round 23: Top scanned projects ──────────────────────────
+  router.get('/api/top-scanned', (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 10, 50);
+    try {
+      const db = signalsService.db;
+      // Ensure table exists
+      db.exec(`CREATE TABLE IF NOT EXISTS scan_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_name TEXT NOT NULL,
+        scores_json TEXT,
+        report_json TEXT,
+        scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      const rows = db.prepare(`
+        SELECT project_name, COUNT(*) as scan_count, MAX(scanned_at) as last_scanned
+        FROM scan_history
+        GROUP BY project_name
+        ORDER BY scan_count DESC
+        LIMIT ?
+      `).all(limit);
+      return res.json({ projects: rows, timestamp: new Date().toISOString() });
+    } catch (err) {
+      console.error('[top-scanned]', err.message);
+      return res.status(500).json({ error: 'Failed to retrieve top scanned projects' });
+    }
   });
 
   router.get('/api/signals/stats', (req, res) => {

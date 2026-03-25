@@ -78,6 +78,14 @@ export function detectChanges(db, projectName, currentData) {
     { metric: 'fees_7d', prev: safeN(prevOnchain.fees_7d), curr: safeN(currOnchain.fees_7d) },
   );
 
+  // ── Round 17: DEX metrics ──────────────────────────────────────
+  const prevDex = prevReport?.raw_data?.dex ?? {};
+  const currDex = currentData?.rawData?.dex ?? {};
+  metricPairs.push(
+    { metric: 'dex_liquidity', prev: safeN(prevDex.dex_liquidity_usd), curr: safeN(currDex.dex_liquidity_usd) },
+    { metric: 'dex_volume_24h', prev: safeN(prevDex.dex_volume_24h), curr: safeN(currDex.dex_volume_24h) },
+  );
+
   for (const { metric, prev, curr } of metricPairs) {
     const pct = changePct(prev, curr);
     changes.push({
@@ -118,10 +126,40 @@ export function detectChanges(db, projectName, currentData) {
     significant: prevVerdict !== currVerdict,
   });
 
+  // Round 14: compute momentum direction from the significant changes
+  const significantChanges = changes.filter((c) => c.significant);
+  const scoreDimChanges = significantChanges.filter((c) => c.metric.startsWith('score_'));
+  const upCount = scoreDimChanges.filter((c) => c.direction === 'up').length;
+  const downCount = scoreDimChanges.filter((c) => c.direction === 'down').length;
+  let scoreMomentum = 'neutral';
+  if (upCount > downCount + 1) scoreMomentum = 'improving';
+  else if (downCount > upCount + 1) scoreMomentum = 'deteriorating';
+
+  // Round 14: highlight if verdict changed direction (upgrade vs downgrade)
+  const verdictChange = changes.find((c) => c.metric === 'verdict' && c.significant);
+  const VERDICT_RANK = { 'STRONG BUY': 5, 'BUY': 4, 'HOLD': 3, 'AVOID': 2, 'STRONG AVOID': 1 };
+  let verdictDirection = null;
+  if (verdictChange) {
+    const prevRank = VERDICT_RANK[verdictChange.previous] ?? 0;
+    const currRank = VERDICT_RANK[verdictChange.current] ?? 0;
+    if (currRank > prevRank) verdictDirection = 'upgrade';
+    else if (currRank < prevRank) verdictDirection = 'downgrade';
+  }
+
+  // Round 74: Overall score delta (absolute, not percent)
+  const prevOverallScore = safeN(prevScores?.overall?.score ?? prevScores?.overall);
+  const currOverallScore = safeN(currentData?.scores?.overall?.score ?? currentData?.scores?.overall);
+  const overallScoreDelta = prevOverallScore != null && currOverallScore != null
+    ? parseFloat((currOverallScore - prevOverallScore).toFixed(2))
+    : null;
+
   return {
     has_previous: true,
     previous_scan_at: previousRow.scanned_at,
     changes,
-    significant_changes: changes.filter((c) => c.significant),
+    significant_changes: significantChanges,
+    score_momentum: scoreMomentum,
+    verdict_direction: verdictDirection,
+    overall_score_delta: overallScoreDelta,
   };
 }

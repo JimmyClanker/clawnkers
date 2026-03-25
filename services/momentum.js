@@ -96,8 +96,33 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   const prevCirc = previousScanData ? safeN(pt.pct_circulating) : null;
   const tokenomicsMomentum = direction(currCirc, prevCirc, 1);
 
+  // ── Round 19: DEX liquidity trend ────────────────────────────────────────
+  const dex = rawData.dex ?? {};
+  const pd  = (prev.dex ?? {});
+  const currDexLiq = safeN(dex.dex_liquidity_usd);
+  const prevDexLiq = previousScanData ? safeN(pd.dex_liquidity_usd) : null;
+  // Also use 24h price change direction from DEX as signal when no prev scan
+  let dexMomentum;
+  if (currDexLiq != null && prevDexLiq != null) {
+    dexMomentum = direction(currDexLiq, prevDexLiq, currDexLiq * 0.05); // 5% threshold
+  } else {
+    const dexChange24h = safeN(dex.dex_price_change_h24);
+    dexMomentum = dexChange24h != null
+      ? (dexChange24h > 2 ? 'improving' : dexChange24h < -2 ? 'declining' : 'stable')
+      : 'stable';
+  }
+
+  // ── Round 61: Social velocity — compare current mentions to expected baseline ─
+  const currentMentions = safeN(social.filtered_mentions ?? social.mentions);
+  const prevMentions = previousScanData ? safeN(ps.filtered_mentions ?? ps.mentions) : null;
+  let socialVelocity = null;
+  if (currentMentions != null && prevMentions != null && prevMentions > 0) {
+    const velocityPct = ((currentMentions - prevMentions) / prevMentions) * 100;
+    socialVelocity = parseFloat(velocityPct.toFixed(1));
+  }
+
   // ── Overall: majority vote ────────────────────────────────────────────────
-  const dims = [marketMomentum, onchainMomentum, socialMomentum, devMomentum, tokenomicsMomentum];
+  const dims = [marketMomentum, onchainMomentum, socialMomentum, devMomentum, tokenomicsMomentum, dexMomentum];
   const improving = dims.filter((d) => d === 'improving').length;
   const declining = dims.filter((d) => d === 'declining').length;
   const overallMomentum = improving > declining + 1
@@ -109,9 +134,10 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   return {
     market:     { direction: marketMomentum },
     onchain:    { direction: onchainMomentum },
-    social:     { direction: socialMomentum },
+    social:     { direction: socialMomentum, velocity_pct: socialVelocity },
     development: { direction: devMomentum },
     tokenomics: { direction: tokenomicsMomentum },
+    dex:        { direction: dexMomentum },
     overall:    { direction: overallMomentum },
   };
 }

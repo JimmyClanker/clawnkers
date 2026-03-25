@@ -183,5 +183,42 @@ export function compareToSector(projectMetrics, benchmark) {
     };
   }
 
+  // Round 21 + Round 50: Volume efficiency comparison (volume / TVL ratio vs sector)
+  if (projectMetrics.tvl > 0 && projectMetrics.market_cap != null) {
+    // Accept volume from direct field or from _volume_24h injected by routes/alpha.js
+    const projectVolume = projectMetrics.volume_24h ?? projectMetrics._volume_24h ?? null;
+    if (projectVolume != null && projectVolume > 0 && projectMetrics.tvl > 0) {
+      const volTvlRatio = projectVolume / projectMetrics.tvl;
+      const sectorVolTvlRatio = (benchmark.volume_median && benchmark.tvl_median && benchmark.tvl_median > 0)
+        ? benchmark.volume_median / benchmark.tvl_median
+        : null;
+      comparison.volume_efficiency = {
+        project_vol_tvl_ratio: Math.round(volTvlRatio * 1000) / 1000,
+        sector_median_ratio: sectorVolTvlRatio ? Math.round(sectorVolTvlRatio * 1000) / 1000 : null,
+        context: sectorVolTvlRatio
+          ? (volTvlRatio > sectorVolTvlRatio * 1.5 ? 'high-velocity' : volTvlRatio < sectorVolTvlRatio * 0.5 ? 'low-velocity' : 'average-velocity')
+          : 'no-sector-data',
+      };
+    }
+  }
+
+  // Round 66: Sector percentile rank estimate (0-100) based on TVL vs distribution
+  // Uses linear interpolation between median and top25 for rough percentile
+  if (projectMetrics.tvl != null && benchmark.tvl_median != null && benchmark.tvl_top25_avg != null) {
+    const tvl = projectMetrics.tvl;
+    let tvlPercentile;
+    if (tvl >= benchmark.tvl_top25_avg) tvlPercentile = 90; // top 25% floor
+    else if (tvl >= benchmark.tvl_median) {
+      // Between median (50th) and top25 (75th)
+      const frac = (tvl - benchmark.tvl_median) / (benchmark.tvl_top25_avg - benchmark.tvl_median);
+      tvlPercentile = Math.round(50 + frac * 25);
+    } else {
+      // Below median
+      const frac = Math.min(tvl / benchmark.tvl_median, 1);
+      tvlPercentile = Math.round(frac * 50);
+    }
+    comparison.sector_tvl_percentile = Math.min(99, Math.max(1, tvlPercentile));
+  }
+
   return comparison;
 }
