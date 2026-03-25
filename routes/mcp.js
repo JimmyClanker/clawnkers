@@ -8,6 +8,7 @@ import { collectAll } from '../collectors/index.js';
 import { calculateScores } from '../synthesis/scoring.js';
 import { generateReport } from '../synthesis/llm.js';
 import { formatReport } from '../synthesis/templates.js';
+import { getSignals } from '../oracle/index.js';
 
 const MCP_SESSION_TTL_MS = 30 * 60 * 1000; // 30 min idle timeout
 
@@ -173,6 +174,26 @@ export function createMcpRouter({ config, exaService, signalsService }) {
             isError: true,
           };
         }
+      }
+    );
+
+    server.tool(
+      'get_oracle_signals',
+      'Get active Alpha Oracle signals — automated alerts about score momentum, category shifts, breaker events, and divergences',
+      {
+        type: z.enum(['SCORE_MOMENTUM', 'CATEGORY_LEADER_SHIFT', 'BREAKER_ALERT', 'DIVERGENCE', 'REGIME_SHIFT']).optional(),
+        severity: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+        limit: z.number().min(1).max(50).default(20).optional(),
+      },
+      async ({ type, severity, limit }) => {
+        const signals = getSignals({ type, severity, limit: limit || 20, activeOnly: true });
+        if (!signals.length) return { content: [{ type: 'text', text: 'No active signals at this time.' }] };
+
+        const formatted = signals.map(s =>
+          `[${s.severity?.toUpperCase()}] ${s.signal_type}: ${s.title}\n${s.detail}`
+        ).join('\n\n');
+
+        return { content: [{ type: 'text', text: formatted }] };
       }
     );
 
