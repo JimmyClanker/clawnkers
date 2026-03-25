@@ -363,6 +363,22 @@
       return items.map(i=>`<li>${escapeHtml(i)}</li>`).join('');
     }
 
+    function renderProjectIntro(payload, analysis, raw) {
+      const projectName = payload?.project_name || 'this project';
+      const summary = String(analysis?.project_summary || payload?.project_summary || '').trim();
+      const category = String(analysis?.project_category || payload?.project_category || raw?.onchain?.category || '').trim();
+
+      if (!summary && !category) return '';
+
+      return `<div class="project-intro-panel" style="margin:18px 0;">
+        <div class="project-intro-card">
+          <div class="project-intro-title">📋 What is ${escapeHtml(projectName)}?</div>
+          ${summary ? `<div class="project-intro-text">${formatAnalysisText(summary)}</div>` : ''}
+          ${category ? `<div class="project-intro-meta">Category: <span class="project-category-badge">${escapeHtml(category)}</span></div>` : ''}
+        </div>
+      </div>`;
+    }
+
     function renderReport(payload) {
       const verdict   = payload?.verdict || 'HOLD';
       const raw       = payload?.raw_data || {};
@@ -370,6 +386,7 @@
       const scores    = payload?.scores || {};
       const cache     = payload?.cache || {};
       const avgScore  = overallScore(scores);
+      const hasAnalysis = !!String(analysis?.analysis_text || '').trim();
 
       resultsSection.classList.add('visible');
       errorBox.classList.add('hidden');
@@ -393,7 +410,8 @@
                 ${(()=>{const sa=scores?.overall?.score_anomaly;if(!sa||sa==='normal')return'';return`<div style="margin-top:4px;padding:3px 10px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:999px;font-size:10px;font-weight:600;display:inline-block;">⚠ ${sa==='high_variance'?'uneven scores':'mixed signals'}</div>`})()}
               </div>
             </div>
-            <div class="analysis">${formatAnalysisText(analysis.analysis_text||'No analysis available.')}</div>
+            ${renderProjectIntro(payload, analysis, raw)}
+            <div class="analysis ${hasAnalysis ? '' : 'analysis-error-state'}">${hasAnalysis ? formatAnalysisText(analysis.analysis_text) : '<p style="margin:0;line-height:1.8;">Oops, something went wrong — we couldn\'t generate the analysis for this project. Try again.</p>'}</div>
             <div class="mini-grid">
               <div class="card moat"><h3>🛡 Moat</h3><div>${escapeHtml(analysis.moat||'n/a')}</div></div>
               <div class="card risks"><h3>⚠ Risks</h3><ul>${renderList(analysis.risks)}</ul></div>

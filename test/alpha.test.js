@@ -155,10 +155,11 @@ test('alpha full falls back when XAI_API_KEY is missing instead of erroring', as
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.ok(payload.llm_analysis.verdict);
-    assert.match(payload.llm_analysis.analysis_text, /Fallback.*XAI_API_KEY missing/);
+    assert.equal(payload.llm_analysis.analysis_text, null);
+    assert.equal(payload.llm_analysis.project_summary, null);
+    assert.equal(payload.llm_analysis.project_category, null);
     assert.equal(payload.score, payload.scores.overall.score);
-    assert.ok(payload.headline);
-    assert.match(payload.headline, /Bitcoin trades at \$|Bitcoin scores/);
+    assert.equal(payload.headline, null);
     assert.deepEqual(payload.validation_warnings, []);
   } finally {
     server.close();

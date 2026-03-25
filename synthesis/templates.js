@@ -105,6 +105,8 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     engine_version: 'r30-2026-03-25', // bump on significant engine changes
     verdict: llmAnalysis?.verdict || 'HOLD',
     headline: llmAnalysis?.headline ?? null,
+    project_summary: llmAnalysis?.project_summary ?? null,
+    project_category: llmAnalysis?.project_category ?? rawData?.onchain?.category ?? null,
     score: scores?.overall?.score ?? null,
     validation_warnings: llmAnalysis?._validation?.warnings ?? [],
     key_metrics: keyMetrics,

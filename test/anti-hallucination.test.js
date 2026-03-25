@@ -333,7 +333,7 @@ test('buildDataSummary omits null/undefined values', () => {
   assert.ok(!summary.includes(': undefined'), `Should not contain literal undefined values`);
 });
 
-test('fallbackReport produces a human headline and readable numbers', () => {
+test('fallbackReport fails gracefully without inventing analysis fields', () => {
   const rawData = makeRawData({
     market: {
       current_price: 92.48,
@@ -350,7 +350,8 @@ test('fallbackReport produces a human headline and readable numbers', () => {
 
   const report = fallbackReport('SOL', rawData, { overall: { score: 5.8 } }, 'XAI_API_KEY missing');
 
-  assert.equal(report.headline, 'SOL trades at $92.48.');
-  assert.match(report.analysis_text, /Market cap sits at \$68.2B/);
-  assert.match(report.analysis_text, /TVL is \$12.5B/);
+  assert.equal(report.headline, null);
+  assert.equal(report.analysis_text, null);
+  assert.equal(report.project_summary, null);
+  assert.equal(report.project_category, null);
 });

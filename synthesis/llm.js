@@ -316,6 +316,43 @@ export function buildDataSummary(rawData = {}) {
   return lines.join('\n');
 }
 
+function inferProjectCategory(rawData = {}) {
+  const candidates = [
+    rawData?.onchain?.category,
+    rawData?.sector_comparison?.category,
+    rawData?.sector_context?.category,
+    rawData?.ecosystem?.category,
+    rawData?.market?.category,
+  ];
+
+  for (const value of candidates) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function summarizeChains(rawData = {}) {
+  const candidates = [
+    rawData?.dex?.dex_chains,
+    rawData?.ecosystem?.chains,
+    rawData?.onchain?.chains,
+  ];
+
+  for (const list of candidates) {
+    if (Array.isArray(list) && list.length) {
+      return list
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, 3);
+    }
+  }
+
+  const primary = String(rawData?.ecosystem?.primary_chain || '').trim();
+  return primary ? [primary] : [];
+}
+
 function buildPrompt(projectName, rawData, scores) {
   const overallScore = scores?.overall?.score ?? 0;
   const factRegistry = buildFactRegistry(rawData);
@@ -357,6 +394,8 @@ function buildPrompt(projectName, rawData, scores) {
     '## OUTPUT FORMAT',
     'Return ONLY valid JSON. Required fields:',
     '- verdict: "STRONG BUY" | "BUY" | "HOLD" | "AVOID" | "STRONG AVOID"',
+    '- project_summary: 1-2 sentences explaining what the project IS, in plain English for an investor seeing it for the first time. Derive from RAW_DATA and verified search results. No hype, no source tags.',
+    '- project_category: the project\'s primary category (examples: "DeFi Lending", "Layer 1", "DEX", "NFT Marketplace", "AI Infrastructure", "Meme Token"). Use the most specific category you can support from RAW_DATA and verified search results.',
     '- analysis_text: 3-4 clean paragraphs for HUMAN READERS. Para 1: summary thesis with key metrics. Para 2: on-chain/fundamental evidence. Para 3: market/sentiment context. Para 4: near-term outlook. FORMAT ALL NUMBERS READABLY: use $414.8M not 414828652, use -2.48% not -2.484401525322113%, use $292.6M not 292636115. NO source tags, NO field names like "tvl_change_7d" — write human-readable labels.',
     '- moat: competitive advantage in 1-2 sentences. Must be based on RAW_DATA or verified search results.',
     '- risks: array of 3-5 risk strings. Format: "Risk type: specific detail." Only include risks you can substantiate with data. NO source tags.',
@@ -593,9 +632,11 @@ export function fallbackReport(projectName, rawData, scores, error = null) {
 
   return {
     verdict,
-    headline: price != null ? `${projectName} trades at ${formatNumber(price)}.` : `${projectName} scores ${overallScore}/10 (${verdict}).`,
-    // Round 5 (AutoResearch nightly): richer fallback analysis_text with more data points
-    analysis_text: analysisText,
+    project_summary: null,
+    project_category: null,
+    headline: null,
+    // Graceful failure: do not invent analysis when LLM failed
+    analysis_text: null,
     moat:
       'Requires external qualitative validation; competitive advantage depends on network effects, liquidity, brand, and execution.',
     risks: risks.length ? risks : ['Data coverage is incomplete: further qualitative validation is required.'],
@@ -697,8 +738,12 @@ function normalizeReport(payload, projectName, rawData, scores) {
   const overallScore = Number(scores?.overall?.score || 0);
   return {
     verdict: normalizeVerdict(payload?.verdict, overallScore),
+    project_summary:
+      cleanReportText(String(payload?.project_summary || '').trim()) || null,
+    project_category:
+      cleanReportText(String(payload?.project_category || '').trim()) || inferProjectCategory(rawData) || null,
     analysis_text:
-      cleanReportText(String(payload?.analysis_text || '').trim()) || fallbackReport(projectName, rawData, scores).analysis_text,
+      cleanReportText(String(payload?.analysis_text || '').trim()) || null,
     moat: cleanReportText(String(payload?.moat || '').trim()) || 'n/a',
     risks: normalizeList(payload?.risks, ['n/a']).map(r => cleanReportText(r)),
     catalysts: normalizeList(payload?.catalysts, ['n/a']).map(c => cleanReportText(c)),
@@ -1000,6 +1045,8 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
     '## OUTPUT FORMAT',
     'Return ONLY valid JSON with these REQUIRED fields:',
     '- verdict: "STRONG BUY" | "BUY" | "HOLD" | "AVOID" | "STRONG AVOID"',
+    '- project_summary: 1-2 sentences explaining what the project IS, using only RAW_DATA. No hype, no source tags.',
+    '- project_category: OPTIONAL. The project\'s primary category if it is clear from RAW_DATA. If unclear, OMIT this field entirely.',
     '- analysis_text: 2-3 clean paragraphs for HUMAN READERS (thesis → evidence → outlook). Format numbers readably ($292.6M, -2.48%). No source tags, no field names.',
     '- moat: specific competitive advantage (1-2 sentences, avoid generics like "first mover")',
     '- risks: array of 3-5 risks, format: "Risk type: specific detail"',
