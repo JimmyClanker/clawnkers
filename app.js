@@ -10,6 +10,7 @@ import { createCollectorCache } from './services/collector-cache.js';
 import { createRestRouter } from './routes/rest.js';
 import { createMcpRouter } from './routes/mcp.js';
 import { createAlphaRouter } from './routes/alpha.js';
+import { createCalibrationRouter } from './routes/calibration.js';
 import { paymentMiddleware, x402ResourceServer } from '@x402/express';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { HTTPFacilitatorClient } from '@x402/core/server';
@@ -200,6 +201,7 @@ export function createApp({
 
   app.use(createRestRouter({ config, exaService: exa, signalsService: signals }));
   app.use(createAlphaRouter({ config, exaService: exa, signalsService: signals, collectAllFn, collectorCache }));
+  app.use(createCalibrationRouter({ config }));
   app.use(createMcpRouter({ config, exaService: exa, signalsService: signals }));
 
   return { app, config, services: { exa, signals, payments } };

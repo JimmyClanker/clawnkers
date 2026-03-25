@@ -280,6 +280,19 @@ export function buildDataSummary(rawData = {}) {
     gaps.push('reddit (no data)');
   }
 
+  // X/TWITTER [Grok Fast]
+  const xSocial = rawData.x_social || {};
+  if (!xSocial.error && rawData.x_social) {
+    lines.push('X/TWITTER [Grok Fast]:');
+    if (xSocial.sentiment) lines.push(`- Sentiment: ${xSocial.sentiment} (score: ${xSocial.sentiment_score})`);
+    if (xSocial.mention_volume) lines.push(`- Mention volume: ${xSocial.mention_volume}`);
+    if (xSocial.key_narratives?.length) lines.push(`- Key narratives: ${xSocial.key_narratives.join(', ')}`);
+    if (xSocial.notable_accounts?.length) lines.push(`- Notable accounts: ${xSocial.notable_accounts.join(', ')}`);
+    if (xSocial.kol_sentiment) lines.push(`- KOL sentiment: ${xSocial.kol_sentiment}`);
+    if (xSocial.summary) lines.push(`- Summary: ${xSocial.summary}`);
+    lines.push('');
+  }
+
   // HOLDERS
   const holders = rawData.holders || {};
   if (!holders.error && holders.top10_concentration_pct != null) {

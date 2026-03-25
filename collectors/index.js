@@ -8,6 +8,7 @@ import { collectReddit } from './reddit.js';
 import { collectHolders } from './holders.js';
 import { collectEcosystem } from './ecosystem.js';
 import { collectContractStatus } from './contract.js';
+import { collectXSocial } from './x-social.js';
 
 const GLOBAL_TIMEOUT_MS = 20000;
 
@@ -87,6 +88,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const githubPromise = maybeCached('github', () => collectGithub(projectName));
   const dexPromise = maybeCached('dex', () => collectDexScreener(projectName));
   const redditPromise = maybeCached('reddit', () => collectReddit(projectName));
+  const xSocialPromise = maybeCached('x_social', () => collectXSocial(projectName));
 
   const TOKENOMICS_OWN_TIMEOUT_MS = 12000;
   const tokenomicsPromise = marketPromise
@@ -111,6 +113,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     tokenomicsPromise,
     withTimeout(dexPromise, 'dex'),
     withTimeout(redditPromise, 'reddit', 15000),
+    withTimeout(xSocialPromise, 'x_social', 30000),
   ]);
 
   const [
@@ -121,6 +124,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     tokenomicsResult,
     dexResult,
     redditResult,
+    xSocialResult,
   ] = phase1Results;
 
   // Unwrap cache wrapper results
@@ -158,6 +162,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const tokenomics = unwrapCache(tokenomicsResult, 'tokenomics');
   const dex = unwrapCache(dexResult, 'dex');
   const reddit = unwrapCache(redditResult, 'reddit');
+  const xSocial = unwrapCache(xSocialResult, 'x_social');
 
   // --- Phase 2: Dependent collectors (need market/onchain/dex data) ---
   // Extract contract address from market data if available
@@ -205,6 +210,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     holders: { ok: holders.ok, error: holders.error, source: holders.source },
     ecosystem: { ok: ecosystem.ok, error: ecosystem.error, source: ecosystem.source },
     contract: { ok: contract.ok, error: contract.error, source: contract.source },
+    x_social: { ok: xSocial.ok, error: xSocial.error, source: xSocial.source },
   };
 
   const dataSourceSummary = buildDataSourceSummary(collectorsInfo);
@@ -221,6 +227,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     holders: holders.data,
     ecosystem: ecosystem.data,
     contract: contract.data,
+    x_social: xSocial.data,
     metadata: {
       started_at: new Date(startedAt).toISOString(),
       completed_at: new Date().toISOString(),
@@ -242,4 +249,5 @@ export {
   collectHolders,
   collectEcosystem,
   collectContractStatus,
+  collectXSocial,
 };
