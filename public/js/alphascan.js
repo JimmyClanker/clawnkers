@@ -566,7 +566,29 @@
       const redFlags = payload?.red_flags || [];
       const critFlags = redFlags.filter(f=>f.severity==='critical');
       const warnFlags = redFlags.filter(f=>f.severity==='warning');
-      const bullishSignals = alphaSignals.filter(s => s.strength === 'strong' || s.strength === 'moderate');
+      // Group & condense alpha signals into max ~3-4 thematic bullets
+      const signalGroups = {};
+      const groupMap = {
+        volume: /volume|vol.mcap|accumulation|trading.activity/i,
+        liquidity: /liquidity|dex.pair|dex.presence|exchange.dist|cex.volume/i,
+        development: /release|commit|github|shipping|dev/i,
+        sentiment: /sentiment|kol|bullish|trending|attention|news.*interest|institutional/i,
+        onchain: /buy.pressure|buy.sell|whale|holder|on.chain|dex.buy/i,
+      };
+      for (const s of alphaSignals) {
+        const key = Object.keys(groupMap).find(k => groupMap[k].test(s.signal + ' ' + s.detail)) || 'other';
+        if (!signalGroups[key]) signalGroups[key] = [];
+        signalGroups[key].push(s);
+      }
+      // Pick the strongest signal from each group, max 4 groups
+      const groupLabels = { volume: '📊 Volume', liquidity: '💧 Liquidity', development: '🛠️ Dev Activity', sentiment: '🔥 Sentiment', onchain: '⛓️ On-chain', other: '📡 Signal' };
+      const condensedSignals = Object.entries(signalGroups).slice(0, 4).map(([group, signals]) => {
+        const sorted = signals.sort((a, b) => (a.strength === 'strong' ? 0 : 1) - (b.strength === 'strong' ? 0 : 1));
+        const best = sorted[0];
+        const extra = sorted.length > 1 ? ` <span style="color:#7e7e7e;font-size:0.75rem;">(+${sorted.length - 1} more)</span>` : '';
+        return { group, label: groupLabels[group] || '📡', detail: best.detail, strength: best.strength, extra, count: sorted.length };
+      });
+
       const bearishFindings = keyFindings.filter(f => /risk|decline|drop|weak|concern|negative/i.test(f));
       const bullishFindings = keyFindings.filter(f => !(/risk|decline|drop|weak|concern|negative/i.test(f)));
       const xSentiment = analysis?.x_sentiment_summary && analysis.x_sentiment_summary !== 'n/a';
@@ -577,8 +599,7 @@
           <h3 style="font-size:1.1rem;font-weight:700;margin:0 0 10px;">🐂 Bull Case${probBadge(llmBull?.probability)}</h3>
           ${llmBull?.thesis ? `<p class="thesis">${escapeHtml(llmBull.thesis)}</p>` : ''}
           ${llmBull?.catalysts?.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#86efac;margin:12px 0 6px;">Catalysts</h4><ul>${llmBull.catalysts.map(c=>`<li>${escapeHtml(c)}</li>`).join('')}</ul>` : ''}
-          ${bullishSignals.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#86efac;margin:12px 0 6px;">🚀 Alpha Signals</h4><ul>${bullishSignals.map(s=>`<li><span style="background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:999px;font-size:0.72rem;font-weight:700;color:#86efac;margin-right:6px;">${escapeHtml(s.strength||'?')}</span>${escapeHtml(humanizeLabel(s.signal))}: ${escapeHtml(s.detail)}</li>`).join('')}</ul>` : ''}
-          ${bullishFindings.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin:12px 0 6px;">Key Findings</h4><ul>${bullishFindings.slice(0,3).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul>` : ''}
+          ${condensedSignals.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#86efac;margin:12px 0 6px;">🚀 Alpha Signals</h4><ul>${condensedSignals.map(s=>`<li>${s.label} <span style="color:var(--text);font-size:0.88rem;">${escapeHtml(s.detail)}</span>${s.extra}</li>`).join('')}</ul>` : ''}
           ${llmBull?.target_conditions ? `<div class="conditions"><strong>Target conditions:</strong> ${escapeHtml(llmBull.target_conditions)}</div>` : ''}
         </div>`;
         const bearCol = `<div class="bear-col">
@@ -587,7 +608,7 @@
           ${llmBear?.risks?.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#f87171;margin:12px 0 6px;">Risks</h4><ul>${llmBear.risks.map(r=>`<li>${escapeHtml(r)}</li>`).join('')}</ul>` : ''}
           ${critFlags.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#ef4444;margin:12px 0 6px;">🚨 Critical Flags</h4><ul>${critFlags.map(f=>`<li style="color:#fca5a5;"><strong>${escapeHtml(humanizeLabel(f.flag))}</strong>: ${escapeHtml(f.detail)}</li>`).join('')}</ul>` : ''}
           ${warnFlags.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#f97316;margin:12px 0 6px;">⚠ Warnings</h4><ul>${warnFlags.map(f=>`<li style="color:#fdba74;"><strong>${escapeHtml(humanizeLabel(f.flag))}</strong>: ${escapeHtml(f.detail)}</li>`).join('')}</ul>` : ''}
-          ${bearishFindings.length ? `<h4 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin:12px 0 6px;">Concerns</h4><ul>${bearishFindings.slice(0,3).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul>` : ''}
+
           ${llmBear?.failure_conditions ? `<div class="conditions"><strong>Failure conditions:</strong> ${escapeHtml(llmBear.failure_conditions)}</div>` : ''}
         </div>`;
         // X Sentiment as full-width row under bull/bear
