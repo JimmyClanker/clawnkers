@@ -142,7 +142,7 @@ function extractScoreRecord(rawData = {}, scores = {}) {
     category_source: rawData?.category_source ?? (rawData?.project_category ? 'report' : rawData?.onchain?.category ? 'onchain' : null),
     weights_json: toJson(SCORE_WEIGHTS),
     leading_signals_json: toJson(rawData?.alpha_signals ?? []),
-    circuit_breakers_json: toJson(rawData?.red_flags?.filter((flag) => flag?.severity === 'critical') ?? []),
+    circuit_breakers_json: toJson(scores?.overall?.circuit_breakers?.breakers || rawData?.red_flags?.filter((flag) => flag?.severity === 'critical') || []),
     red_flags_count: Array.isArray(rawData?.red_flags) ? rawData.red_flags.length : 0,
     alpha_signals_count: Array.isArray(rawData?.alpha_signals) ? rawData.alpha_signals.length : 0,
     divergence_json: toJson(rawData?.momentum?.divergence ?? rawData?.divergence ?? null),

@@ -441,6 +441,16 @@ function buildPrompt(projectName, rawData, scores) {
         ]
       : []),
 
+    ...(scores?.overall?.circuit_breakers?.capped
+      ? [
+          '## CIRCUIT BREAKERS ACTIVE',
+          `The algorithmic score has been CAPPED from ${scores.overall.circuit_breakers.original_score}/10 to ${scores.overall.circuit_breakers.score}/10.`,
+          scores.overall.circuit_breakers.breakers.map((b) => `- [${b.severity.toUpperCase()}] Cap at ${b.cap}: ${b.reason}`).join('\n'),
+          `Your verdict MUST NOT exceed ${scores.overall.circuit_breakers.applied_cap}/10.`,
+          'If circuit breakers are active, explain WHY they are justified, do not argue against them.',
+        ]
+      : []),
+
     // Round 16: DEX-specific price context
     ...(rawData?.dex && !rawData.dex.error
       ? [
@@ -1064,6 +1074,16 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
     ...(rawData?.volatility && rawData.volatility.regime !== 'calm'
       ? [
           `## VOLATILITY: ${rawData.volatility.regime.toUpperCase()} — 24h move ${rawData.volatility.volatility_pct_24h != null ? rawData.volatility.volatility_pct_24h.toFixed(1) + '%' : 'n/a'}. Adjust sizing and stops accordingly.`,
+        ]
+      : []),
+
+    ...(scores?.overall?.circuit_breakers?.capped
+      ? [
+          '## CIRCUIT BREAKERS ACTIVE',
+          `The algorithmic score has been CAPPED from ${scores.overall.circuit_breakers.original_score}/10 to ${scores.overall.circuit_breakers.score}/10.`,
+          scores.overall.circuit_breakers.breakers.map((b) => `- [${b.severity.toUpperCase()}] Cap at ${b.cap}: ${b.reason}`).join('\n'),
+          `Your verdict MUST NOT exceed ${scores.overall.circuit_breakers.applied_cap}/10.`,
+          'If circuit breakers are active, explain WHY they are justified, do not argue against them.',
         ]
       : []),
 

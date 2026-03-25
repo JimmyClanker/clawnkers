@@ -1,3 +1,6 @@
+import { applyCircuitBreakers } from '../scoring/circuit-breakers.js';
+import { detectRedFlags } from '../services/red-flags.js';
+
 function clampScore(value) {
   return Math.min(10, Math.max(1, Number(value.toFixed(1))));
 }
@@ -735,6 +738,31 @@ export function calculateScores(data) {
   // High std dev (>2) = wildly uneven performance across dimensions — signals fragility
   const scoreAnomaly = dimStddev > 2.5 ? 'high_variance' : dimStddev > 1.5 ? 'moderate_variance' : 'normal';
 
+  // Circuit breakers — cap score based on structural risks (post-processing)
+  const redFlagsForBreakers = typeof detectRedFlags === 'function'
+    ? detectRedFlags(data)
+    : [];
+  const breakerResult = applyCircuitBreakers(
+    overallValue,
+    data,
+    {
+      market_strength,
+      onchain_health,
+      social_momentum,
+      development,
+      tokenomics_health,
+      distribution,
+      risk,
+      overall: { completeness: Math.round(completeness * 100) },
+    },
+    redFlagsForBreakers
+  );
+
+  // Se lo score è stato cappato, usa il valore cappato
+  if (breakerResult.capped) {
+    overallValue = breakerResult.score;
+  }
+
   return {
     market_strength,
     onchain_health,
@@ -750,6 +778,7 @@ export function calculateScores(data) {
       score_anomaly: scoreAnomaly,
       dim_stddev: parseFloat(dimStddev.toFixed(2)),
       reasoning: `Weighted blend: ${weightStr}. Data completeness: ${Math.round(completeness * 100)}%. Overall confidence: ${confidence.overall_confidence}%. Score spread: ${scoreAnomaly} (stddev ${dimStddev.toFixed(2)}).`,
+      circuit_breakers: breakerResult.capped ? breakerResult : null,
     },
   };
 }
