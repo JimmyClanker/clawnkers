@@ -562,7 +562,7 @@
       const thesis  = payload?.thesis;
       // Gather signals/findings/flags for integration into bull/bear
       const alphaSignals = payload?.alpha_signals || [];
-      const keyFindings = analysis?.key_findings || [];
+      // key_findings merged into alpha signals grouping — no separate rendering
       const redFlags = payload?.red_flags || [];
       const critFlags = redFlags.filter(f=>f.severity==='critical');
       const warnFlags = redFlags.filter(f=>f.severity==='warning');
@@ -589,8 +589,7 @@
         return { group, label: groupLabels[group] || '📡', detail: best.detail, strength: best.strength, extra, count: sorted.length };
       });
 
-      const bearishFindings = keyFindings.filter(f => /risk|decline|drop|weak|concern|negative/i.test(f));
-      const bullishFindings = keyFindings.filter(f => !(/risk|decline|drop|weak|concern|negative/i.test(f)));
+
       const xSentiment = analysis?.x_sentiment_summary && analysis.x_sentiment_summary !== 'n/a';
 
       let panel3 = '';
