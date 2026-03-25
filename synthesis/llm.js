@@ -2,6 +2,10 @@ const XAI_RESPONSES_URL = 'https://api.x.ai/v1/responses';
 const DEFAULT_TIMEOUT_MS = 60000;
 const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
 const REASONING_MODEL = 'grok-4.20-multi-agent-0309';
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const OPUS_MODEL = 'claude-opus-4-6-20250219';
+const OPUS_TIMEOUT_MS = 90000;
 const FALLBACK_VERDICTS = [
   { min: 8.5, verdict: 'STRONG BUY' },
   { min: 7, verdict: 'BUY' },
@@ -1015,6 +1019,159 @@ export function validateReport(report, rawData) {
   return report;
 }
 
+async function requestAnthropic({ apiKey, model, systemPrompt, userMessage, timeoutMs = OPUS_TIMEOUT_MS }) {
+  const response = await withTimeout(timeoutMs, (signal) =>
+    fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        temperature: 0.1,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: '{' }, // Prefill to force JSON output
+        ],
+      }),
+      signal,
+    })
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Anthropic returned ${response.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  // Reconstruct full JSON: prefill '{' + completion text
+  const text = data?.content?.[0]?.text || '';
+  return '{' + text; // Prepend the prefilled '{'
+}
+
+/**
+ * Builds a split prompt for Opus (no tools — all data pre-collected).
+ * Returns { system, user } where system = ROLE + RULES + FORMAT, user = DATA.
+ */
+export function buildOpusPrompt(projectName, rawData, scores) {
+  const overallScore = scores?.overall?.score ?? 0;
+  const factRegistry = buildFactRegistry(rawData);
+
+  const system = [
+    '## ROLE',
+    'You are a senior crypto alpha analyst. Your job: produce actionable, evidence-based reports for sophisticated investors. No fluff, no generic disclaimers.',
+
+    '## CRITICAL: ANTI-HALLUCINATION RULES',
+    'These rules are ABSOLUTE and override everything else:',
+    '1. EVERY factual claim MUST be backed by a specific field from the provided data (RAW_DATA, X_SOCIAL, or SCORES).',
+    '2. If the provided data has NO relevant information for a topic, write "No recent data found" — NEVER invent details, names, dates, or events.',
+    '3. NEVER invent: funding round amounts, partnership announcements, exchange listings, protocol upgrades, TVL numbers, price targets, or any specific facts not in the provided data.',
+    '4. NEVER invent KOL names, Twitter accounts, or attribute opinions to specific people unless they appear in the X_SOCIAL data provided below.',
+    '5. If you cannot verify a catalyst or risk with data, prefix it with "[Unverified]" or omit it entirely.',
+    '6. For competitor_comparison: ONLY compare metrics that exist in RAW_DATA. Do not invent TVL, fees, or market cap numbers for competitors.',
+    '7. For x_sentiment_summary: Summarize the X_SOCIAL data provided below. If X_SOCIAL is empty or has errors, write "No X/Twitter data available."',
+    '8. Numbers in your analysis MUST match RAW_DATA but FORMAT THEM FOR HUMANS: $292.6M not 292636115, -2.48% not -2.484401525322113%. Round to 2 decimal places max. Always include $ for USD values.',
+    '9. When in doubt, say LESS. A shorter, accurate report is infinitely better than a longer, hallucinated one.',
+    '10. NEVER expose internal field names (tvl_change_7d, dex_liquidity_usd, ecosystem.chain_count). Use human labels: "7-day TVL change", "DEX liquidity", "supported chains".',
+
+    '## INSTRUCTIONS',
+    '1. Use the attached RAW_DATA and SCORES as your PRIMARY and AUTHORITATIVE data source. These are verified from CoinGecko, DeFiLlama, GitHub, Messari, DexScreener, Reddit, and Etherscan.',
+    '2. Use the X_SOCIAL section below for Twitter/X discussion data (collected by Grok Fast). Report ONLY what is in X_SOCIAL. If no X_SOCIAL data, say so.',
+    '3. All data is pre-collected. Do NOT reference tools you don\'t have.',
+    '4. Synthesize into a coherent thesis, but ONLY use verified information.',
+    '5. Clearly separate FACTS (from data) from OPINIONS (your analysis). Your opinions are welcome but must be labeled as such.',
+    '6. INTERNAL tracking: for each claim, mentally verify which data source backs it. But do NOT put [source: ...] tags in analysis_text, moat, risks, catalysts, or x_sentiment_summary. Those tags make the output unreadable for humans.',
+    '7. Put source references ONLY in the facts_verified array (e.g., "TVL: $414.8M [source: RAW_DATA.onchain.tvl]").',
+
+    '## SCORING CALIBRATION',
+    `The algorithmic score is ${overallScore}/10. Use this as a starting point but adjust based on qualitative factors:`,
+    '- STRONG BUY (8.5-10): Clear edge — strong fundamentals + positive narrative + upcoming catalyst. High conviction entry.',
+    '- BUY (7-8.4): Solid fundamentals, constructive sentiment, risk/reward favorable. Worth accumulating.',
+    '- HOLD (5.5-6.9): Mixed signals. Worth watching but no urgent entry. Wait for better setup.',
+    '- AVOID (3.5-5.4): Weak fundamentals or negative developments. Better opportunities elsewhere.',
+    '- STRONG AVOID (0-3.4): Clear red flags — failing fundamentals, negative catalysts, or active risk events.',
+
+    '## OUTPUT FORMAT',
+    'Return ONLY valid JSON. Required fields:',
+    '- verdict: "STRONG BUY" | "BUY" | "HOLD" | "AVOID" | "STRONG AVOID"',
+    '- project_summary: 1-2 sentences explaining what the project IS, in plain English for an investor seeing it for the first time. Derive from RAW_DATA and X_SOCIAL. No hype, no source tags.',
+    '- project_category: the project\'s primary category (examples: "DeFi Lending", "Layer 1", "DEX", "NFT Marketplace", "AI Infrastructure", "Meme Token"). Use the most specific category you can support from RAW_DATA.',
+    '- analysis_text: 3-4 clean paragraphs for HUMAN READERS. Para 1: summary thesis with key metrics. Para 2: on-chain/fundamental evidence. Para 3: market/sentiment context. Para 4: near-term outlook. FORMAT ALL NUMBERS READABLY: use $414.8M not 414828652, use -2.48% not -2.484401525322113%, use $292.6M not 292636115. NO source tags, NO field names like "tvl_change_7d" — write human-readable labels.',
+    '- moat: competitive advantage in 1-2 sentences. Must be based on RAW_DATA or X_SOCIAL data.',
+    '- risks: array of 3-5 risk strings. Format: "Risk type: specific detail." Only include risks you can substantiate with data. NO source tags.',
+    '- catalysts: array of 2-4 upcoming catalysts. ONLY include catalysts supported by data. Prefix unverified ones with "[Unverified]". It is OK to have fewer catalysts if data is limited.',
+    '- competitor_comparison: Compare ONLY with metrics you have data for. If no competitor data available, write "Insufficient data for competitor comparison."',
+    '- x_sentiment_summary: Summarize the X_SOCIAL data provided below. If X_SOCIAL is empty or has errors, write "No X/Twitter data available."',
+    '- key_findings: array of 3-5 key findings. Each MUST reference a specific data point from RAW_DATA or X_SOCIAL.',
+    '- liquidity_assessment: Based on RAW_DATA volume, market cap, and DEX liquidity. Do not invent slippage estimates.',
+    '- data_gaps: array of strings listing what data was missing or could not be verified. This helps the reader assess report reliability.',
+    '- facts_verified: array of 4-8 strings. ONLY hard facts, each with a [source: ...] tag.',
+    '- opinions: array of 2-5 strings. Analytical interpretations; if not directly proven, prefix with [Opinion].',
+    '- section_confidence: object with numbers (0-100): { fundamentals, market_sentiment, outlook, overall } based on evidence quality.',
+
+    '## FINAL REMINDER (READ THIS LAST)',
+    'Before outputting your response, verify:',
+    '1. Every number you cite matches FACT_REGISTRY or RAW_DATA exactly.',
+    '2. Source tags go ONLY in facts_verified. Do NOT put [source: ...] in analysis_text, risks, catalysts, key_findings, moat, or any other user-facing field.',
+    '3. If you wrote something you cannot trace to data, DELETE IT.',
+    '4. "I don\'t have data for this" is ALWAYS better than making something up.',
+    '5. Shorter and accurate > longer and fabricated.',
+  ].join('\n\n');
+
+  const userParts = [
+    `PROJECT: ${projectName}`,
+    `ALGORITHMIC_SCORES: ${JSON.stringify(scores, null, 2)}`,
+    `FACT_REGISTRY: ${JSON.stringify(factRegistry, null, 2)}`,
+    `RAW_DATA_SUMMARY:\n${buildDataSummary(rawData)}`,
+  ];
+
+  if (rawData?.sector_comparison) {
+    userParts.push(`SECTOR_CONTEXT:\n${JSON.stringify(rawData.sector_comparison, null, 2)}`);
+  }
+
+  if (rawData?.percentiles) {
+    userParts.push(`PERCENTILE_CONTEXT:\n${JSON.stringify(rawData.percentiles, null, 2)}`);
+  }
+
+  if (Array.isArray(rawData?.red_flags) && rawData.red_flags.length) {
+    userParts.push(`RED_FLAGS:\n${rawData.red_flags.map((f) => `- [${f.severity?.toUpperCase() || 'WARNING'}] ${f.flag}: ${f.detail}`).join('\n')}`);
+  }
+
+  if (Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length) {
+    userParts.push(`ALPHA_SIGNALS:\n${rawData.alpha_signals.map((s) => `- [${s.strength?.toUpperCase() || 'MODERATE'}] ${s.signal}: ${s.detail}`).join('\n')}`);
+  }
+
+  if (scores?.overall?.circuit_breakers?.capped) {
+    const cb = scores.overall.circuit_breakers;
+    userParts.push([
+      `CIRCUIT_BREAKERS_ACTIVE: Score capped from ${cb.original_score}/10 to ${cb.score}/10.`,
+      cb.breakers.map((b) => `- [${b.severity.toUpperCase()}] Cap at ${b.cap}: ${b.reason}`).join('\n'),
+      `Your verdict MUST NOT exceed ${cb.applied_cap}/10. Explain WHY the circuit breakers are justified.`,
+    ].join('\n'));
+  }
+
+  // X_SOCIAL data section (collected by Grok Fast collector)
+  const xSocial = rawData?.x_social;
+  if (xSocial && !xSocial.error) {
+    const xLines = ['X_SOCIAL (collected by Grok Fast):'];
+    if (xSocial.sentiment) xLines.push(`- Sentiment: ${xSocial.sentiment} (score: ${xSocial.sentiment_score})`);
+    if (xSocial.mention_volume) xLines.push(`- Mention volume: ${xSocial.mention_volume}`);
+    if (xSocial.key_narratives?.length) xLines.push(`- Key narratives: ${xSocial.key_narratives.join(', ')}`);
+    if (xSocial.notable_accounts?.length) xLines.push(`- Notable accounts: ${xSocial.notable_accounts.join(', ')}`);
+    if (xSocial.kol_sentiment) xLines.push(`- KOL sentiment: ${xSocial.kol_sentiment}`);
+    if (xSocial.summary) xLines.push(`- Summary: ${xSocial.summary}`);
+    userParts.push(xLines.join('\n'));
+  } else {
+    userParts.push('X_SOCIAL: No X/Twitter data collected.');
+  }
+
+  return { system, user: userParts.join('\n\n') };
+}
+
 async function requestXai({ apiKey, model, input, tools = [], timeoutMs = DEFAULT_TIMEOUT_MS }) {
   const response = await withTimeout(timeoutMs, (signal) =>
     fetch(XAI_RESPONSES_URL, {
@@ -1178,17 +1335,43 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
   );
 }
 
-export async function generateReport(projectName, rawData, scores, { apiKey: explicitKey } = {}) {
-  const apiKey = explicitKey || process.env.XAI_API_KEY;
-  if (!apiKey) {
-    return fallbackReport(projectName, rawData, scores, 'XAI_API_KEY missing');
+export async function generateReport(projectName, rawData, scores, { apiKey: explicitKey, anthropicKey: explicitAnthropicKey } = {}) {
+  // Try Opus 4.6 first (primary synthesis engine)
+  const anthropicKey = explicitAnthropicKey || process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) {
+    try {
+      const { system, user } = buildOpusPrompt(projectName, rawData, scores);
+      const text = await requestAnthropic({
+        apiKey: anthropicKey,
+        model: OPUS_MODEL,
+        systemPrompt: system,
+        userMessage: user,
+        timeoutMs: OPUS_TIMEOUT_MS,
+      });
+
+      if (!text || text.length < 50) throw new Error('Empty Opus response');
+      console.log(`[full-llm] Opus response length: ${text.length}`);
+
+      const parsed = JSON.parse(text);
+      const report = validateReport(normalizeReport(parsed, projectName, rawData, scores), rawData);
+      report._model = OPUS_MODEL;
+      return report;
+    } catch (err) {
+      console.error(`[full-llm] Opus failed: ${err.message}`);
+      // Fall through to Grok reasoning as backup
+    }
+  }
+
+  // Fallback: Grok reasoning (original behavior)
+  const xaiKey = explicitKey || process.env.XAI_API_KEY;
+  if (!xaiKey) {
+    return fallbackReport(projectName, rawData, scores, 'No LLM API key available (ANTHROPIC_API_KEY and XAI_API_KEY both missing)');
   }
 
   const prompt = buildPrompt(projectName, rawData, scores);
-
   try {
     const payload = await requestXai({
-      apiKey,
+      apiKey: xaiKey,
       model: REASONING_MODEL,
       input: prompt,
       tools: [{ type: 'web_search' }, { type: 'x_search' }],
@@ -1196,6 +1379,7 @@ export async function generateReport(projectName, rawData, scores, { apiKey: exp
     });
     const text = extractOutputText(payload);
     const report = normalizeReport(JSON.parse(text), projectName, rawData, scores);
+    report._model = REASONING_MODEL;
     return validateReport(report, rawData);
   } catch (error) {
     return fallbackReport(
