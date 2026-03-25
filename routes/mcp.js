@@ -177,6 +177,30 @@ export function createMcpRouter({ config, exaService, signalsService }) {
       }
     );
 
+    // Round 40 (AutoResearch): New MCP tool — x_sentiment for quick X/Twitter sentiment lookup
+    server.tool(
+      'x_sentiment',
+      'Get real-time X/Twitter sentiment for a crypto project using Grok Fast. Returns KOL sentiment, mention volume, and key narratives.',
+      { project: z.string().describe("Project name (e.g. 'Bitcoin', 'Solana', 'Uniswap')") },
+      async ({ project }) => {
+        const { collectXSocial } = await import('../collectors/x-social.js');
+        const data = await collectXSocial(project);
+        if (data.error) {
+          return { content: [{ type: 'text', text: `X sentiment unavailable: ${data.error}` }] };
+        }
+        const lines = [
+          `## X/Twitter Sentiment: ${project}`,
+          `**Sentiment:** ${data.sentiment ?? 'n/a'} (score: ${data.sentiment_score ?? 'n/a'})`,
+          `**Mention volume:** ${data.mention_volume ?? 'n/a'}`,
+          `**KOL sentiment:** ${data.kol_sentiment ?? 'n/a'}`,
+          data.key_narratives?.length ? `**Key narratives:** ${data.key_narratives.join(', ')}` : '',
+          data.notable_accounts?.length ? `**Notable accounts:** ${data.notable_accounts.map((a) => `@${a}`).join(', ')}` : '',
+          data.summary ? `\n**Summary:** ${data.summary}` : '',
+        ].filter(Boolean).join('\n');
+        return { content: [{ type: 'text', text: lines }] };
+      }
+    );
+
     server.tool(
       'get_oracle_signals',
       'Get active Alpha Oracle signals — automated alerts about score momentum, category shifts, breaker events, and divergences',

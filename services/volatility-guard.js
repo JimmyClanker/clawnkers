@@ -91,8 +91,30 @@ export function assessVolatility(rawData = {}) {
     extreme: 0.25,
   }[regime];
 
+  // Round 38 (AutoResearch): risk_tier — human-readable label combining regime + weekly class
+  const RISK_TIER_MAP = {
+    calm_normal: 'low_risk',
+    calm_elevated: 'moderate_risk',
+    calm_high: 'moderate_risk',
+    calm_extreme: 'elevated_risk',
+    elevated_normal: 'moderate_risk',
+    elevated_elevated: 'elevated_risk',
+    elevated_high: 'elevated_risk',
+    elevated_extreme: 'high_risk',
+    high_normal: 'elevated_risk',
+    high_elevated: 'high_risk',
+    high_high: 'high_risk',
+    high_extreme: 'high_risk',
+    extreme_normal: 'high_risk',
+    extreme_elevated: 'high_risk',
+    extreme_high: 'critical_risk',
+    extreme_extreme: 'critical_risk',
+  };
+  const risk_tier = RISK_TIER_MAP[`${regime}_${weekly_class}`] ?? 'moderate_risk';
+
   return {
     regime,
+    risk_tier,
     caution_multiplier,
     position_size_multiplier: positionSizeMultiplier,
     weekly_class,

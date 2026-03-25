@@ -99,16 +99,46 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
 
   const keyMetrics = extractKeyMetrics(rawData, scores);
 
-  const json = {
+    // Round 44 (AutoResearch): build structured data quality summary for MCP consumers
+  const collectorMeta = rawData?.metadata?.collectors ?? {};
+  const totalCollectors = Object.keys(collectorMeta).length;
+  const okCollectors = Object.values(collectorMeta).filter((c) => c?.ok !== false && !c?.error).length;
+  const dataQualitySummary = {
+    total_collectors: totalCollectors,
+    ok_collectors: okCollectors,
+    failed_collectors: failedCollectors.length,
+    coverage_pct: totalCollectors > 0 ? Math.round((okCollectors / totalCollectors) * 100) : null,
+    completeness_pct: scores?.overall?.completeness ?? null,
+    overall_confidence: scores?.overall?.overall_confidence ?? null,
+    data_freshness_score: rawData?.report_quality?.data_freshness_score ?? null,
+    quality_tier: (() => {
+      const cov = totalCollectors > 0 ? okCollectors / totalCollectors : 0;
+      if (cov >= 0.8 && (scores?.overall?.completeness ?? 0) >= 70) return 'high';
+      if (cov >= 0.5 && (scores?.overall?.completeness ?? 0) >= 40) return 'medium';
+      return 'low';
+    })(),
+  };
+
+const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
-    engine_version: 'r30-2026-03-25', // bump on significant engine changes
+    engine_version: 'r44-2026-03-25', // bump on significant engine changes
     verdict: llmAnalysis?.verdict || 'HOLD',
     headline: llmAnalysis?.headline ?? null,
     project_summary: llmAnalysis?.project_summary ?? null,
     project_category: llmAnalysis?.project_category ?? rawData?.onchain?.category ?? null,
+    // Round 46 (AutoResearch): surface category detection metadata for transparency
+    category_detection: rawData?.category_weights
+      ? {
+          category: rawData.category_weights.category,
+          source: rawData.category_weights.source,
+          confidence: rawData.category_weights.confidence,
+          confidence_label: rawData.category_weights.confidence >= 0.8 ? 'high' : rawData.category_weights.confidence >= 0.5 ? 'medium' : 'low',
+        }
+      : null,
     score: scores?.overall?.score ?? null,
     validation_warnings: llmAnalysis?._validation?.warnings ?? [],
+    data_quality: dataQualitySummary,
     key_metrics: keyMetrics,
     scores,
     llm_analysis: llmAnalysis,
@@ -155,6 +185,13 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     '',
     '🐦 X sentiment',
     llmAnalysis?.x_sentiment_summary || 'n/a',
+    // Round 35 (AutoResearch): Surface raw x_social KOL data when available
+    ...(rawData?.x_social && !rawData.x_social.error && rawData.x_social.notable_accounts?.length
+      ? [`- KOLs: ${rawData.x_social.notable_accounts.slice(0, 4).map((a) => `@${a}`).join(', ')} (${rawData.x_social.kol_sentiment || 'n/a'})`]
+      : []),
+    ...(rawData?.x_social && !rawData.x_social.error && rawData.x_social.key_narratives?.length
+      ? [`- Narratives: ${rawData.x_social.key_narratives.slice(0, 3).join('; ')}`]
+      : []),
     '',
     '🔎 Key findings',
     ...(llmAnalysis?.key_findings?.length ? llmAnalysis.key_findings.map((item) => `- ${item}`) : ['- n/a']),

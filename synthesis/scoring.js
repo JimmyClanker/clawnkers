@@ -164,11 +164,24 @@ function scoreMarketStrength(market = {}) {
   else if (exchangeCount >= 10) raw += 0.2;
   else if (exchangeCount >= 5) raw += 0.1;
 
+  // Round 39 (AutoResearch): market_efficiency_score — how efficiently the market prices the asset
+  // Measures: liquidity depth (vol/mcap), listing quality, trend confirmation, info efficiency
+  const meComponents = [
+    ratio > 0 ? Math.min(ratio / 0.2, 1) * 30 : 0,         // volume-to-mcap liquidity (0-30)
+    trendConsistency * 20,                                    // multi-TF trend confirmation (0-20)
+    exchangeCount >= 10 ? 20 : exchangeCount >= 5 ? 12 : exchangeCount >= 2 ? 5 : 0, // listing quality (0-20)
+    marketCapRank > 0 && marketCapRank <= 100 ? 15 : marketCapRank > 0 && marketCapRank <= 500 ? 8 : 0, // rank (0-15)
+    totalCommunitySize > 100_000 ? 10 : totalCommunitySize > 10_000 ? 5 : 0, // community signal (0-10)
+    fdvOverhang < 2 ? 5 : fdvOverhang < 5 ? 2 : 0,          // FDV transparency (0-5)
+  ];
+  const marketEfficiencyScore = Math.round(Math.min(100, meComponents.reduce((a, b) => a + b, 0)));
+
   return {
     score: clampScore(raw),
+    market_efficiency_score: marketEfficiencyScore,
     is_new_project: isNewProject,
     age_months: age_months != null ? parseFloat(age_months.toFixed(1)) : null,
-    reasoning: `Volume/MC ratio ${ratio.toFixed(2)}, weighted momentum ${momentum.toFixed(2)}%, trend consistency ${(trendConsistency * 100).toFixed(0)}%, FDV/MC ${fdvOverhang.toFixed(2)}, ATH distance ${athDistancePct == null ? 'n/a' : `${athDistancePct.toFixed(1)}%`}${age_months != null ? `, age ${age_months.toFixed(1)} months${isNewProject ? ' (new project penalty applied)' : ''}` : ''}.`,
+    reasoning: `Volume/MC ratio ${ratio.toFixed(2)}, weighted momentum ${momentum.toFixed(2)}%, trend consistency ${(trendConsistency * 100).toFixed(0)}%, FDV/MC ${fdvOverhang.toFixed(2)}, ATH distance ${athDistancePct == null ? 'n/a' : `${athDistancePct.toFixed(1)}%`}${age_months != null ? `, age ${age_months.toFixed(1)} months${isNewProject ? ' (new project penalty applied)' : ''}` : ''}, market_efficiency ${marketEfficiencyScore}.`,
   };
 }
 
@@ -229,9 +242,23 @@ function scoreOnchainHealth(onchain = {}) {
   else if (maturity === 'tier3') raw += 0.15;
   // 'emerging' → no bonus, not penalized
 
+  // Round 37 (AutoResearch): onchain_maturity_score — normalized 0-100 sustainability composite
+  const tvl = safeNumber(onchain.tvl ?? 0);
+  const omComponents = [
+    fees > 0 ? Math.min(Math.log10(fees) / 6, 1) * 25 : 0,  // fee generation (0-25)
+    Math.max(0, Math.min((trend7d + 15) / 30, 1)) * 20,      // TVL stability 7d (0-20)
+    Math.max(0, Math.min((trend30d + 20) / 40, 1)) * 15,     // TVL stability 30d (0-15)
+    tvlStickiness === 'sticky' ? 15 : tvlStickiness === 'moderate' ? 8 : tvlStickiness === 'fleeing' ? 0 : 7.5, // stickiness (0-15)
+    chainCount >= 5 ? 10 : chainCount >= 3 ? 6 : chainCount >= 2 ? 3 : 0, // chain diversification (0-10)
+    activeAddresses7d > 10_000 ? 10 : activeAddresses7d > 1_000 ? 5 : activeAddresses7d > 100 ? 2 : 0, // active users (0-10)
+    revenueToFees !== null && revenueToFees > 0 ? Math.min(revenueToFees * 10, 5) : 0, // value capture (0-5)
+  ];
+  const onchainMaturityScore = Math.round(Math.min(100, omComponents.reduce((a, b) => a + b, 0)));
+
   return {
     score: clampScore(raw),
-    reasoning: `7-day TVL change ${trend7d.toFixed(2)}%, 30-day TVL change ${trend30d.toFixed(2)}%, 7-day fees $${fees.toLocaleString('en-US', { maximumFractionDigits: 0 })}, chains ${chainCount}${multichainBonus > 0 ? ` (+${multichainBonus} multichain bonus)` : ''}${tvlStickiness ? `, capital stickiness ${tvlStickiness}` : ''}${activeAddresses7d > 0 ? `, active addresses (7d) ${activeAddresses7d.toLocaleString('en-US')}` : ''}${revenueToFees !== null ? `, revenue capture ${(revenueToFees * 100).toFixed(0)}%` : ''}${maturity ? `, maturity ${maturity}` : ''}.`,
+    onchain_maturity_score: onchainMaturityScore,
+    reasoning: `7-day TVL change ${trend7d.toFixed(2)}%, 30-day TVL change ${trend30d.toFixed(2)}%, 7-day fees $${fees.toLocaleString('en-US', { maximumFractionDigits: 0 })}, chains ${chainCount}${multichainBonus > 0 ? ` (+${multichainBonus} multichain bonus)` : ''}${tvlStickiness ? `, capital stickiness ${tvlStickiness}` : ''}${activeAddresses7d > 0 ? `, active addresses (7d) ${activeAddresses7d.toLocaleString('en-US')}` : ''}${revenueToFees !== null ? `, revenue capture ${(revenueToFees * 100).toFixed(0)}%` : ''}${maturity ? `, maturity ${maturity}` : ''}, onchain_maturity_score ${onchainMaturityScore}.`,
   };
 }
 
@@ -358,9 +385,24 @@ function scoreDevelopment(github = {}) {
   const languageCount = typeof github.languages === 'object' ? Object.keys(github.languages ?? {}).length : 0;
   if (languageCount >= 4) raw += 0.15; // polyglot repo = more integrations
 
+  // Round 36 (AutoResearch): dev_quality_index — normalized 0-100 composite quality signal
+  // Combines all available dev signals into a single normalized score for external consumers
+  const dqComponents = [
+    Math.min(contributors / 20, 1) * 20,              // contributor breadth (0-20)
+    Math.min(commits90d / 100, 1) * 20,               // commit velocity (0-20)
+    stars > 0 ? Math.min(Math.log10(stars) / 4, 1) * 15 : 0, // traction (0-15)
+    daysSinceCommit != null ? Math.max(0, 1 - daysSinceCommit / 180) * 15 : 7.5, // freshness (0-15)
+    github.has_ci ? 10 : 0,                            // CI/CD (0-10)
+    repoHealthTier === 'excellent' ? 10 : repoHealthTier === 'good' ? 6 : repoHealthTier === 'moderate' ? 3 : 0, // repo health (0-10)
+    languageCount >= 4 ? 5 : languageCount >= 2 ? 3 : 0, // ecosystem breadth (0-5)
+    github.license ? 5 : 0,                            // license (0-5)
+  ];
+  const devQualityIndex = Math.round(dqComponents.reduce((a, b) => a + b, 0));
+
   return {
     score: clampScore(raw),
-    reasoning: `Contributors ${contributors}, commits (90d) ${commits90d.toLocaleString('en-US')}, commits (last 30d vs prior 30d) ${commits30d.toLocaleString('en-US')}/${commits30dPrev.toLocaleString('en-US')} (trend: ${commitTrend || 'n/a'}), stars ${stars.toLocaleString('en-US')}, forks ${forks.toLocaleString('en-US')}, watchers ${watchers.toLocaleString('en-US')}, languages ${languageCount}, issue pressure ${issuePressure.toFixed(2)}, days since last commit ${daysSinceCommit == null ? 'n/a' : daysSinceCommit.toFixed(0)}${github.has_ci ? ', CI ✓' : ''}.`,
+    dev_quality_index: Math.min(100, devQualityIndex),
+    reasoning: `Contributors ${contributors}, commits (90d) ${commits90d.toLocaleString('en-US')}, commits (last 30d vs prior 30d) ${commits30d.toLocaleString('en-US')}/${commits30dPrev.toLocaleString('en-US')} (trend: ${commitTrend || 'n/a'}), stars ${stars.toLocaleString('en-US')}, forks ${forks.toLocaleString('en-US')}, watchers ${watchers.toLocaleString('en-US')}, languages ${languageCount}, issue pressure ${issuePressure.toFixed(2)}, days since last commit ${daysSinceCommit == null ? 'n/a' : daysSinceCommit.toFixed(0)}${github.has_ci ? ', CI ✓' : ''}, dev_quality_index ${Math.min(100, devQualityIndex)}.`,
   };
 }
 
@@ -393,9 +435,21 @@ function scoreTokenomicsRisk(tokenomics = {}) {
   else if (dilutionRisk === 'medium') raw -= 0.4;
   // 'low' → no penalty (already captured in pctCirculating bonus)
 
+  // Round 41 (AutoResearch): tokenomics_risk_score — normalized 0-100 risk metric
+  // 100 = safe tokenomics, 0 = extreme risk (inverse of typical "risk" labeling)
+  const trsComponents = [
+    pctCirculating > 0 ? Math.min(pctCirculating / 100, 1) * 35 : 0,      // circulating pct (0-35)
+    inflation < 5 ? 25 : inflation < 15 ? 15 : inflation < 30 ? 5 : 0,    // inflation penalty (0-25)
+    hasDistribution ? 15 : 0,                                               // has distribution data (0-15)
+    dilutionRisk === 'low' ? 15 : dilutionRisk === 'medium' ? 8 : 0,       // dilution risk (0-15)
+    unlockOverhangPct !== null && unlockOverhangPct < 20 ? 10 : unlockOverhangPct !== null && unlockOverhangPct < 50 ? 5 : 0, // unlock safety (0-10)
+  ];
+  const tokenomicsRiskScore = Math.round(Math.min(100, trsComponents.reduce((a, b) => a + b, 0)));
+
   return {
     score: clampScore(raw),
-    reasoning: `Circulating supply ${pctCirculating.toFixed(2)}%, unlock overhang ${unlockOverhangPct != null ? `${unlockOverhangPct.toFixed(1)}%` : 'n/a'} (${dilutionRisk || 'unknown'} dilution risk), inflation ${inflation.toFixed(2)}%, distribution ${hasDistribution ? 'available' : 'missing'}.`,
+    tokenomics_risk_score: tokenomicsRiskScore,
+    reasoning: `Circulating supply ${pctCirculating.toFixed(2)}%, unlock overhang ${unlockOverhangPct != null ? `${unlockOverhangPct.toFixed(1)}%` : 'n/a'} (${dilutionRisk || 'unknown'} dilution risk), inflation ${inflation.toFixed(2)}%, distribution ${hasDistribution ? 'available' : 'missing'}, tokenomics_risk_score ${tokenomicsRiskScore}/100 (higher=safer).`,
   };
 }
 
@@ -645,6 +699,29 @@ export function calculateScores(data) {
 
   // Round 29 (AutoResearch batch): narrative momentum supplement
   social_momentum.score = applyNarrativeMomentumBonus(social_momentum.score, data?.narrative_momentum ?? null);
+
+  // Round 31 (AutoResearch): X/Twitter social supplement — KOL-weighted sentiment
+  // x_social provides higher-quality data (real Twitter search via Grok) vs Exa web mentions
+  const xSocial = data?.x_social ?? {};
+  if (!xSocial.error && xSocial.sentiment_score != null) {
+    const xSentScore = safeNumber(xSocial.sentiment_score); // -1 to +1
+    const xVolume = xSocial.mention_volume; // 'high' | 'medium' | 'low' | 'none'
+    const xKolSentiment = xSocial.kol_sentiment; // 'bullish' | 'bearish' | 'neutral' | 'mixed'
+
+    // Volume weight: more mentions = more reliable signal
+    const xVolumeWeight = xVolume === 'high' ? 1.0 : xVolume === 'medium' ? 0.7 : xVolume === 'low' ? 0.4 : 0;
+
+    // Base X sentiment adjustment (max ±0.5 from x_social)
+    const xSentAdj = xSentScore * 0.5 * xVolumeWeight;
+
+    // KOL bonus: if KOL sentiment aligns with overall sentiment, amplify slightly
+    let kolBonus = 0;
+    if (xKolSentiment === 'bullish' && xSentScore > 0.3) kolBonus = 0.15;
+    else if (xKolSentiment === 'bearish' && xSentScore < -0.3) kolBonus = -0.15;
+
+    social_momentum.score = clampScore(social_momentum.score + xSentAdj + kolBonus);
+    social_momentum.reasoning += ` | X/Twitter: sentiment ${xSentScore.toFixed(2)}, volume ${xVolume ?? 'n/a'}, KOL ${xKolSentiment ?? 'n/a'} (adj ${(xSentAdj + kolBonus).toFixed(2)}).`;
+  }
 
   // Round 11: Risk as 7th dimension
   const risk = scoreRisk(

@@ -364,6 +364,53 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 45 (AutoResearch): Social divergence signal — X/Twitter vs Exa/Reddit sentiment divergence
+  // When KOLs are bullish but web mentions are bearish (or vice versa), it's a contrarian signal
+  const xSocial = rawData.x_social ?? {};
+  if (!xSocial.error && xSocial.sentiment_score != null) {
+    const exaSentScore = typeof social?.sentiment_score === 'number' ? social.sentiment_score : null;
+    if (exaSentScore !== null) {
+      const xScore = xSocial.sentiment_score; // -1 to +1
+      const divergence = xScore - exaSentScore;
+      // Significant divergence: X is much more bullish than web mentions
+      if (divergence > 0.5 && xScore > 0.3) {
+        signals.push({
+          signal: 'x_vs_web_bullish_divergence',
+          strength: divergence > 0.8 ? 'strong' : 'moderate',
+          detail: `X/Twitter KOLs (${xScore.toFixed(2)}) are significantly more bullish than web/news sentiment (${exaSentScore.toFixed(2)}) — KOLs may be front-running a narrative shift.`,
+        });
+      // X is much more bearish than web mentions
+      } else if (divergence < -0.5 && xScore < -0.3) {
+        signals.push({
+          signal: 'x_vs_web_bearish_divergence',
+          strength: divergence < -0.8 ? 'strong' : 'moderate',
+          detail: `X/Twitter KOLs (${xScore.toFixed(2)}) are significantly more bearish than web/news sentiment (${exaSentScore.toFixed(2)}) — possible early warning from informed traders.`,
+        });
+      }
+    }
+  }
+
+  // Round 32 (AutoResearch): X/Twitter KOL bullish signal — notable accounts discussing bullishly
+  if (!xSocial.error && xSocial.kol_sentiment === 'bullish') {
+    const notableCount = Array.isArray(xSocial.notable_accounts) ? xSocial.notable_accounts.length : 0;
+    if (notableCount >= 2 || xSocial.mention_volume === 'high') {
+      signals.push({
+        signal: 'kol_bullish_x_sentiment',
+        strength: notableCount >= 3 ? 'strong' : 'moderate',
+        detail: `${notableCount} notable X/Twitter accounts bullish${xSocial.mention_volume === 'high' ? ', high mention volume' : ''} — KOL consensus forming.`,
+      });
+    }
+  }
+
+  // Round 32 (AutoResearch): X/Twitter bearish warning — adds as signal for alert systems
+  if (!xSocial.error && xSocial.kol_sentiment === 'bearish' && xSocial.mention_volume !== 'none') {
+    signals.push({
+      signal: 'kol_bearish_x_sentiment',
+      strength: xSocial.sentiment_score != null && xSocial.sentiment_score < -0.5 ? 'strong' : 'moderate',
+      detail: `X/Twitter KOL sentiment is bearish (score: ${xSocial.sentiment_score?.toFixed(2) ?? 'n/a'}) — influential accounts expressing concern.`,
+    });
+  }
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {

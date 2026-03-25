@@ -96,7 +96,10 @@ export async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, 
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} for ${url}`);
+        // Round 42 (AutoResearch): include status text and truncated URL for cleaner debug logs
+        const statusText = response.statusText || '';
+        const urlHint = url.length > 120 ? url.slice(0, 80) + '…' + url.slice(-20) : url;
+        throw new Error(`HTTP ${response.status}${statusText ? ` ${statusText}` : ''} — ${urlHint}`);
       }
 
       const result = await response.json();

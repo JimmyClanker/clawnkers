@@ -272,11 +272,22 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   const bearProbability = Math.min(85, Math.max(10, 100 - bullProbability));
   const baseProbability = Math.min(60, Math.max(20, 100 - Math.abs(bullProbability - bearProbability)));
 
+  // Round 43 (AutoResearch): conviction_score — normalized 0-100 combining score + evidence quality
+  // High conviction = strong score + rich data + aligned evidence
+  const dataConfidence = Math.max(0, 100 - ((10 - Math.min(Object.keys(rawData?.metadata?.collectors ?? {}).length || 5, 10)) * 5));
+  const evidenceStrength = Math.min(bullEvidence.length + bearEvidence.length, 6) / 6; // 0-1
+  const convictionScore = Math.round(
+    (overallScore / 10) * 50 +                    // score component (0-50)
+    evidenceStrength * 25 +                        // evidence richness (0-25)
+    (dataConfidence / 100) * 25                    // data coverage (0-25)
+  );
+
   return {
     bull_case,
     bear_case,
     neutral_case,
     one_liner: oneLiner,
+    conviction_score: Math.min(100, Math.max(0, convictionScore)),
     metrics_snapshot: metricsSnap || null,
     // New fields (Round Pipeline R8)
     evidence: {

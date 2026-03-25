@@ -123,6 +123,40 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     }
   }
 
+  // Round 34 (AutoResearch): Stablecoin de-peg circuit breaker
+  // If a token is supposed to be pegged to $1 but is significantly off-peg, cap score
+  const symbol = (market.symbol || '').toUpperCase();
+  const currentPrice = market.current_price ?? market.price ?? 0;
+  const STABLECOIN_SYMBOLS = new Set(['USDT', 'USDC', 'DAI', 'BUSD', 'FRAX', 'LUSD', 'USDD', 'FDUSD', 'PYUSD', 'USDE', 'USDX', 'SUSD', 'EURS', 'TUSD', 'GUSD', 'USDP']);
+  if (STABLECOIN_SYMBOLS.has(symbol) && currentPrice > 0) {
+    const depegPct = Math.abs((currentPrice - 1.0) / 1.0) * 100;
+    if (depegPct > 10) {
+      breakers.push({
+        cap: 3.0,
+        reason: `Stablecoin de-peg: ${symbol} trading at $${currentPrice.toFixed(4)} (${depegPct.toFixed(1)}% off peg) — critical stability failure`,
+        severity: 'critical',
+      });
+    } else if (depegPct > 3) {
+      breakers.push({
+        cap: 5.0,
+        reason: `Stablecoin de-peg risk: ${symbol} at $${currentPrice.toFixed(4)} (${depegPct.toFixed(1)}% off $1 peg)`,
+        severity: 'warning',
+      });
+    }
+  }
+
+  // Round 34 (AutoResearch): Active dump pattern + no liquidity = cascading failure risk
+  if (dex.pump_dump_signal === 'possible_dump') {
+    const dexLiqForDump = dex.dex_liquidity_usd ?? dex.liquidity ?? dex.total_liquidity ?? 0;
+    if (dexLiqForDump < 500_000 && dexLiqForDump > 0) {
+      breakers.push({
+        cap: 3.0,
+        reason: `Active dump + thin liquidity ($${(dexLiqForDump / 1000).toFixed(0)}K) — severe price collapse risk`,
+        severity: 'critical',
+      });
+    }
+  }
+
   // Applica il cap più restrittivo
   if (breakers.length === 0) {
     return { score: overallScore, breakers: [], capped: false };

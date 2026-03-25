@@ -34,6 +34,16 @@ export const CATEGORY_WEIGHTS = {
     market: 0.12, onchain: 0.15, social: 0.25, development: 0.18,
     tokenomics: 0.10, distribution: 0.10, risk: 0.10,
   },
+  // Round 33 (AutoResearch): Real World Assets — regulatory/institutional signals matter more
+  rwa: {
+    market: 0.15, onchain: 0.25, social: 0.08, development: 0.12,
+    tokenomics: 0.18, distribution: 0.12, risk: 0.10,
+  },
+  // Round 33 (AutoResearch): DePIN — hardware/network deployment + development are key
+  depin: {
+    market: 0.10, onchain: 0.20, social: 0.12, development: 0.28,
+    tokenomics: 0.12, distribution: 0.08, risk: 0.10,
+  },
   default: {
     market: 0.14, onchain: 0.18, social: 0.14, development: 0.18,
     tokenomics: 0.14, distribution: 0.12, risk: 0.10,
@@ -66,6 +76,15 @@ export const CATEGORY_MAP = {
   nft: 'nft_gaming',
   metaverse: 'nft_gaming',
   'play-to-earn': 'nft_gaming',
+  // Round 33 (AutoResearch): RWA and DePIN mappings
+  'real-world-assets': 'rwa',
+  'real-world-asset': 'rwa',
+  rwa: 'rwa',
+  'tokenized-asset': 'rwa',
+  'tokenized-securities': 'rwa',
+  depin: 'depin',
+  'decentralized-physical-infrastructure': 'depin',
+  'iot-network': 'depin',
 };
 
 // ─── Boot-time validation ────────────────────────────────────────────────────
