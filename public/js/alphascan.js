@@ -1068,6 +1068,9 @@
       };
     }
 
+    // ── Persist API key from URL (survives replaceState) ─────────────
+    const _persistedKey = new URLSearchParams(location.search).get('key') || '';
+
     // ── Main scan function ────────────────────────────────────────────
     async function runScan(mode = 'full') {
       clearError();
@@ -1097,7 +1100,7 @@
           const payload = await res.json();
           if (!res.ok) throw new Error(payload?.error || `Server error (${res.status})`);
           renderReport(payload);
-          history.replaceState({}, '', `/?project=${encodeURIComponent(project)}&mode=quick`);
+          history.replaceState({}, '', `/?project=${encodeURIComponent(project)}&mode=quick${_persistedKey ? '&key=' + encodeURIComponent(_persistedKey) : ''}`);
         } catch(err) {
           const [msg, hint] = err.name === 'AbortError'
             ? ['Request timed out', 'The quick scan took too long. Try again.']
@@ -1107,8 +1110,8 @@
           setLoading(false, mode);
         }
       } else {
-        // Bypass payment if API key is in URL
-        var urlKey = new URLSearchParams(location.search).get('key');
+        // Bypass payment if API key is in URL (persisted across replaceState)
+        var urlKey = _persistedKey || new URLSearchParams(location.search).get('key');
         if (urlKey) {
           setLoading(true, mode);
           try {
@@ -1128,7 +1131,7 @@
         } else {
           showPaymentModal(project, (result) => {
             renderReport(result);
-            history.replaceState({}, '', '/?project=' + encodeURIComponent(project) + '&mode=full');
+            history.replaceState({}, '', '/?project=' + encodeURIComponent(project) + '&mode=full' + (_persistedKey ? '&key=' + encodeURIComponent(_persistedKey) : ''));
           });
         }
       }
