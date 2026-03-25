@@ -6,8 +6,14 @@
  */
 
 import express from 'express';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { getCalibrationDb } from '../calibration/db.js';
 import { runBatchScan } from '../calibration/batch-scanner.js';
+import { calculateMetrics } from '../calibration/metrics.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Create calibration router.
@@ -93,6 +99,33 @@ export function createCalibrationRouter({ config } = {}) {
       console.error('[calibration/batch-scan]', err.message);
       return res.status(500).json({ error: err.message });
     }
+  });
+
+  /**
+   * GET /alpha/metrics — accuracy metrics dashboard data (protected)
+   */
+  router.get('/alpha/metrics', (req, res) => {
+    if (config?.alphaAuthKey) {
+      const providedKey = req.query.key || req.get('x-alpha-key');
+      if (providedKey !== config.alphaAuthKey) {
+        return res.status(401).json({ error: 'Unauthorized: valid key required' });
+      }
+    }
+
+    try {
+      const metrics = calculateMetrics();
+      return res.json(metrics);
+    } catch (err) {
+      console.error('[calibration/metrics]', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  /**
+   * GET /metrics — serve metrics dashboard HTML (internal tool)
+   */
+  router.get('/metrics', (req, res) => {
+    res.sendFile(join(__dirname, '..', 'public', 'metrics.html'));
   });
 
   return router;

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metrics Dashboard — Clawnkers Internal</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #161616;
+      --surface3: #1c1c1c;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.16);
+      --text: #e8e8e8;
+      --muted: #7e7e7e;
+      --muted2: #9a9a9a;
+      --accent: #D4580A;
+      --accent-dim: rgba(212,88,10,0.12);
+      --accent-glow: 0 0 28px rgba(212,88,10,0.2);
+      --green: #4caf7d;
+      --red: #ff6b6b;
+      --yellow: #ffd166;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
+    .header .badge {
+      font-size: 0.7rem; font-weight: 600;
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid rgba(212,88,10,0.3);
+      padding: 2px 8px; border-radius: 20px; letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); display: inline-block;
+    }
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.error { background: var(--red); }
+    #status-text { font-size: 0.8rem; color: var(--muted2); }
+    #refresh-btn {
+      font-size: 0.8rem; padding: 6px 14px; border-radius: 8px;
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid rgba(212,88,10,0.3); cursor: pointer;
+      transition: background 0.15s;
+    }
+    #refresh-btn:hover { background: rgba(212,88,10,0.2); }
+    /* Key input */
+    #key-bar {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    #key-bar label { font-size: 0.85rem; color: var(--muted2); white-space: nowrap; }
+    #auth-key-input {
+      flex: 1; min-width: 200px; max-width: 400px;
+      background: var(--surface3); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 6px 12px; font-size: 0.85rem; font-family: monospace;
+    }
+    #auth-key-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    #load-btn {
+      padding: 6px 16px; border-radius: var(--radius-sm);
+      background: var(--accent); color: #000; font-weight: 600;
+      border: none; cursor: pointer; font-size: 0.85rem;
+    }
+    #load-btn:hover { opacity: 0.88; }
+    /* Main layout */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .header { padding: 14px 16px; }
+      #key-bar { padding: 12px 16px; }
+      .container { padding: 16px 12px; }
+    }
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .card-title {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted2);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .icon { font-size: 1rem; }
+    /* Stat row */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+    .stat-item { }
+    .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .stat-value.accent { color: var(--accent); }
+    .stat-label { font-size: 0.75rem; color: var(--muted2); margin-top: 2px; }
+    /* Progress bar */
+    .progress-wrap { margin: 12px 0; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 0.8rem; color: var(--muted2); margin-bottom: 5px;
+    }
+    .progress-label .pct { font-weight: 700; color: var(--text); }
+    .progress-bar {
+      height: 8px; background: var(--surface3);
+      border-radius: 99px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+    .progress-fill.buy { background: var(--green); }
+    .progress-fill.avoid { background: var(--red); }
+    /* Correlation badge */
+    .corr-value {
+      font-size: 3rem; font-weight: 900; line-height: 1;
+      color: var(--accent);
+    }
+    .corr-interp {
+      font-size: 0.85rem; color: var(--muted2); margin-top: 4px;
+    }
+    /* Table */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th {
+      text-align: left; padding: 8px 12px;
+      color: var(--muted2); font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.025); }
+    .verdict-pill {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; white-space: nowrap;
+    }
+    .verdict-STRONG-BUY  { background: rgba(76,175,125,0.2); color: #4caf7d; }
+    .verdict-BUY         { background: rgba(212,88,10,0.2); color: #D4580A; }
+    .verdict-HOLD        { background: rgba(255,209,102,0.15); color: #ffd166; }
+    .verdict-AVOID       { background: rgba(255,107,107,0.15); color: #ff8b8b; }
+    .verdict-STRONG-AVOID { background: rgba(255,50,50,0.2); color: #ff5555; }
+    /* Verdict distribution */
+    .dist-bar-wrap { margin: 8px 0; }
+    .dist-bar-label {
+      display: flex; justify-content: space-between;
+      font-size: 0.78rem; margin-bottom: 3px;
+    }
+    .dist-bar-inner {
+      height: 20px; border-radius: 4px;
+      display: flex; align-items: center; padding: 0 8px;
+      font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.85);
+      transition: width 0.4s ease;
+      min-width: 28px;
+      background: var(--accent-dim);
+    }
+    /* Insufficient data state */
+    .insufficient {
+      color: var(--muted2); font-size: 0.85rem;
+      padding: 20px 0; text-align: center;
+    }
+    .insufficient .collecting {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,209,102,0.08);
+      border: 1px solid rgba(255,209,102,0.2);
+      border-radius: var(--radius-sm);
+      padding: 8px 16px; margin-top: 8px;
+      color: #ffd166; font-size: 0.8rem;
+    }
+    /* Error / loading */
+    #main-content { }
+    #loading-overlay {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 300px; color: var(--muted2); font-size: 0.9rem;
+    }
+    #error-message {
+      background: rgba(255,107,107,0.1);
+      border: 1px solid rgba(255,107,107,0.3);
+      border-radius: var(--radius-sm);
+      padding: 16px 20px; color: #ff8b8b;
+      margin-bottom: 20px; display: none;
+    }
+    .section-gap { margin-bottom: 24px; }
+    .full-width { grid-column: 1 / -1; }
+    /* Auto-refresh countdown */
+    #countdown { font-size: 0.75rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>📊 Metrics Dashboard</h1>
+    <span class="badge">Internal</span>
+  </div>
+  <div class="header-right">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">—</span>
+    <span id="countdown"></span>
+    <button id="refresh-btn" onclick="loadMetrics()">↺ Refresh</button>
+  </div>
+</div>
+
+<div id="key-bar">
+  <label for="auth-key-input">Auth Key:</label>
+  <input type="password" id="auth-key-input" placeholder="Enter alpha auth key..." autocomplete="off" />
+  <button id="load-btn" onclick="loadMetrics()">Load</button>
+</div>
+
+<div class="container">
+  <div id="error-message"></div>
+  <div id="main-content">
+    <div id="loading-overlay">Enter your auth key above and click Load.</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Read key from URL param ──────────────────────────────────────
+  const urlParams = new URLSearchParams(location.search);
+  const urlKey = urlParams.get('key');
+  if (urlKey) {
+    document.getElementById('auth-key-input').value = urlKey;
+  }
+
+  // ── Auto-refresh every 5 minutes ────────────────────────────────
+  let refreshTimer = null;
+  let countdownTimer = null;
+  let countdownSeconds = 0;
+
+  function startRefreshCountdown() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+
+    countdownSeconds = 300;
+    refreshTimer = setTimeout(() => loadMetrics(), 300_000);
+    countdownTimer = setInterval(() => {
+      countdownSeconds--;
+      if (countdownSeconds <= 0) {
+        clearInterval(countdownTimer);
+        document.getElementById('countdown').textContent = '';
+      } else {
+        const m = Math.floor(countdownSeconds / 60);
+        const s = countdownSeconds % 60;
+        document.getElementById('countdown').textContent =
+          `auto-refresh in ${m}:${String(s).padStart(2,'0')}`;
+      }
+    }, 1000);
+  }
+
+  // ── Format helpers ───────────────────────────────────────────────
+  function pct(v, decimals = 1) {
+    if (v == null) return '—';
+    return (v * 100).toFixed(decimals) + '%';
+  }
+  function num(v, decimals = 0) {
+    if (v == null) return '—';
+    return Number(v).toLocaleString(undefined, { maximumFractionDigits: decimals });
+  }
+  function score(v) {
+    if (v == null) return '—';
+    return Number(v).toFixed(1);
+  }
+  function verdictClass(verdict) {
+    if (!verdict) return '';
+    return 'verdict-' + verdict.replace(/\s+/g, '-');
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  }
+  function shortDate(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────
+  function renderMetrics(data) {
+    const content = document.getElementById('main-content');
+    const sections = [];
+
+    // 1. Coverage
+    const cov = data.coverage || {};
+    sections.push(`
+      <div class="card section-gap">
+        <div class="card-title"><span class="icon">🌐</span> Coverage</div>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value accent">${num(cov.total_tokens)}</div>
+            <div class="stat-label">Tokens in Universe</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">${num(cov.total_snapshots)}</div>
+            <div class="stat-label">Total Snapshots</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">${num(cov.total_with_outcomes)}</div>
+            <div class="stat-label">With 30d Outcomes</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">${cov.snapshots_per_day != null ? cov.snapshots_per_day : '—'}</div>
+            <div class="stat-label">Snapshots/Day (avg)</div>
+          </div>
+        </div>
+        ${cov.first_snapshot_at ? `
+        <div style="margin-top:14px;font-size:0.78rem;color:var(--muted2);">
+          Range: <span style="color:var(--text)">${shortDate(cov.first_snapshot_at)}</span>
+          → <span style="color:var(--text)">${shortDate(cov.last_snapshot_at)}</span>
+        </div>` : ''}
+      </div>
+    `);
+
+    // 2. Hit Rates
+    const hr = data.hit_rates || {};
+    let hitRateHtml;
+    if (hr.status === 'insufficient_data') {
+      hitRateHtml = `
+        <div class="insufficient">
+          <div>Not enough outcome data yet.</div>
+          <div class="collecting">⏳ Collecting… ${hr.count || 0} / ${hr.min_required} outcomes needed</div>
+        </div>`;
+    } else {
+      const buyPct = hr.buy_hit_rate != null ? +(hr.buy_hit_rate * 100).toFixed(1) : null;
+      const avoidPct = hr.avoid_hit_rate != null ? +(hr.avoid_hit_rate * 100).toFixed(1) : null;
+      hitRateHtml = `
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>BUY hits vs BTC (30d)</span>
+            <span class="pct">${buyPct != null ? buyPct + '%' : '—'} <span style="color:var(--muted)">(n=${num(hr.buy_count)})</span></span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill buy" style="width:${buyPct || 0}%"></div>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>AVOID hits vs BTC (30d)</span>
+            <span class="pct">${avoidPct != null ? avoidPct + '%' : '—'} <span style="color:var(--muted)">(n=${num(hr.avoid_count)})</span></span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill avoid" style="width:${avoidPct || 0}%"></div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:0.78rem;color:var(--muted2);">
+          HOLD count: <strong style="color:var(--text)">${num(hr.hold_count)}</strong>
+          · Total outcomes: <strong style="color:var(--text)">${num(hr.total_count)}</strong>
+        </div>`;
+    }
+    sections.push(`
+      <div class="card section-gap">
+        <div class="card-title"><span class="icon">🎯</span> Hit Rates</div>
+        ${hitRateHtml}
+      </div>
+    `);
+
+    // 3. Spearman Correlation
+    const corr = data.correlation || {};
+    let corrHtml;
+    if (corr.status === 'insufficient_data') {
+      corrHtml = `
+        <div class="insufficient">
+          <div>Not enough outcome data yet.</div>
+          <div class="collecting">⏳ Collecting… ${corr.count || 0} / ${corr.min_required} outcomes needed</div>
+        </div>`;
+    } else {
+      const rho = corr.spearman_rho;
+      const interp = corr.interpretation || '';
+      const interpColor = { strong: 'var(--green)', moderate: 'var(--accent)', weak: 'var(--yellow)', negligible: 'var(--muted2)' }[interp] || 'var(--muted2)';
+      corrHtml = `
+        <div class="corr-value">${rho != null ? rho.toFixed(3) : '—'}</div>
+        <div class="corr-interp">
+          Spearman ρ · Score vs 30d Relative Return
+          ${interp ? `<span style="color:${interpColor};font-weight:700;margin-left:6px;text-transform:capitalize">${interp}</span>` : ''}
+        </div>
+        <div style="margin-top:10px;font-size:0.78rem;color:var(--muted2)">Based on ${num(corr.count)} outcomes</div>
+        <div style="margin-top:8px;font-size:0.75rem;color:var(--muted)">
+          ρ &gt; 0.7 = strong · ρ 0.4–0.7 = moderate · ρ 0.2–0.4 = weak
+        </div>`;
+    }
+    sections.push(`
+      <div class="card section-gap">
+        <div class="card-title"><span class="icon">📈</span> Score–Performance Correlation</div>
+        ${corrHtml}
+      </div>
+    `);
+
+    // 4. Circuit Breaker Protection
+    const bp = data.breaker_protection || {};
+    let breakerHtml;
+    if (bp.status === 'insufficient_data') {
+      breakerHtml = `
+        <div class="insufficient">
+          <div>No circuit breaker outcomes yet.</div>
+          <div class="collecting">⏳ Needs tokens with active circuit breakers + 30d outcomes</div>
+        </div>`;
+    } else {
+      const protPct = bp.protection_rate != null ? (bp.protection_rate * 100).toFixed(1) : null;
+      breakerHtml = `
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value accent">${num(bp.total_with_breaker)}</div>
+            <div class="stat-label">Tokens with Breaker</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">${num(bp.actually_lost_20pct)}</div>
+            <div class="stat-label">Actually Lost &gt;20%</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">${protPct != null ? protPct + '%' : '—'}</div>
+            <div class="stat-label">Protection Rate</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:0.78rem;color:var(--muted2)">
+          ${num(bp.with_outcomes)} breaker tokens have 30d outcomes
+        </div>`;
+    }
+    sections.push(`
+      <div class="card section-gap">
+        <div class="card-title"><span class="icon">🛡️</span> Circuit Breaker Protection</div>
+        ${breakerHtml}
+      </div>
+    `);
+
+    // 5. Verdict Distribution
+    const vd = data.verdict_distribution || {};
+    const verdictEntries = Object.entries(vd).sort((a, b) => b[1] - a[1]);
+    const totalVerdicts = verdictEntries.reduce((s, [,n]) => s + n, 0);
+    let vDistHtml;
+    if (verdictEntries.length === 0) {
+      vDistHtml = `<div class="insufficient"><div>No verdicts recorded yet.</div></div>`;
+    } else {
+      const VERDICT_COLORS = {
+        'STRONG BUY': '#4caf7d',
+        'BUY': '#D4580A',
+        'HOLD': '#ffd166',
+        'AVOID': '#ff8b8b',
+        'STRONG AVOID': '#ff5555',
+      };
+      vDistHtml = verdictEntries.map(([verdict, count]) => {
+        const barPct = totalVerdicts > 0 ? Math.max(4, Math.round(count / totalVerdicts * 100)) : 4;
+        const color = VERDICT_COLORS[verdict] || 'var(--accent)';
+        return `
+          <div class="dist-bar-wrap">
+            <div class="dist-bar-label">
+              <span style="color:${color};font-weight:600">${verdict}</span>
+              <span style="color:var(--muted2)">${num(count)} (${totalVerdicts > 0 ? (count/totalVerdicts*100).toFixed(1) : 0}%)</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width:${barPct}%;background:${color};opacity:0.8"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+    sections.push(`
+      <div class="card section-gap">
+        <div class="card-title"><span class="icon">📊</span> Verdict Distribution</div>
+        ${vDistHtml}
+      </div>
+    `);
+
+    // 6. Category Performance
+    const catPerf = data.category_performance || [];
+    let catHtml;
+    if (catPerf.length === 0) {
+      catHtml = `<div class="insufficient"><div>No category data yet (need ≥5 outcomes per category).</div></div>`;
+    } else {
+      catHtml = `
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Count</th>
+                <th>Avg Score</th>
+                <th>Avg Rel Return</th>
+                <th>Hit Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${catPerf.map(cat => {
+                const retColor = cat.avg_relative_return > 0 ? 'var(--green)' : cat.avg_relative_return < 0 ? 'var(--red)' : 'var(--text)';
+                return `
+                  <tr>
+                    <td style="font-weight:600">${cat.category || '—'}</td>
+                    <td>${num(cat.count)}</td>
+                    <td>${score(cat.avg_score)}</td>
+                    <td style="color:${retColor}">${cat.avg_relative_return != null ? (cat.avg_relative_return > 0 ? '+' : '') + cat.avg_relative_return.toFixed(1) + '%' : '—'}</td>
+                    <td>${cat.hit_rate != null ? (cat.hit_rate * 100).toFixed(1) + '%' : '—'}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+    sections.push(`
+      <div class="card section-gap full-width">
+        <div class="card-title"><span class="icon">🗂️</span> Category Performance</div>
+        ${catHtml}
+      </div>
+    `);
+
+    // 7. Recent Scans
+    const scans = data.recent_scans || [];
+    let scansHtml;
+    if (scans.length === 0) {
+      scansHtml = `<div class="insufficient"><div>No scans recorded yet.</div></div>`;
+    } else {
+      scansHtml = `
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Score</th>
+                <th>Verdict</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>24h Δ</th>
+                <th>Scanned</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${scans.map(s => {
+                const chg = s.price_change_24h;
+                const chgColor = chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--text)';
+                return `
+                  <tr>
+                    <td style="font-weight:600">${s.project_name || '—'}</td>
+                    <td>${score(s.overall_score)}</td>
+                    <td><span class="verdict-pill ${verdictClass(s.verdict)}">${s.verdict || '—'}</span></td>
+                    <td style="color:var(--muted2)">${s.category || '—'}</td>
+                    <td>$${s.price != null ? Number(s.price).toLocaleString(undefined, {maximumFractionDigits:4}) : '—'}</td>
+                    <td style="color:${chgColor}">${chg != null ? (chg > 0 ? '+' : '') + chg.toFixed(1) + '%' : '—'}</td>
+                    <td style="color:var(--muted2);font-size:0.77rem">${shortDate(s.snapshot_at)}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+    sections.push(`
+      <div class="card section-gap full-width">
+        <div class="card-title"><span class="icon">🔍</span> Recent Scans</div>
+        ${scansHtml}
+      </div>
+    `);
+
+    // Build layout: top 4 in 2-col grid, rest full-width
+    const topCards = sections.slice(0, 4); // coverage, hit rates, correlation, breaker
+    const bottomCards = sections.slice(4);  // verdict, category, recent
+
+    content.innerHTML = `
+      <div class="grid-2 section-gap">
+        ${topCards.join('')}
+      </div>
+      ${bottomCards.join('')}
+      <div style="text-align:center;color:var(--muted);font-size:0.75rem;padding:20px 0">
+        Generated at ${fmtDate(data.generated_at)} · Auto-refresh every 5 min
+      </div>
+    `;
+  }
+
+  // ── Load metrics ────────────────────────────────────────────────
+  window.loadMetrics = async function() {
+    const key = document.getElementById('auth-key-input').value.trim();
+    if (!key) {
+      showError('Please enter your auth key.');
+      return;
+    }
+
+    setStatus('loading');
+    document.getElementById('error-message').style.display = 'none';
+    document.getElementById('main-content').innerHTML =
+      '<div id="loading-overlay">Loading metrics…</div>';
+
+    try {
+      const res = await fetch(`/alpha/metrics?key=${encodeURIComponent(key)}`);
+      if (res.status === 401) throw new Error('Unauthorized — check your auth key');
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      renderMetrics(data);
+      setStatus('ok', `Last updated ${fmtDate(data.generated_at)}`);
+      startRefreshCountdown();
+    } catch (err) {
+      setStatus('error');
+      showError(err.message);
+      document.getElementById('main-content').innerHTML = '';
+    }
+  };
+
+  function setStatus(state, text) {
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    dot.className = 'status-dot ' + (state === 'ok' ? 'ok' : state === 'error' ? 'error' : '');
+    txt.textContent = text || (state === 'loading' ? 'Loading…' : state === 'error' ? 'Error' : '');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-message');
+    el.textContent = '⚠ ' + msg;
+    el.style.display = 'block';
+  }
+
+  // Auto-load if key is in URL
+  if (urlKey) {
+    window.loadMetrics();
+  }
+
+  // Allow Enter key in key input
+  document.getElementById('auth-key-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') window.loadMetrics();
+  });
+})();
+</script>
+</body>
+</html>
