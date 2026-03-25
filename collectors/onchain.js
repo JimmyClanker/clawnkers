@@ -53,7 +53,7 @@ function similarityScore(projectName, protocol) {
   if (symbol === target) score += 90;
   if (slug === target) score += 85;
   if (name.includes(target)) score += 60;
-  if (target.includes(name) && name) score += 50;
+  if (target.includes(name) && name && name.length >= 4) score += 50;
   if (slug.includes(target)) score += 45;
   if (symbol && symbol.length >= 3 && target.includes(symbol)) score += 35;
   if (protocol?.category) score += 3;
