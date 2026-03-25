@@ -4,7 +4,7 @@ const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
 const REASONING_MODEL = 'grok-4.20-multi-agent-0309';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const OPUS_MODEL = 'claude-opus-4-6-20250219';
+const OPUS_MODEL = 'claude-opus-4-20250514';
 const OPUS_TIMEOUT_MS = 90000;
 const FALLBACK_VERDICTS = [
   { min: 8.5, verdict: 'STRONG BUY' },
