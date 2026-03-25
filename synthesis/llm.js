@@ -3,8 +3,12 @@ const DEFAULT_TIMEOUT_MS = 60000;
 const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
 const REASONING_MODEL = 'grok-4.20-multi-agent-0309';
 
+// Opus via OpenClaw gateway (OAuth, zero cost) — falls back to direct Anthropic API if gateway unavailable
+const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:18789/v1/chat/completions';
+const OPENCLAW_GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const OPUS_MODEL = 'claude-opus-4-20250514';
+const OPUS_MODEL = 'anthropic/claude-opus-4-6'; // OpenClaw gateway model ID
+const OPUS_MODEL_DIRECT = 'claude-opus-4-20250514'; // Direct Anthropic API model ID
 const OPUS_TIMEOUT_MS = 90000;
 const FALLBACK_VERDICTS = [
   { min: 8.5, verdict: 'STRONG BUY' },
@@ -1019,7 +1023,25 @@ export function validateReport(report, rawData) {
   return report;
 }
 
+/**
+ * Request Opus via OpenClaw gateway (OAuth, zero cost).
+ * Falls back to direct Anthropic API if gateway unavailable and ANTHROPIC_API_KEY is set.
+ */
 async function requestAnthropic({ apiKey, model, systemPrompt, userMessage, timeoutMs = OPUS_TIMEOUT_MS }) {
+  // Try OpenClaw gateway first (OAuth — free via Claude Max)
+  const gatewayToken = OPENCLAW_GATEWAY_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN;
+  if (gatewayToken) {
+    try {
+      const text = await requestViaGateway({ gatewayToken, systemPrompt, userMessage, timeoutMs });
+      if (text && text.length > 10) return text;
+    } catch (err) {
+      console.error(`[full-llm] Gateway Opus failed: ${err.message}, trying direct API...`);
+    }
+  }
+
+  // Fallback: direct Anthropic API (costs money — only for production)
+  if (!apiKey) throw new Error('No gateway token and no ANTHROPIC_API_KEY available');
+
   const response = await withTimeout(timeoutMs, (signal) =>
     fetch(ANTHROPIC_API_URL, {
       method: 'POST',
@@ -1029,13 +1051,13 @@ async function requestAnthropic({ apiKey, model, systemPrompt, userMessage, time
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model,
+        model: OPUS_MODEL_DIRECT,
         max_tokens: 4096,
         temperature: 0.1,
         system: systemPrompt,
         messages: [
           { role: 'user', content: userMessage },
-          { role: 'assistant', content: '{' }, // Prefill to force JSON output
+          { role: 'assistant', content: '{' },
         ],
       }),
       signal,
@@ -1048,9 +1070,46 @@ async function requestAnthropic({ apiKey, model, systemPrompt, userMessage, time
   }
 
   const data = await response.json();
-  // Reconstruct full JSON: prefill '{' + completion text
   const text = data?.content?.[0]?.text || '';
-  return '{' + text; // Prepend the prefilled '{'
+  return '{' + text;
+}
+
+/**
+ * Request via OpenClaw gateway (OpenAI-compatible chat completions endpoint).
+ * Uses OAuth — zero cost with Claude Max subscription.
+ */
+async function requestViaGateway({ gatewayToken, systemPrompt, userMessage, timeoutMs }) {
+  const response = await withTimeout(timeoutMs, (signal) =>
+    fetch(OPENCLAW_GATEWAY_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${gatewayToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: OPUS_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage + '\n\nRespond with valid JSON only. Start with {' },
+        ],
+        max_tokens: 4096,
+        temperature: 0.1,
+      }),
+      signal,
+    })
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Gateway returned ${response.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || '';
+  // Extract JSON from response (may be wrapped in markdown code block)
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Gateway response contains no JSON object');
+  return jsonMatch[0];
 }
 
 /**
@@ -1336,9 +1395,10 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
 }
 
 export async function generateReport(projectName, rawData, scores, { apiKey: explicitKey, anthropicKey: explicitAnthropicKey } = {}) {
-  // Try Opus 4.6 first (primary synthesis engine)
+  // Try Opus via OpenClaw gateway (OAuth, free) or direct API
   const anthropicKey = explicitAnthropicKey || process.env.ANTHROPIC_API_KEY;
-  if (anthropicKey) {
+  const hasGateway = !!(OPENCLAW_GATEWAY_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN);
+  if (hasGateway || anthropicKey) {
     try {
       const { system, user } = buildOpusPrompt(projectName, rawData, scores);
       const text = await requestAnthropic({
