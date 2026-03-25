@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateReport, buildDataSummary } from '../synthesis/llm.js';
+import { validateReport, buildDataSummary, fallbackReport } from '../synthesis/llm.js';
 
 // ── Helper: create a base report object ──────────────────────────
 function makeReport(overrides = {}) {
@@ -331,4 +331,26 @@ test('buildDataSummary omits null/undefined values', () => {
   // Should include price but not "null" or "undefined" literals
   assert.ok(!summary.includes(': null'), `Should not contain literal null values`);
   assert.ok(!summary.includes(': undefined'), `Should not contain literal undefined values`);
+});
+
+test('fallbackReport produces a human headline and readable numbers', () => {
+  const rawData = makeRawData({
+    market: {
+      current_price: 92.48,
+      market_cap: 68_200_000_000,
+      total_volume: 2_100_000_000,
+      price_change_percentage_24h: -2.3,
+      price_change_percentage_7d_in_currency: 5.1,
+    },
+    onchain: {
+      tvl: 12_500_000_000,
+      tvl_change_7d: 3.2,
+    },
+  });
+
+  const report = fallbackReport('SOL', rawData, { overall: { score: 5.8 } }, 'XAI_API_KEY missing');
+
+  assert.equal(report.headline, 'SOL trades at $92.48.');
+  assert.match(report.analysis_text, /Market cap sits at \$68.2B/);
+  assert.match(report.analysis_text, /TVL is \$12.5B/);
 });
