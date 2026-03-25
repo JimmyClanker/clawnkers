@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+<defs>
+  <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0d0d0d"/><stop offset="100%" stop-color="#111"/></linearGradient>
+  <radialGradient id="fill-grad" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#D4580A" stop-opacity="0.25"/><stop offset="100%" stop-color="#D4580A" stop-opacity="0.05"/></radialGradient>
+</defs>
+<rect width="500" height="500" rx="16" fill="url(#bg)"/>
+<text x="250.0" y="32" fill="#e8e8e8" font-family="Inter,sans-serif" font-size="18" font-weight="700" text-anchor="middle">SOLANA — Score Radar</text>
+<text x="250.0" y="52" fill="#888" font-family="Inter,sans-serif" font-size="12" text-anchor="middle">Overall: 5.7/10 · HOLD</text>
+<polygon points="250.0,218.0 275.0,230.0 281.2,257.1 263.9,278.8 236.1,278.8 218.8,257.1 225.0,230.0" fill="none" stroke="rgba(255,255,255,0.09)" stroke-dasharray="4 6"/>
+<text x="258.0" y="222.0" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono,monospace" font-size="9">2</text>
+<polygon points="250.0,186.0 300.0,210.1 312.4,264.2 277.8,307.7 222.2,307.7 187.6,264.2 200.0,210.1" fill="none" stroke="rgba(255,255,255,0.12)" stroke-dasharray="4 6"/>
+<text x="258.0" y="190.0" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono,monospace" font-size="9">4</text>
+<polygon points="250.0,154.0 325.1,190.1 343.6,271.4 291.7,336.5 208.3,336.5 156.4,271.4 174.9,190.1" fill="none" stroke="rgba(255,255,255,0.15)" stroke-dasharray="4 6"/>
+<text x="258.0" y="158.0" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono,monospace" font-size="9">6</text>
+<polygon points="250.0,122.0 350.1,170.2 374.8,278.5 305.5,365.3 194.5,365.3 125.2,278.5 149.9,170.2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-dasharray="4 6"/>
+<text x="258.0" y="126.0" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono,monospace" font-size="9">8</text>
+<polygon points="250.0,90.0 375.1,150.2 406.0,285.6 319.4,394.2 180.6,394.2 94.0,285.6 124.9,150.2" fill="none" stroke="rgba(255,255,255,0.21)" stroke-dasharray="4 6"/>
+<text x="258.0" y="94.0" fill="rgba(255,255,255,0.3)" font-family="IBM Plex Mono,monospace" font-size="9">10</text>
+<line x1="250.0" y1="250.0" x2="250.0" y2="90.0" stroke="rgba(255,255,255,0.12)"/>
+<text x="250.0" y="54.0" fill="#b5c7d3" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="middle">Market</text>
+<text x="250.0" y="68.0" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="middle" dominant-baseline="middle">4.8/10</text>
+<line x1="250.0" y1="250.0" x2="375.0930371948848" y2="150.24163170260266" stroke="rgba(255,255,255,0.12)"/>
+<text x="403.2" y="127.8" fill="#D4580A" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle">Onchain</text>
+<text x="403.2" y="141.8" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="start" dominant-baseline="middle">5.9/10</text>
+<line x1="250.0" y1="250.0" x2="405.9884659490918" y2="285.6033494330103" stroke="rgba(255,255,255,0.12)"/>
+<text x="441.1" y="293.6" fill="#ffd3b6" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle">Social</text>
+<text x="441.1" y="307.6" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="start" dominant-baseline="middle">8.3/10</text>
+<line x1="250.0" y1="250.0" x2="319.4213982588093" y2="394.1550188643871" stroke="rgba(255,255,255,0.12)"/>
+<text x="335.0" y="426.6" fill="#c5b3e6" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="start" dominant-baseline="middle">Dev</text>
+<text x="335.0" y="440.6" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="start" dominant-baseline="middle">10.0/10</text>
+<line x1="250.0" y1="250.0" x2="180.5786017411907" y2="394.1550188643871" stroke="rgba(255,255,255,0.12)"/>
+<text x="165.0" y="426.6" fill="#ffdfba" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="end" dominant-baseline="middle">Tokenomics</text>
+<text x="165.0" y="440.6" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="end" dominant-baseline="middle">3.5/10</text>
+<line x1="250.0" y1="250.0" x2="94.01153405090821" y2="285.6033494330103" stroke="rgba(255,255,255,0.12)"/>
+<text x="58.9" y="293.6" fill="#a8e6cf" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="end" dominant-baseline="middle">Distribution</text>
+<text x="58.9" y="307.6" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="end" dominant-baseline="middle">7.0/10</text>
+<line x1="250.0" y1="250.0" x2="124.90696280511521" y2="150.24163170260266" stroke="rgba(255,255,255,0.12)"/>
+<text x="96.8" y="127.8" fill="#ff8a80" font-family="Inter,sans-serif" font-size="13" font-weight="600" text-anchor="end" dominant-baseline="middle">Risk</text>
+<text x="96.8" y="141.8" fill="rgba(255,255,255,0.5)" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="end" dominant-baseline="middle">6.5/10</text>
+<polygon points="250.0,173.2 323.8,191.1 379.5,279.6 319.4,394.2 225.7,300.5 140.8,274.9 168.7,185.2" fill="url(#fill-grad)" stroke="#D4580A" stroke-width="2.5" filter="url(#glow)"/>
+<circle cx="250.0" cy="173.2" r="5" fill="#0a0a0a" stroke="#b5c7d3" stroke-width="2"/>
+<circle cx="250.0" cy="173.2" r="2" fill="#b5c7d3"/>
+<circle cx="323.8" cy="191.1" r="5" fill="#0a0a0a" stroke="#D4580A" stroke-width="2"/>
+<circle cx="323.8" cy="191.1" r="2" fill="#D4580A"/>
+<circle cx="379.5" cy="279.6" r="5" fill="#0a0a0a" stroke="#ffd3b6" stroke-width="2"/>
+<circle cx="379.5" cy="279.6" r="2" fill="#ffd3b6"/>
+<circle cx="319.4" cy="394.2" r="5" fill="#0a0a0a" stroke="#c5b3e6" stroke-width="2"/>
+<circle cx="319.4" cy="394.2" r="2" fill="#c5b3e6"/>
+<circle cx="225.7" cy="300.5" r="5" fill="#0a0a0a" stroke="#ffdfba" stroke-width="2"/>
+<circle cx="225.7" cy="300.5" r="2" fill="#ffdfba"/>
+<circle cx="140.8" cy="274.9" r="5" fill="#0a0a0a" stroke="#a8e6cf" stroke-width="2"/>
+<circle cx="140.8" cy="274.9" r="2" fill="#a8e6cf"/>
+<circle cx="168.7" cy="185.2" r="5" fill="#0a0a0a" stroke="#ff8a80" stroke-width="2"/>
+<circle cx="168.7" cy="185.2" r="2" fill="#ff8a80"/>
+<circle cx="250.0" cy="250.0" r="2.5" fill="rgba(255,255,255,0.3)"/>
+<text x="250.0" y="484" fill="#555" font-family="IBM Plex Mono,monospace" font-size="10" text-anchor="middle">clawnkers.com · Grok 4.20 MultiAgent</text>
+</svg>

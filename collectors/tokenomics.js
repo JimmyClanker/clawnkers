@@ -6,6 +6,21 @@ function emptyTokenomicsResult(projectName, coinGeckoId, marketData) {
   const circulatingSupply = marketData?.circulating_supply ?? null;
   const totalSupply = marketData?.total_supply ?? null;
   const maxSupply = marketData?.max_supply ?? null;
+  const effectiveMaxSupply = maxSupply || totalSupply || null;
+  const pctCirculating = (circulatingSupply != null && effectiveMaxSupply)
+    ? (circulatingSupply / Number(effectiveMaxSupply)) * 100
+    : null;
+
+  // Unlock overhang: percentage of supply not yet circulating
+  const unlockOverhangPct = pctCirculating != null ? Math.max(0, 100 - pctCirculating) : null;
+
+  // Dilution risk tier: high >40% locked, medium 20-40%, low <20%
+  let dilutionRisk = null;
+  if (unlockOverhangPct != null) {
+    if (unlockOverhangPct > 40) dilutionRisk = 'high';
+    else if (unlockOverhangPct > 20) dilutionRisk = 'medium';
+    else dilutionRisk = 'low';
+  }
 
   return {
     project_name: projectName,
@@ -13,10 +28,9 @@ function emptyTokenomicsResult(projectName, coinGeckoId, marketData) {
     circulating_supply: circulatingSupply,
     total_supply: totalSupply,
     max_supply: maxSupply,
-    pct_circulating:
-      circulatingSupply != null && (maxSupply || totalSupply)
-        ? (circulatingSupply / Number(maxSupply || totalSupply)) * 100
-        : null,
+    pct_circulating: pctCirculating,
+    unlock_overhang_pct: unlockOverhangPct,
+    dilution_risk: dilutionRisk,
     inflation_rate: null,
     token_distribution: null,
     roi_data: null,

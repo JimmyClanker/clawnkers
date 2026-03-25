@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <!-- Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' api.clawnkers.com api.dexscreener.com api.coingecko.com; frame-ancestors 'none';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alpha Scanner — Clawnkers</title>
+  <meta name="description" content="Deep alpha analysis for any crypto project with market data, on-chain metrics, sentiment, development activity, and Grok 4.20 MultiAgent live search." />
+  <meta property="og:title" content="Alpha Scanner — Clawnkers" />
+  <meta property="og:description" content="Get a BUY/HOLD/AVOID verdict on any crypto project. Market data, on-chain metrics, GitHub, social sentiment + Grok 4.20 MultiAgent. Quick scan free, full scan $1 USDC." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clawnkers.com/alphascan" />
+  <meta property="og:image" content="https://clawnkers.com/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Alpha Scanner — Clawnkers" />
+  <meta name="twitter:description" content="BUY/HOLD/AVOID verdict on any crypto project. 5 data sources + Grok 4.20 MultiAgent. Free quick scan." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.dexscreener.com" />
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ══════════════════════════════════════════════════════════════
+       SHARED DESIGN SYSTEM — matches landing page (index.html)
+       ══════════════════════════════════════════════════════════════ */
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #161616;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.16);
+      --text: #e8e8e8;
+      --muted: #7e7e7e;
+      --muted2: #9a9a9a;
+      --green: #D4580A;
+      --green-dim: rgba(212,88,10,0.12);
+      --green-glow: 0 0 28px rgba(212,88,10,0.2);
+      --green-glow-strong: 0 0 40px rgba(212,88,10,0.3);
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 48px rgba(0,0,0,0.5);
+      --radius: 16px;
+      --radius-sm: 10px;
+      /* scanner-specific colors */
+      --buy: #D4580A;
+      --avoid: #ff8b94;
+      --hold: #ffd3b6;
+      --info: #b5c7d3;
+      --dev: #c5b3e6;
+      --warn: #ffaaa5;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .skip-link {
+      position: absolute; top: -100%; left: 12px;
+      background: var(--green); color: #000;
+      padding: 8px 16px; border-radius: 0 0 8px 8px;
+      font-weight: 700; font-size: 0.9rem; z-index: 9999;
+      text-decoration: none; transition: top 0.2s;
+    }
+    .skip-link:focus { top: 0; outline: 3px solid #000; outline-offset: 2px; }
+
+    a { color: var(--green); text-decoration: none; }
+    a:hover { opacity: 0.85; }
+
+    :focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+
+    .container {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .fade-in {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.visible { opacity: 1; transform: translateY(0); }
+    .fade-in-delay-1 { transition-delay: 0.1s; }
+    .fade-in-delay-2 { transition-delay: 0.2s; }
+    .fade-in-delay-3 { transition-delay: 0.3s; }
+
+    /* ── Header ── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10,10,10,0.92);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      height: 64px; gap: 24px;
+    }
+    .logo {
+      font-size: 1.4rem; font-weight: 800;
+      color: var(--text); letter-spacing: -0.03em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .logo img { width: 56px; height: 56px; border-radius: 6px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); }
+    .logo span { color: var(--green); }
+    nav { display: flex; align-items: center; gap: 28px; }
+    nav a {
+      color: var(--muted2); font-size: 0.9rem;
+      font-weight: 500; transition: color 0.2s;
+    }
+    nav a:hover { color: var(--text); opacity: 1; }
+    nav a.active { color: var(--text); }
+    .btn-nav {
+      background: var(--green) !important;
+      color: #000 !important;
+      padding: 8px 18px; border-radius: 8px;
+      font-weight: 600; font-size: 0.88rem;
+      transition: box-shadow 0.2s, transform 0.2s !important;
+      opacity: 1 !important;
+    }
+    .btn-nav:hover {
+      box-shadow: var(--green-glow);
+      transform: translateY(-1px);
+      opacity: 1 !important;
+    }
+
+    /* ── Hero (exact match to landing) ── */
+    .hero-section {
+      position: relative; overflow: hidden;
+      padding: 96px 0 80px;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(212,88,10,0.06) 0%, transparent 60%),
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      pointer-events: none;
+    }
+    .hero-content {
+      position: relative; text-align: center;
+      max-width: 860px; margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      border: 1px solid rgba(212,88,10,0.3);
+      border-radius: 999px;
+      background: rgba(212,88,10,0.06);
+      color: var(--green); font-size: 0.82rem; font-weight: 500;
+      margin-bottom: 28px; letter-spacing: 0.02em;
+    }
+    .hero-badge::before { content: '●'; font-size: 0.6rem; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    h1.hero-headline {
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      font-weight: 800; line-height: 1.08;
+      letter-spacing: -0.04em; color: var(--text);
+      margin-bottom: 20px;
+    }
+    h1.hero-headline em { font-style: normal; color: var(--green); }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--muted2); line-height: 1.7;
+      max-width: 660px; margin: 0 auto 36px;
+    }
+    .hero-ctas {
+      display: flex; gap: 14px;
+      justify-content: center; flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--green); color: #000;
+      padding: 14px 28px; border-radius: var(--radius-sm);
+      font-weight: 700; font-size: 1rem;
+      transition: box-shadow 0.25s, transform 0.2s;
+      letter-spacing: -0.01em;
+      animation: ctaPulse 3s ease-in-out infinite;
+      border: none; cursor: pointer; font-family: 'Inter', sans-serif;
+    }
+    .btn-primary:hover {
+      box-shadow: var(--green-glow-strong);
+      transform: translateY(-2px);
+      opacity: 1; animation: none;
+    }
+    @keyframes ctaPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(212,88,10,0); }
+      50% { box-shadow: 0 0 18px 4px rgba(212,88,10,0.22); }
+    }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: transparent; color: var(--muted2);
+      padding: 14px 28px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      font-weight: 500; font-size: 1rem;
+      transition: border-color 0.2s, color 0.2s, transform 0.2s;
+      font-family: 'Inter', sans-serif; cursor: pointer;
+    }
+    .btn-secondary:hover {
+      border-color: var(--border-hover); color: var(--text);
+      transform: translateY(-1px); opacity: 1;
+    }
+
+    /* ── Section commons ── */
+    section { padding: 80px 0; }
+    .section-label {
+      font-size: 0.78rem; font-weight: 600; color: var(--green);
+      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;
+    }
+    h2.section-title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800; letter-spacing: -0.04em;
+      line-height: 1.1; margin-bottom: 14px;
+    }
+    .section-sub {
+      color: #a8a8a8; font-size: 1.05rem;
+      max-width: 560px; line-height: 1.7;
+    }
+    .section-head { margin-bottom: 48px; }
+
+    /* ── Product card style (for how-it-works cards) ── */
+    .card-panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      display: flex; flex-direction: column; gap: 12px;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+      position: relative; overflow: hidden;
+    }
+    .card-panel::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at top left, rgba(212,88,10,0.04), transparent 60%);
+      pointer-events: none; opacity: 0; transition: opacity 0.3s;
+    }
+    .card-panel:hover {
+      border-color: rgba(212,88,10,0.25);
+      box-shadow: 0 0 0 1px rgba(212,88,10,0.08), var(--shadow-lg);
+      transform: translateY(-3px);
+    }
+    .card-panel:hover::before { opacity: 1; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+    }
+    .footer-inner {
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 800; font-size: 1rem;
+      letter-spacing: -0.02em; color: var(--text);
+    }
+    .footer-logo img { width: 40px; height: 40px; border-radius: 4px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); }
+    .footer-logo span { color: var(--green); }
+    .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .footer-links a {
+      color: var(--muted); font-size: 0.88rem; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--text); opacity: 1; }
+    .footer-copy { color: var(--muted); font-size: 0.82rem; }
+
+    code {
+      font-family: 'IBM Plex Mono', monospace;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px;
+      font-size: 0.85em; color: var(--green);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ALPHA SCANNER — SPECIFIC STYLES
+       ══════════════════════════════════════════════════════════════ */
+
+    /* ── Scanner input form ── */
+    .scanner-form-section {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 0;
+    }
+    .toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .toolbar .btn-row {
+      display: flex; gap: 12px; justify-content: center;
+    }
+    .input-wrap { position: relative; }
+    #project-input {
+      width: 100%; min-width: 0;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 14px 16px;
+      font-family: 'Inter', sans-serif; font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #project-input:focus {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(212,88,10,0.12);
+    }
+    #project-input::placeholder { color: var(--muted); }
+
+    .hero-note {
+      color: var(--muted); font-size: 0.82rem;
+      margin-top: 12px;
+    }
+
+    /* ── Status / Loading ── */
+    .status {
+      min-height: 0;
+      display: flex; align-items: center;
+      padding: 0; color: var(--muted);
+      margin-top: 12px;
+    }
+    .loading-wrap { width: min(560px, 100%); display: grid; gap: 8px; }
+    .chalk-loading {
+      font-family: 'Inter', sans-serif; font-weight: 700;
+      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+      letter-spacing: -0.03em; color: var(--text);
+      display: inline-flex; align-items: baseline; gap: 4px;
+    }
+    .loading-project {
+      color: var(--green); max-width: 18ch;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .loading-dots::after {
+      content: ''; display: inline-block; width: 1.4em;
+      text-align: left; animation: dots 1.2s steps(4, end) infinite;
+    }
+    .loading-bar {
+      position: relative; height: 4px; border-radius: 999px;
+      overflow: hidden; background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+    }
+    .loading-bar::before {
+      content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+      background: linear-gradient(90deg, rgba(212,88,10,0.15), var(--hold), var(--buy), rgba(212,88,10,0.15));
+      animation: progressSweep 1.7s ease-in-out infinite;
+    }
+
+    @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } 100% { content: ''; } }
+    @keyframes progressSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fillBar { from { width: 0; } to { width: var(--target-width, 0%); } }
+
+    /* ── DexScreener Autocomplete ── */
+    .dex-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: linear-gradient(180deg, rgba(18,18,28,0.98), rgba(12,12,20,0.98));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+      backdrop-filter: blur(14px);
+      z-index: 1000; overflow: hidden;
+      max-height: 400px; overflow-y: auto; display: none;
+    }
+    .dex-dropdown.open { display: block; }
+    .dex-dropdown::-webkit-scrollbar { width: 4px; }
+    .dex-dropdown::-webkit-scrollbar-track { background: transparent; }
+    .dex-dropdown::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .dex-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: background 0.14s;
+    }
+    .dex-item:last-child { border-bottom: none; }
+    .dex-item:hover, .dex-item.active { background: rgba(212,88,10,0.07); }
+
+    .dex-logo {
+      width: 32px; height: 32px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .dex-logo-fallback {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: linear-gradient(135deg, rgba(212,88,10,0.15), rgba(181,199,211,0.1));
+      color: var(--buy);
+    }
+    .dex-info { flex: 1; min-width: 0; }
+    .dex-symbol {
+      font-weight: 500; font-size: 0.9rem; color: var(--text);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .dex-chain {
+      font-size: 0.68rem; padding: 1px 6px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 999px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .dex-name {
+      font-size: 0.76rem; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+    }
+    .dex-price { text-align: right; flex-shrink: 0; }
+    .dex-price-val { font-size: 0.82rem; color: var(--buy); font-weight: 500; }
+    .dex-vol { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+    .dex-loading, .dex-empty { padding: 14px 16px; color: var(--muted); font-size: 0.84rem; text-align: center; }
+
+    /* ── Results Report ── */
+    #results-section { display: none; }
+    #results-section.visible { display: block; animation: fadeUp 0.45s ease both; }
+
+    .results-container {
+      width: min(1100px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+    }
+
+    /* Result panels use landing card style */
+    .panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+    }
+    .panel:hover {
+      border-color: rgba(212,88,10,0.2);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    .panel.radar-panel { overflow: visible; }
+    .hidden { display: none !important; }
+
+    .header-row, .footer-row {
+      display: flex; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; align-items: center;
+    }
+
+    .project-name {
+      font-family: 'Inter', sans-serif; font-weight: 800;
+      font-size: clamp(2rem, 5vw, 3.5rem); margin: 0;
+      letter-spacing: -0.04em;
+    }
+    .verdict-wrap { display: grid; justify-items: end; gap: 8px; }
+    .verdict-meta {
+      color: var(--muted); font-size: 0.78rem;
+      letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .verdict {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      padding: 14px 24px; border-radius: 999px;
+      border: 1px solid currentColor;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    }
+    .overall-score {
+      font-family: 'Inter', sans-serif; font-weight: 700;
+      font-size: 1.8rem; line-height: 1;
+    }
+
+    .buy { color: var(--buy); }
+    .hold { color: var(--hold); }
+    .avoid { color: var(--avoid); }
+    .dev { color: var(--dev); }
+    .info { color: var(--info); }
+    .warn { color: var(--warn); }
+    .muted { color: var(--muted); }
+
+    .analysis {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--text); line-height: 1.8; white-space: pre-wrap;
+      font-size: 0.9rem;
+    }
+    .score-list { display: grid; gap: 12px; }
+    .score-row {
+      display: grid; grid-template-columns: 120px 1fr 72px;
+      gap: 12px; align-items: center;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      animation: fadeUp 0.45s ease both;
+    }
+    .score-label { display: grid; gap: 2px; }
+    .score-label strong { font-size: 0.9rem; color: var(--text); }
+    .score-label span { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .bar {
+      position: relative; height: 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px; overflow: hidden;
+      background: rgba(255,255,255,0.04);
+    }
+    .bar > span {
+      display: block; height: 100%;
+      width: var(--target-width, 0%); border-radius: inherit;
+      box-shadow: 0 0 14px rgba(255,255,255,0.14);
+      animation: fillBar 1s ease both; transform-origin: left center;
+    }
+    .score-value { text-align: right; font-weight: 500; color: var(--text); }
+
+    .mini-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+
+    /* Result sub-cards */
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px; min-height: 100%;
+      background: rgba(255,255,255,0.02);
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute; inset: 0 auto 0 0;
+      width: 4px; border-radius: 999px;
+      background: currentColor; opacity: 0.6;
+    }
+    .card h3 {
+      margin: 0 0 10px;
+      font-family: 'Inter', sans-serif; font-weight: 700;
+      font-size: 1.4rem; letter-spacing: -0.02em;
+    }
+    .card ul { margin: 0; padding-left: 18px; color: var(--text); }
+    .card li + li { margin-top: 8px; }
+    .moat { color: var(--buy); }
+    .risks { color: var(--avoid); }
+    .catalysts { color: var(--hold); }
+
+    .table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .table th, .table td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0; text-align: left; vertical-align: top;
+    }
+    .table th { color: var(--muted); font-weight: 500; width: 38%; }
+    .table td { word-break: break-word; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .sentiment-box {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px; min-height: 100%;
+    }
+
+    .footnote { color: var(--muted); font-size: 0.88rem; }
+    .pos-change { color: var(--buy); }
+    .neg-change { color: var(--avoid); }
+
+    .github-card {
+      margin-top: 14px;
+      border: 1px solid rgba(197,179,230,0.2);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      background: rgba(197,179,230,0.04);
+    }
+    .github-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .github-title { color: var(--dev); font-weight: 500; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .github-icon { color: var(--dev); }
+    .repo-link { margin-left: auto; color: var(--dev); font-size: 0.82rem; text-decoration: none; opacity: 0.85; }
+    .repo-link:hover { opacity: 1; }
+    .github-desc { margin: 0 0 10px; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+    .github-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+    .lang-badge, .license-badge, .stat-badge {
+      background: rgba(197,179,230,0.1);
+      border: 1px solid rgba(197,179,230,0.2);
+      border-radius: 999px; padding: 2px 8px;
+      font-size: 0.76rem; color: var(--dev); letter-spacing: 0.04em;
+    }
+    .stat-badge {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border); color: var(--muted);
+    }
+
+    /* ── Round 3: Dark mode polish — improved hover states & contrast ── */
+    .panel:hover { background: rgba(255,255,255,0.008); }
+    .card { transition: border-color 0.2s; }
+    .card:hover { border-color: rgba(255,255,255,0.14); }
+    .score-row:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
+    nav a { transition: color 0.2s, opacity 0.2s; }
+    .table tr:hover td { color: var(--text); }
+    .table td { color: #d0d0d0; }  /* slightly brighter table data */
+    .analysis { color: #d8d8d8; }  /* better reading contrast */
+    .github-desc { color: #a0a0a0; } /* slightly brighter */
+    /* better focus ring on buttons */
+    button:focus-visible, a:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+    }
+    /* scan button active state */
+    .btn-primary:active { transform: translateY(0) scale(0.98); }
+    .btn-secondary:active { transform: translateY(0) scale(0.98); }
+
+    .error {
+      color: var(--avoid);
+      border: 1px solid rgba(255,139,148,0.25);
+      padding: 12px 14px; border-radius: var(--radius-sm);
+      background: rgba(255,139,148,0.05);
+    }
+
+    svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+    /* ── How It Works Section ── */
+    .how-section {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .how-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 20px; position: relative;
+    }
+    .how-grid::before {
+      content: ''; position: absolute;
+      top: 32px;
+      left: calc(16.66% + 16px); right: calc(16.66% + 16px);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212,88,10,0.5), transparent);
+      opacity: 0.6;
+    }
+    .how-step {
+      padding: 28px;
+      text-align: center;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 14px;
+    }
+    .how-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 1px solid rgba(212,88,10,0.35);
+      background: rgba(212,88,10,0.08);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; position: relative; z-index: 1;
+    }
+    .how-step h3 {
+      font-size: 1.1rem; font-weight: 700;
+      color: var(--text); margin: 0;
+      letter-spacing: -0.02em;
+    }
+    .how-step p {
+      color: var(--muted2); font-size: 0.9rem;
+      line-height: 1.65; margin: 0;
+    }
+
+    /* ── Stats Section ── */
+    .stats-section { background: var(--bg); }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .stat-box {
+      background: var(--surface);
+      padding: 28px 24px; text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat-box:last-child { border-right: none; }
+    .stat-val {
+      font-size: 2rem; font-weight: 800;
+      letter-spacing: -0.04em; color: var(--green);
+      line-height: 1; margin-bottom: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .stat-label { color: var(--muted2); font-size: 0.85rem; }
+
+    /* ── Scanner fade-in ── */
+    .scanner-fade-in {
+      opacity: 1; transform: translateY(0);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .scanner-fade-delay-1 { transition-delay: 0.1s; }
+    .scanner-fade-delay-2 { transition-delay: 0.2s; }
+
+    /* ── Round 2: Skeleton loading state ── */
+    @keyframes shimmer {
+      0% { background-position: -600px 0; }
+      100% { background-position: 600px 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%);
+      background-size: 600px 100%;
+      animation: shimmer 1.4s infinite linear;
+      border-radius: 6px;
+    }
+    .skeleton-panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 18px;
+      display: grid; gap: 14px;
+    }
+    .skeleton-title { height: 40px; width: 55%; }
+    .skeleton-badge { height: 32px; width: 30%; border-radius: 999px; }
+    .skeleton-line { height: 14px; }
+    .skeleton-line.w-full { width: 100%; }
+    .skeleton-line.w-80 { width: 80%; }
+    .skeleton-line.w-60 { width: 60%; }
+    .skeleton-line.w-40 { width: 40%; }
+    .skeleton-bar { height: 12px; border-radius: 999px; }
+    .skeleton-score { display: grid; grid-template-columns: 120px 1fr 72px; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+    /* ── Round 2: Smooth results reveal ── */
+    #results-section {
+      display: none;
+    }
+    #results-section.visible {
+      display: block;
+    }
+    #report.results-reveal {
+      animation: resultsReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    @keyframes resultsReveal {
+      from { opacity: 0; transform: translateY(18px) scale(0.99); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    #report .panel {
+      animation: panelSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    #report .panel:nth-child(1) { animation-delay: 0.05s; }
+    #report .panel:nth-child(2) { animation-delay: 0.12s; }
+    #report .panel:nth-child(3) { animation-delay: 0.18s; }
+    #report .panel:nth-child(4) { animation-delay: 0.24s; }
+    #report .panel:nth-child(5) { animation-delay: 0.30s; }
+    #report .panel:nth-child(6) { animation-delay: 0.36s; }
+    @keyframes panelSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── x402 Payment Modal ── */
+    .payment-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9000;
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      animation: fadeUp 0.25s ease both;
+    }
+    .payment-card {
+      background: linear-gradient(180deg, rgba(30,30,40,0.98), rgba(18,18,28,0.98));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      width: min(420px, calc(100vw - 32px));
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 28px 80px rgba(0,0,0,0.7);
+      position: relative; overflow: hidden;
+    }
+    .payment-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(212,88,10,0.04), transparent 45%);
+      pointer-events: none;
+    }
+    .payment-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 2rem; margin: 0 0 6px; color: var(--text); }
+    .payment-sub { color: var(--muted); font-size: 0.82rem; margin-bottom: 22px; }
+    .payment-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .payment-row span:first-child { color: var(--muted); font-size: 0.82rem; }
+    .payment-row span:last-child { font-weight: 500; color: var(--text); }
+    .network-badge {
+      background: rgba(212,88,10,0.12);
+      border: 1px solid rgba(212,88,10,0.3);
+      border-radius: 999px; padding: 3px 10px;
+      font-size: 0.76rem; color: var(--buy); letter-spacing: 0.04em;
+    }
+    .pay-btn {
+      width: 100%; margin-top: 18px; padding: 15px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(212,88,10,0.35);
+      background: linear-gradient(135deg, rgba(212,88,10,0.25), rgba(212,88,10,0.15));
+      color: var(--buy); font-family: inherit; font-size: 1rem;
+      font-weight: 500; cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      letter-spacing: 0.03em;
+    }
+    .pay-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(212,88,10,0.12);
+      background: linear-gradient(135deg, rgba(212,88,10,0.32), rgba(212,88,10,0.22));
+    }
+    .pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .pay-cancel {
+      display: block; text-align: center; margin-top: 12px;
+      font-size: 0.82rem; color: var(--muted); cursor: pointer;
+      background: none; border: none; font-family: inherit;
+      width: 100%; padding: 6px; border-radius: 8px; transition: color 0.18s;
+    }
+    .pay-cancel:hover { color: var(--avoid); }
+    .payment-error {
+      margin-top: 12px; padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255,139,148,0.25);
+      background: rgba(255,139,148,0.06);
+      color: var(--avoid); font-size: 0.83rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      .how-grid { grid-template-columns: 1fr; gap: 12px; }
+      .how-grid::before { display: none; }
+    }
+    @media (max-width: 860px) {
+      nav a:not(.btn-nav) { display: none; }
+      .footer-inner { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .stat-box { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat-box:last-child { border-bottom: none; }
+    }
+    @media (max-width: 720px) {
+      .toolbar { grid-template-columns: 1fr; gap: 8px; }
+      .score-row { grid-template-columns: 1fr; gap: 6px; }
+      .header-row { align-items: flex-start; flex-direction: column; gap: 12px; }
+      .verdict-wrap { justify-items: start; width: 100%; }
+      .verdict { width: 100%; text-align: center; font-size: 1.4rem; padding: 12px 20px; }
+      .table, .table tbody, .table tr, .table th, .table td { display: block; width: 100%; }
+      .table tr { padding: 10px 0; border-bottom: 1px solid var(--border); }
+      .table th, .table td { border-bottom: 0; padding: 0; }
+      .table th { width: auto; margin-bottom: 4px; color: var(--info); }
+      .two-col { grid-template-columns: 1fr; }
+      .sentiment-box { word-break: break-word; overflow-wrap: anywhere; }
+      .analysis { font-size: 0.85rem; }
+      .panel { padding: 16px; overflow-x: hidden; }
+      .card { padding: 14px; }
+      .dex-dropdown { max-height: 300px; }
+      .payment-card { padding: 24px 18px; }
+    }
+    @media (max-width: 560px) {
+      .hero-section { padding: 64px 0 56px; }
+      h1.hero-headline { font-size: 2.4rem; }
+      .hero-ctas { flex-direction: column; align-items: center; }
+      .how-step { padding: 20px 16px; }
+    }
+    /* ── Round 1: Mobile responsive — 375px fixes ── */
+    @media (max-width: 400px) {
+      .container { width: calc(100% - 28px); }
+      h1.hero-headline { font-size: 2rem; letter-spacing: -0.03em; }
+      .hero-badge { font-size: 0.72rem; padding: 5px 10px; max-width: 100%; text-align: center; }
+      .btn-primary, .btn-secondary { width: 100%; justify-content: center; padding: 13px 16px; font-size: 0.95rem; }
+      .btn-row { flex-direction: column; }
+      .results-container { width: calc(100% - 24px); padding: 20px 0 40px; }
+      .project-name { font-size: 1.8rem !important; }
+      .verdict { font-size: 1.2rem; padding: 10px 16px; }
+      .score-row { font-size: 0.85rem; }
+      .score-label strong { font-size: 0.82rem; }
+      .score-value { font-size: 0.82rem; }
+      .panel { padding: 14px; }
+      .payment-card { width: calc(100vw - 16px); padding: 20px 14px; }
+      .payment-title { font-size: 1.5rem; }
+      .dex-item { padding: 8px 10px; }
+      .dex-logo, .dex-logo-fallback { width: 26px; height: 26px; }
+      .chalk-loading { font-size: 1.4rem; }
+      .loading-project { max-width: 12ch; }
+      .analysis { font-size: 0.82rem; word-break: break-word; overflow-wrap: anywhere; }
+      .card h3 { font-size: 1.1rem; }
+      .stat-val { font-size: 1.6rem; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js" defer></script>
+</head>
+<body>
+  <!-- ── Round 10: Progressive enhancement — noscript fallback ── -->
+  <noscript>
+    <style>
+      .scanner-fade-in, .fade-in { opacity: 1 !important; transform: none !important; }
+      .noscript-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.96); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+      .noscript-box { background: #111; border: 1px solid #D4580A; border-radius: 16px; padding: 40px 32px; max-width: 480px; text-align: center; }
+      .noscript-box h2 { color: #e8e8e8; font-size: 1.6rem; margin-bottom: 12px; font-weight: 800; }
+      .noscript-box p { color: #9a9a9a; font-size: 0.95rem; line-height: 1.7; margin-bottom: 20px; }
+      .noscript-box ul { text-align: left; color: #b0b0b0; font-size: 0.88rem; line-height: 2; margin-bottom: 24px; padding-left: 20px; }
+      .noscript-box a { display: inline-block; background: #D4580A; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 0.95rem; text-decoration: none; margin-right: 10px; }
+      .noscript-box a.sec { background: transparent; color: #D4580A; border: 1px solid #D4580A; }
+    </style>
+    <div class="noscript-overlay" role="main">
+      <div class="noscript-box">
+        <h2>⚡ JavaScript Required</h2>
+        <p>Alpha Scanner needs JavaScript enabled to run scans, display results, and process payments.</p>
+        <ul>
+          <li>Enable JavaScript in your browser settings</li>
+          <li>Disable extensions that block scripts</li>
+          <li>Or use the REST API directly</li>
+        </ul>
+        <a href="/api/health">View API Docs</a>
+        <a href="/" class="sec">← Home</a>
+      </div>
+    </div>
+  </noscript>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="container">
+      <div class="header-inner">
+        <a href="/" class="logo" aria-label="Clawnkers — Home"><img src="/claw-logo.png?v=3" alt="" width="28" height="28">Clawnkers<span>.</span></a>
+        <nav aria-label="Main navigation">
+          <a href="/#products">Products</a>
+          <a href="/#about">About</a>
+          <a href="/alphascan" class="active btn-nav" aria-current="page">Alpha Scanner →</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+
+    <!-- ── Hero ── -->
+    <section class="hero-section">
+      <div class="hero-bg"></div>
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-badge fade-in visible">🧠 Grok 4.20 MultiAgent · Live X Search · CoinGecko · DeFiLlama · GitHub</div>
+          <h1 class="hero-headline fade-in visible fade-in-delay-1">
+            Alpha Scanner<br><em>Find Your Edge</em>
+          </h1>
+          <p class="hero-sub fade-in visible fade-in-delay-2">
+            Deep alpha analysis for any crypto project. Market data, on-chain metrics, social sentiment, GitHub activity — then Grok 4.20 MultiAgent delivers a scored BUY/HOLD/AVOID verdict.
+          </p>
+          <form id="scan-form" class="toolbar fade-in visible fade-in-delay-3" role="search" aria-label="Scan a crypto project" style="margin-top: 8px;">
+            <div class="input-wrap">
+              <input id="project-input" name="project" type="search" maxlength="100"
+                placeholder="solana, aave, 0x833589fCD6... or search by name"
+                autocomplete="off" aria-label="Project name or contract address"
+                aria-haspopup="listbox" aria-controls="dex-dropdown" />
+              <div id="dex-dropdown" class="dex-dropdown" role="listbox" aria-label="Token suggestions"></div>
+            </div>
+            <div class="btn-row">
+              <button type="submit" id="scan-btn" class="btn-primary" aria-label="Full scan — $1.00 USDC on Base">Full Scan $1</button>
+              <a href="#" id="quick-link" class="btn-secondary" aria-label="Quick scan — free, algorithmic scoring">Quick scan (free)</a>
+            </div>
+          </form>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+          <div class="hero-note" role="note" style="margin-top: 4px;">✓ Quick scan free — no wallet · Full scan $1.00 USDC on Base · Powered by Grok 4.20 MultiAgent</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Results (appear after scan) ── -->
+    <div id="results-section">
+      <div class="results-container">
+        <section id="error-box" class="panel hidden"></section>
+        <section id="report" class="hidden"></section>
+      </div>
+    </div>
+
+    <!-- ── How It Works ── -->
+    <section class="how-section">
+      <div class="container">
+        <div class="section-head fade-in">
+          <div class="section-label">How it works</div>
+          <h2 class="section-title">Three steps to alpha</h2>
+          <p class="section-sub">A clean pipeline from project name to actionable verdict — powered by 5 live data sources and Grok AI.</p>
+        </div>
+        <div class="how-grid">
+          <div class="how-step scanner-fade-in">
+            <div class="how-num">🎯</div>
+            <h3>Choose a project</h3>
+            <p>Enter any token name or contract address. We support all major chains and most long-tail tokens via CoinGecko + DexScreener.</p>
+          </div>
+          <div class="how-step scanner-fade-in scanner-fade-delay-1">
+            <div class="how-num">⚡</div>
+            <h3>AI analyzes 5 sources</h3>
+            <p>CoinGecko, DeFiLlama, GitHub, Social (X), On-chain — all queried in parallel and fed to Grok 4.20 MultiAgent with live search.</p>
+          </div>
+          <div class="how-step scanner-fade-in scanner-fade-delay-2">
+            <div class="how-num">📊</div>
+            <h3>Get your verdict</h3>
+            <p>Comprehensive report with scores, moat assessment, risks, catalysts, competitor comparison, and a BUY/HOLD/AVOID verdict.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Live Stats ── -->
+    <section class="stats-section scanner-fade-in">
+      <div class="container">
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="stat-projects-scan">—</div>
+            <div class="stat-label">Projects analyzed</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">Grok 4.20 MultiAgent</div>
+            <div class="stat-label">Powered by xAI</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">Base</div>
+            <div class="stat-label">Running on Base mainnet</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo"><img src="/claw-logo.png?v=3" alt="" width="24" height="24">Clawnkers<span>.</span></div>
+        <div class="footer-links">
+          <a href="/alphascan">Alpha Scanner</a>
+          <a href="/#api">API Docs</a>
+          <a href="https://github.com/JimmyClanker/x402-research">GitHub</a>
+        </div>
+        <div class="footer-copy">© 2026 Clawnkers</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ── DOM Refs ─────────────────────────────────────────────────────
+    const form        = document.getElementById('scan-form');
+    const input       = document.getElementById('project-input');
+    const quickLink   = document.getElementById('quick-link');
+    const statusBox   = document.getElementById('status');
+    const reportBox   = document.getElementById('report');
+    const errorBox    = document.getElementById('error-box');
+    const resultsSection = document.getElementById('results-section');
+    const dexDropdown = document.getElementById('dex-dropdown');
+
+    // Hero buttons removed (form is now in hero directly)
+
+    // ── Score metadata ────────────────────────────────────────────────
+    const SCORE_META = [
+      ['market_strength',   'Market',       '#b5c7d3'],
+      ['onchain_health',    'Onchain',      '#D4580A'],
+      ['social_momentum',   'Social',       '#ffd3b6'],
+      ['development',       'Dev',          '#c5b3e6'],
+      ['tokenomics_health', 'Tokenomics',   '#ffdfba'],
+      ['distribution',      'Distribution', '#a8e6cf'],
+    ];
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+    function verdictClass(verdict) {
+      const v = String(verdict || '').toUpperCase();
+      if (v.includes('BUY'))  return 'buy';
+      if (v.includes('HOLD')) return 'hold';
+      return 'avoid';
+    }
+    function formatCompactNumber(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const abs = Math.abs(num), sign = num < 0 ? '-' : '';
+      if (abs >= 1e12) return `${sign}$${(abs/1e12).toFixed(2)}t`;
+      if (abs >= 1e9)  return `${sign}$${(abs/1e9).toFixed(2)}B`;
+      if (abs >= 1e6)  return `${sign}$${(abs/1e6).toFixed(2)}M`;
+      if (abs >= 1e3)  return `${sign}$${(abs/1e3).toFixed(2)}K`;
+      if (abs > 0 && abs < 1) { const d = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4; return `${sign}$${abs.toFixed(d)}`; }
+      return `${sign}$${abs.toFixed(abs < 100 ? 2 : 0)}`;
+    }
+    function formatPercent(value, decimals=1, signed=false) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const prefix = signed && num > 0 ? '+' : '';
+      return `${prefix}${num.toFixed(decimals)}%`;
+    }
+    function formatPrice(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      const abs = Math.abs(num);
+      if (abs >= 1000) return formatCompactNumber(num);
+      if (abs >= 1)    return `$${num.toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}`;
+      if (abs > 0)     { const d = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4; return `$${num.toFixed(d)}`; }
+      return '$0.00';
+    }
+    function formatNumber(value, key='') {
+      if (value === null || value === undefined || value === '') return 'n/a';
+      if (typeof value === 'string' && value.trim() === '') return 'n/a';
+      const k = String(key||'').toLowerCase();
+      const num = typeof value === 'number' ? value : Number(String(value).replace(/,/g,''));
+      if (!Number.isFinite(num)) return String(value);
+      if (k.includes('pct') || k.includes('%')) return formatPercent(num, 1);
+      const abs = Math.abs(num);
+      if (abs >= 1e12) return `$${(num/1e12).toFixed(2)}t`;
+      if (abs >= 1e9)  return `$${(num/1e9).toFixed(2)}B`;
+      if (abs >= 1e6)  return `$${(num/1e6).toFixed(2)}M`;
+      if (abs >= 1e3)  return `$${(num/1e3).toFixed(2)}K`;
+      if (abs > 0 && abs < 1) { const d = abs < 0.0001 ? 6 : abs < 0.01 ? 5 : 4; return num.toFixed(d); }
+      return num.toLocaleString(undefined, {maximumFractionDigits:2});
+    }
+    function formatMetricValue(label, key, value) {
+      const k = String(key||label||'').toLowerCase();
+      if (value === null || value === undefined || value === '') return 'n/a';
+      switch (k) {
+        case 'price': case 'current_price': case 'price_usd': return formatPrice(value);
+        case 'market_cap': case 'total_volume': case 'fdv': case 'tvl': case 'fees_7d': case 'revenue_7d': return formatCompactNumber(value);
+        case 'tvl_change_7d': case 'tvl_change_30d': return formatPercent(value,1,true);
+        case 'pct_circulating': return formatPercent(value,1);
+        case 'inflation_rate': return formatPercent(value,2);
+        default: return formatNumber(value,k);
+      }
+    }
+    function formatDuration(ms) {
+      const s = Math.max(0, Math.round(Number(ms||0)/1000));
+      if (s < 60) return `${s}s`;
+      const m = Math.floor(s/60), sec = s%60;
+      if (m < 60) return sec ? `${m}m ${sec}s` : `${m}m`;
+      const h = Math.floor(m/60), rm = m%60;
+      return rm ? `${h}h ${rm}m` : `${h}h`;
+    }
+    function overallScore(scores) {
+      const vals = Object.values(scores||{}).map(i=>Number(i?.score)).filter(v=>Number.isFinite(v));
+      if (!vals.length) return null;
+      return vals.reduce((s,v)=>s+v,0)/vals.length;
+    }
+    function barColor(v) {
+      if (v >= 8) return '#D4580A';
+      if (v >= 6) return '#ffd3b6';
+      if (v >= 4) return '#ffaaa5';
+      return '#ff8b94';
+    }
+    function changeClass(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return '';
+      return n > 0 ? 'pos-change' : n < 0 ? 'neg-change' : '';
+    }
+    function formatDexPrice(priceUsd) {
+      const n = parseFloat(priceUsd);
+      if (!n || !isFinite(n)) return '';
+      if (n >= 1000) return `$${(n/1000).toFixed(1)}K`;
+      if (n >= 1)    return `$${n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+      if (n > 0)     { const d = n < 0.00001 ? 8 : n < 0.001 ? 6 : 4; return `$${n.toFixed(d)}`; }
+      return '';
+    }
+    function formatDexVol(vol) {
+      const n = Number(vol);
+      if (!n || !isFinite(n)) return '';
+      if (n >= 1e9) return `vol $${(n/1e9).toFixed(1)}B`;
+      if (n >= 1e6) return `vol $${(n/1e6).toFixed(1)}M`;
+      if (n >= 1e3) return `vol $${(n/1e3).toFixed(0)}K`;
+      return `vol $${n.toFixed(0)}`;
+    }
+
+    // ── Skeleton loading state (Round 2) ────────────────────────────
+    function showSkeleton() {
+      resultsSection.classList.add('visible');
+      reportBox.classList.remove('hidden');
+      errorBox.classList.add('hidden');
+      reportBox.classList.remove('results-reveal');
+      reportBox.innerHTML = `
+        <div class="skeleton-panel">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div style="display:grid;gap:10px;flex:1;">
+              <div class="skeleton skeleton-line w-40" style="height:12px;"></div>
+              <div class="skeleton skeleton-title"></div>
+            </div>
+            <div class="skeleton skeleton-badge"></div>
+          </div>
+          <div class="skeleton skeleton-line w-full"></div>
+          <div class="skeleton skeleton-line w-80"></div>
+          <div class="skeleton skeleton-line w-60"></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px;">
+            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
+            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
+            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
+          </div>
+        </div>
+        <div class="skeleton-panel" style="display:grid;gap:10px;">
+          <div class="skeleton skeleton-line w-40" style="height:12px;"></div>
+          ${[0,1,2,3,4].map(i => `<div class="skeleton-score">
+            <div class="skeleton skeleton-line w-full"></div>
+            <div class="skeleton skeleton-bar"></div>
+            <div class="skeleton skeleton-line w-40"></div>
+          </div>`).join('')}
+        </div>`;
+    }
+
+    // ── Loading state ────────────────────────────────────────────────
+    function setLoading(isLoading, mode) {
+      const scanBtn   = document.getElementById('scan-btn');
+      const quickLinkEl = document.getElementById('quick-link');
+
+      if (isLoading) {
+        if (scanBtn)    { scanBtn.disabled = true; scanBtn.textContent = 'Scanning…'; scanBtn.setAttribute('aria-busy', 'true'); }
+        if (quickLinkEl) quickLinkEl.style.pointerEvents = 'none';
+
+        const project   = escapeHtml(input.value.trim() || 'project');
+        const modeLabel = mode === 'quick'
+          ? 'Free quick scan — algorithmic scoring'
+          : 'Full deep scan — 5 sources + Grok 4.20 MultiAgent · ~10–20s';
+
+        statusBox.innerHTML = `
+          <div class="loading-wrap" role="status" aria-live="polite" aria-label="Scanning ${project}">
+            <div class="chalk-loading">Scanning <span class="loading-project">${project}</span><span class="loading-dots"></span></div>
+            <div class="loading-bar" aria-hidden="true"></div>
+            <div class="footnote">${modeLabel}</div>
+          </div>`;
+        // Show skeleton while loading
+        showSkeleton();
+      } else {
+        if (scanBtn)    { scanBtn.disabled = false; scanBtn.textContent = 'Full Scan $1'; scanBtn.removeAttribute('aria-busy'); }
+        if (quickLinkEl) quickLinkEl.style.pointerEvents = '';
+        statusBox.innerHTML = '';
+      }
+    }
+
+    // ── Radar chart ─────────────────────────────────────────────────
+    function renderRadar(scores) {
+      const size = 400, center = size/2, radius = 108, levels = 5;
+      const keys = SCORE_META.map(([k])=>k), labels = SCORE_META.map(([,l])=>l);
+      const values = keys.map(k=>Number(scores?.[k]?.score||0));
+      const points = values.map((v,i)=>{
+        const angle = (-Math.PI/2)+(i*Math.PI*2/values.length);
+        const scale = Math.max(0,Math.min(10,v))/10;
+        return [center+Math.cos(angle)*radius*scale, center+Math.sin(angle)*radius*scale];
+      });
+      const polygon = points.map(([x,y])=>`${x},${y}`).join(' ');
+      const grid = Array.from({length:levels},(_,i)=>{
+        const l=i+1, lr=radius*(l/levels);
+        const lp=labels.map((_,j)=>{
+          const a=(-Math.PI/2)+(j*Math.PI*2/labels.length);
+          return `${center+Math.cos(a)*lr},${center+Math.sin(a)*lr}`;
+        }).join(' ');
+        const ty=center-lr+4;
+        return `<polygon points="${lp}" fill="none" stroke="rgba(232,232,232,${0.08+l*0.02})" stroke-dasharray="4 6" /><text x="${center+10}" y="${ty}" fill="rgba(232,232,232,0.36)" font-size="10">${l*2}</text>`;
+      }).join('');
+      const axes = labels.map((label,i)=>{
+        const a=(-Math.PI/2)+(i*Math.PI*2/labels.length);
+        const x=center+Math.cos(a)*radius, y=center+Math.sin(a)*radius;
+        const tx=center+Math.cos(a)*(radius+42), ty=center+Math.sin(a)*(radius+42);
+        const anchor=Math.cos(a)>0.25?'start':Math.cos(a)<-0.25?'end':'middle';
+        return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="rgba(232,232,232,0.16)" /><circle cx="${x}" cy="${y}" r="2.5" fill="rgba(232,232,232,0.35)" /><text x="${tx}" y="${ty}" fill="#e8e8e8" font-size="12.5" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>`;
+      }).join('');
+      return `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Radar chart"><defs><filter id="radar-glow"><feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur><feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter></defs>${grid}${axes}<circle cx="${center}" cy="${center}" r="3" fill="rgba(255,255,255,0.35)" /><polygon points="${polygon}" fill="rgba(212,88,10,0.16)" stroke="#D4580A" stroke-width="2.5" filter="url(#radar-glow)" />${points.map(([x,y],i)=>`<g><circle cx="${x}" cy="${y}" r="6" fill="rgba(10,10,10,0.9)" stroke="${SCORE_META[i][2]}" stroke-width="2" /><circle cx="${x}" cy="${y}" r="2.5" fill="${SCORE_META[i][2]}" /></g>`).join('')}</svg>`;
+    }
+
+
+    function renderScoreBars(scores) {
+      return SCORE_META.map(([key,label])=>{
+        const v=Number(scores?.[key]?.score||0), w=`${Math.max(0,Math.min(100,v*10))}%`;
+        const tone=v>=8?'High conviction':v>=6?'Constructive':v>=4?'Mixed setup':'Fragile';
+        return `<div class="score-row"><div class="score-label"><strong>${label}</strong><span>${tone}</span></div><div class="bar"><span style="--target-width:${w}; background:${barColor(v)}"></span></div><div class="score-value">${v.toFixed(1)}/10</div></div>`;
+      }).join('');
+    }
+
+    function metricRows(raw) {
+      const mp = raw?.market?.current_price ?? raw?.market?.price ?? raw?.market?.price_usd;
+      const rows = [
+        ['Price','price',mp,null],
+        ['Market cap','market_cap',raw?.market?.market_cap,null],
+        ['24h volume','total_volume',raw?.market?.total_volume,null],
+        ['FDV','fdv',raw?.market?.fully_diluted_valuation ?? raw?.market?.fdv,null],
+        ['TVL','tvl',raw?.onchain?.tvl,null],
+        ['7d TVL %','tvl_change_7d',raw?.onchain?.tvl_change_7d,'change'],
+        ['30d TVL %','tvl_change_30d',raw?.onchain?.tvl_change_30d,'change'],
+        ['Fees 7d','fees_7d',raw?.onchain?.fees_7d,null],
+        ['Revenue 7d','revenue_7d',raw?.onchain?.revenue_7d,null],
+        ['Mentions','mentions',raw?.social?.mentions,null],
+        ['Commits 90d','commits_90d',raw?.github?.commits_90d,null],
+        ['Contributors','contributors',raw?.github?.contributors,null],
+        ['Pct circulating','pct_circulating',raw?.tokenomics?.pct_circulating,null],
+        ['Inflation rate','inflation_rate',raw?.tokenomics?.inflation_rate,null],
+      ];
+      return rows.filter(([,,value])=> value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a').map(([label,key,value,type])=>{
+        const cls=type==='change'?` class="${changeClass(value)}"`:''
+        return `<tr><th>${escapeHtml(label)}</th><td data-label="${escapeHtml(label)}"${cls}>${escapeHtml(formatMetricValue(label,key,value))}</td></tr>`;
+      }).join('');
+    }
+
+    function renderGithubCard(github) {
+      if (!github||github.error) return '';
+      const lang=github.language?`<span class="lang-badge">${escapeHtml(github.language)}</span>`:'';
+      const desc=github.description?`<p class="github-desc">${escapeHtml(github.description)}</p>`:'';
+      const lic=github.license?`<span class="license-badge">${escapeHtml(github.license)}</span>`:'';
+      const url=github.repo_url?`<a href="${escapeHtml(github.repo_url)}" target="_blank" rel="noopener" class="repo-link">↗ View Repo</a>`:'';
+      return `<div class="github-card"><div class="github-card-header"><span class="github-icon">⌥</span><span class="github-title">Repository</span>${url}</div>${desc}<div class="github-badges">${lang}${lic}${github.stars!=null?`<span class="stat-badge">★ ${Number(github.stars).toLocaleString()}</span>`:''} ${github.watchers!=null?`<span class="stat-badge">👁 ${Number(github.watchers).toLocaleString()}</span>`:''}</div></div>`;
+    }
+
+    function renderList(items, fallback='n/a') {
+      if (!Array.isArray(items)||!items.length) return `<li>${escapeHtml(fallback)}</li>`;
+      return items.map(i=>`<li>${escapeHtml(i)}</li>`).join('');
+    }
+
+    function renderReport(payload) {
+      const verdict   = payload?.verdict || 'HOLD';
+      const raw       = payload?.raw_data || {};
+      const analysis  = payload?.llm_analysis || {};
+      const scores    = payload?.scores || {};
+      const cache     = payload?.cache || {};
+      const avgScore  = overallScore(scores);
+
+      resultsSection.classList.add('visible');
+      errorBox.classList.add('hidden');
+      reportBox.classList.remove('hidden');
+      // Trigger smooth reveal animation (Round 2)
+      reportBox.classList.add('results-reveal');
+
+      reportBox.innerHTML = `
+        <div class="grid">
+          <section class="panel">
+            <div class="header-row">
+              <div>
+                <div class="footnote">${escapeHtml(payload?.mode||'full')} scan</div>
+                <h1 class="project-name">${escapeHtml(payload?.project_name||'Unknown')}</h1>
+              </div>
+              <div class="verdict-wrap">
+                <div class="verdict-meta">Research verdict</div>
+                <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
+                <div class="overall-score ${verdictClass(verdict)}">${avgScore!==null?`${avgScore.toFixed(1)}/10`:'n/a'}</div>
+              </div>
+            </div>
+            <p class="analysis">${escapeHtml(analysis.analysis_text||'No analysis available.')}</p>
+            <div class="mini-grid">
+              <div class="card moat"><h3>🛡 Moat</h3><div>${escapeHtml(analysis.moat||'n/a')}</div></div>
+              <div class="card risks"><h3>⚠ Risks</h3><ul>${renderList(analysis.risks)}</ul></div>
+              <div class="card catalysts"><h3>🚀 Catalysts</h3><ul>${renderList(analysis.catalysts)}</ul></div>
+            </div>
+          </section>
+          <section class="panel radar-panel">
+            <div class="section-label">Score Radar</div>
+            ${renderRadar(scores)}
+            <div class="score-list">${renderScoreBars(scores)}</div>
+          </section>
+        </div>
+
+        ${(()=>{const mr=metricRows(raw);const gc=renderGithubCard(raw?.github);return(mr||gc)?`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">Market Board</div>
+          ${mr?`<table class="table"><tbody>${mr}</tbody></table>`:''}
+          ${gc}
+        </section>`:''})()}
+
+        ${analysis.x_sentiment_summary&&analysis.x_sentiment_summary!=='n/a'?`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">X Sentiment</div>
+          <p class="analysis">${escapeHtml(analysis.x_sentiment_summary)}</p>
+        </section>`:''}
+
+        ${analysis.competitor_comparison&&analysis.competitor_comparison!=='n/a'?`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">Competitor Comparison</div>
+          <p class="analysis">${escapeHtml(analysis.competitor_comparison)}</p>
+        </section>`:''}
+
+        ${analysis.key_findings&&analysis.key_findings.length?`<section class="panel" style="margin-top:18px;">
+          <div class="section-label">Key Findings</div>
+          <ul>${renderList(analysis.key_findings)}</ul>
+        </section>`:''}
+
+        <section class="panel" style="margin-top:18px;">
+          <div class="footer-row">
+            <div class="footnote">Generated: ${escapeHtml(payload?.generated_at||'n/a')}</div>
+            <div class="footnote">Cache: ${cache.hit?'HIT':'MISS'} · age ${escapeHtml(formatDuration(cache.age_ms))} · ttl ${escapeHtml(formatDuration(cache.ttl_ms))}</div>
+          </div>
+          <div class="footnote" style="margin-top:8px;">Powered by Grok 4.20 MultiAgent + CoinGecko + DeFiLlama</div>
+        </section>
+      `;
+
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function showError(msg, hint) {
+      resultsSection.classList.add('visible');
+      errorBox.classList.remove('hidden');
+      const hintHtml = hint ? `<div style="margin-top:8px;font-size:0.82rem;color:var(--muted);">${escapeHtml(hint)}</div>` : '';
+      const quickHtml = `<div style="margin-top:12px;font-size:0.82rem;">
+        <a href="#" id="errorQuickLink" style="color:var(--buy);text-decoration:underline;">Try free quick scan instead →</a>
+      </div>`;
+      errorBox.innerHTML = `<div class="error"><strong>⚠ Scan failed:</strong> ${escapeHtml(msg)}${hintHtml}${quickHtml}</div>`;
+      document.getElementById('errorQuickLink')?.addEventListener('click', e => { e.preventDefault(); runScan('quick'); });
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function clearError() {
+      errorBox.classList.add('hidden');
+      errorBox.innerHTML = '';
+    }
+
+    // ── Round 4: Enhanced user-friendly error messages ───────────────
+    function userFriendlyError(err) {
+      const msg = err?.message || String(err || 'Unknown error');
+      const code = err?.code;
+      // User rejected wallet transaction
+      if (code === 4001 || msg.includes('User rejected') || msg.includes('user rejected')) {
+        return ['Payment cancelled', 'You cancelled the transaction. You can try again or use Quick Scan (free).'];
+      }
+      // Wrong network
+      if (msg.includes('chain') || msg.includes('network') || msg.includes('4902')) {
+        return ['Wrong network', 'Please switch to Base Mainnet in your wallet and try again.'];
+      }
+      // Insufficient funds
+      if (msg.includes('insufficient') || msg.includes('INSUFFICIENT')) {
+        return ['Insufficient USDC balance', 'You need at least $1.00 USDC on Base to run a full scan. Try the free Quick Scan instead.'];
+      }
+      // Network / offline
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_CONNECTION_REFUSED') || msg.includes('net::ERR')) {
+        return ['Network error — server may be offline', 'Check your internet connection and try again in a few seconds.'];
+      }
+      // Timeout
+      if (msg.includes('timeout') || msg.includes('Timeout') || msg.includes('AbortError')) {
+        return ['Request timed out', 'The analysis took too long. Try again or use Quick Scan (free) — it\'s faster.'];
+      }
+      // Rate limit
+      if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many')) {
+        return ['Rate limit reached', 'You\'ve sent too many requests. Wait 60 seconds and try again.'];
+      }
+      // Server error
+      if (msg.includes('500') || msg.includes('503') || msg.includes('Internal') || msg.includes('Service Unavailable')) {
+        return ['Server error', 'Something went wrong on our end. Usually temporary — try again in 30 seconds.'];
+      }
+      // Payment verification failed
+      if (msg.includes('Payment verification') || msg.includes('pay-verify') || msg.includes('transaction')) {
+        return ['Payment verification failed', 'Your payment went through but we couldn\'t verify it. Contact us with your transaction hash.'];
+      }
+      // No wallet
+      if (msg.includes('No wallet') || msg.includes('window.ethereum') || msg.includes('MetaMask')) {
+        return ['No wallet detected', 'Install MetaMask or Coinbase Wallet to pay $1 USDC. Or use the free Quick Scan.'];
+      }
+      // Project not found
+      if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('no data')) {
+        return ['Project not found', 'We couldn\'t find data for this project. Try a different name, ticker symbol, or contract address.'];
+      }
+      // Invalid input
+      if (msg.includes('400') || msg.includes('Bad request') || msg.includes('invalid')) {
+        return ['Invalid input', 'Check your project name or contract address and try again.'];
+      }
+      return [msg, null];
+    }
+
+    // ── DexScreener Autocomplete ──────────────────────────────────────
+    let dexDebounceTimer = null;
+    let dexActiveIndex = -1;
+    let dexItems = [];
+
+    function symbolColor(symbol) {
+      let hash = 0;
+      for (const c of symbol) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
+      const hue = Math.abs(hash) % 360;
+      return `hsl(${hue},55%,55%)`;
+    }
+
+    function renderDexItems(pairs) {
+      if (!pairs || !pairs.length) {
+        dexDropdown.innerHTML = '<div class="dex-empty">No tokens found</div>';
+        dexDropdown.classList.add('open');
+        dexItems = [];
+        return;
+      }
+
+      const bySymbol = new Map();
+      for (const pair of pairs) {
+        const sym = pair.baseToken?.symbol?.toUpperCase();
+        if (!sym) continue;
+        const liq = Number(pair.liquidity?.usd || 0);
+        if (!bySymbol.has(sym) || liq > bySymbol.get(sym)._liq) {
+          bySymbol.set(sym, { ...pair, _liq: liq });
+        }
+      }
+
+      dexItems = Array.from(bySymbol.values()).slice(0, 8);
+      dexActiveIndex = -1;
+
+      dexDropdown.innerHTML = dexItems.map((pair, idx) => {
+        const sym     = escapeHtml(pair.baseToken?.symbol || '?');
+        const name    = escapeHtml(pair.baseToken?.name || '');
+        const chain   = escapeHtml(pair.chainId || '');
+        const price   = formatDexPrice(pair.priceUsd);
+        const vol     = formatDexVol(pair.volume?.h24);
+        const imgUrl  = pair.info?.imageUrl;
+        const color   = symbolColor(sym);
+
+        const logo = imgUrl
+          ? `<img class="dex-logo" src="${escapeHtml(imgUrl)}" alt="${sym}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const fallback = `<div class="dex-logo-fallback" style="${imgUrl ? 'display:none' : ''};color:${color};border-color:${color}33">${sym.charAt(0)}</div>`;
+
+        return `<div class="dex-item" role="option" data-index="${idx}" data-name="${escapeHtml(pair.baseToken?.name||sym)}">
+          ${logo}${fallback}
+          <div class="dex-info">
+            <div class="dex-symbol">${sym}<span class="dex-chain">${chain}</span></div>
+            <div class="dex-name">${name}</div>
+          </div>
+          <div class="dex-price">
+            ${price ? `<div class="dex-price-val">${price}</div>` : ''}
+            ${vol   ? `<div class="dex-vol">${vol}</div>`         : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      dexDropdown.classList.add('open');
+
+      dexDropdown.querySelectorAll('.dex-item').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          const name = el.dataset.name;
+          input.value = name;
+          closeDexDropdown();
+        });
+      });
+    }
+
+    function closeDexDropdown() {
+      dexDropdown.classList.remove('open');
+      dexItems = [];
+      dexActiveIndex = -1;
+    }
+
+    function highlightDexItem(idx) {
+      dexDropdown.querySelectorAll('.dex-item').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+      });
+    }
+
+    async function fetchDexSuggestions(query) {
+      if (!query || query.length < 2) { closeDexDropdown(); return; }
+      try {
+        dexDropdown.innerHTML = '<div class="dex-loading">Searching...</div>';
+        dexDropdown.classList.add('open');
+
+        // Use our server proxy (handles CoinGecko + DexScreener fallback)
+        var res = await fetch('/search?q=' + encodeURIComponent(query));
+        if (!res.ok) { closeDexDropdown(); return; }
+        var data = await res.json();
+        
+        if (data.coins && data.coins.length > 0) {
+          renderCoinGeckoItems(data.coins);
+        } else if (data.pairs && data.pairs.length > 0) {
+          renderDexItems(data.pairs);
+        } else {
+          dexDropdown.innerHTML = '<div class="dex-empty">No tokens found</div>';
+        }
+      } catch (e) {
+        closeDexDropdown();
+      }
+    }
+
+    function renderCoinGeckoItems(coins) {
+      if (!coins || !coins.length) {
+        dexDropdown.innerHTML = '<div class="dex-empty">No tokens found</div>';
+        dexDropdown.classList.add('open');
+        dexItems = [];
+        return;
+      }
+      dexItems = coins;
+      dexActiveIndex = -1;
+      dexDropdown.innerHTML = coins.map((coin, idx) => {
+        const sym = escapeHtml((coin.symbol || '?').toUpperCase());
+        const name = escapeHtml(coin.name || '');
+        const rank = coin.market_cap_rank ? `#${coin.market_cap_rank}` : '';
+        const imgUrl = coin.thumb || coin.small;
+        const color = symbolColor(sym);
+        const logo = imgUrl
+          ? `<img class="dex-logo" src="${escapeHtml(imgUrl)}" alt="${sym}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          : '';
+        const fallback = `<div class="dex-logo-fallback" style="${imgUrl ? 'display:none' : ''};color:${color};border-color:${color}33">${sym.charAt(0)}</div>`;
+        return `<div class="dex-item" role="option" data-index="${idx}" data-name="${escapeHtml(coin.name||sym)}">
+          ${logo}${fallback}
+          <div class="dex-info">
+            <div class="dex-symbol">${sym}${rank ? `<span class="dex-chain">${rank}</span>` : ''}</div>
+            <div class="dex-name">${name}</div>
+          </div>
+        </div>`;
+      }).join('');
+      dexDropdown.classList.add('open');
+      dexDropdown.querySelectorAll('.dex-item').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          input.value = el.dataset.name;
+          closeDexDropdown();
+        });
+      });
+    }
+
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      clearTimeout(dexDebounceTimer);
+      if (!val || val.length < 2) { closeDexDropdown(); return; }
+      dexDebounceTimer = setTimeout(() => fetchDexSuggestions(val), 300);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (!dexDropdown.classList.contains('open')) return;
+      const items = dexDropdown.querySelectorAll('.dex-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        dexActiveIndex = Math.min(dexActiveIndex + 1, items.length - 1);
+        highlightDexItem(dexActiveIndex);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        dexActiveIndex = Math.max(dexActiveIndex - 1, -1);
+        highlightDexItem(dexActiveIndex);
+      } else if (e.key === 'Enter' && dexActiveIndex >= 0) {
+        e.preventDefault();
+        const name = items[dexActiveIndex]?.dataset?.name;
+        if (name) { input.value = name; closeDexDropdown(); }
+      } else if (e.key === 'Escape') {
+        closeDexDropdown();
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.input-wrap')) closeDexDropdown();
+    });
+
+    input.addEventListener('focus', () => {
+      const val = input.value.trim();
+      if (val.length >= 2) fetchDexSuggestions(val);
+    });
+
+    // ── Payment flow (Base Mainnet USDC) ──────────────────────────────
+    const BASE_CHAIN_ID  = '0x2105';
+    const USDC_BASE      = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+    const PAY_TO         = '0x4bDE6B11Df6C0F0f5351e6fB0E7Bdc40eAa0cb4D';
+    const PAYMENT_AMOUNT = '1000000'; // $1.00 USDC (6 decimals)
+
+    async function switchToBase() {
+      try {
+        await window.ethereum.request({ method:'wallet_switchEthereumChain', params:[{chainId:BASE_CHAIN_ID}] });
+      } catch(e) {
+        if (e.code === 4902) {
+          await window.ethereum.request({ method:'wallet_addEthereumChain', params:[{
+            chainId:BASE_CHAIN_ID, chainName:'Base',
+            nativeCurrency:{name:'ETH',symbol:'ETH',decimals:18},
+            rpcUrls:['https://mainnet.base.org'], blockExplorerUrls:['https://basescan.org']
+          }]});
+        } else throw e;
+      }
+    }
+
+    async function sendUSDCPayment() {
+      if (!window.ethereum) throw new Error('No wallet detected. Install MetaMask or Coinbase Wallet.');
+      const accounts = await window.ethereum.request({method:'eth_requestAccounts'});
+      const from = accounts[0];
+      await switchToBase();
+      const transferData = '0xa9059cbb' + PAY_TO.slice(2).padStart(64,'0') + BigInt(PAYMENT_AMOUNT).toString(16).padStart(64,'0');
+      return await window.ethereum.request({ method:'eth_sendTransaction', params:[{from, to:USDC_BASE, data:transferData, value:'0x0'}] });
+    }
+
+    function removePaymentModal() {
+      document.querySelector('.payment-overlay')?.remove();
+    }
+
+    function showPaymentModal(project, onSuccess) {
+      removePaymentModal();
+      const overlay = document.createElement('div');
+      overlay.className = 'payment-overlay';
+      overlay.setAttribute('role', 'presentation');
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) removePaymentModal(); });
+      overlay.innerHTML = `
+        <div class="payment-card" role="dialog" aria-modal="true" aria-labelledby="pay-title">
+          <div class="payment-title" id="pay-title">🔒 Full Scan</div>
+          <div class="payment-sub">One-time payment · No account required · Instant analysis</div>
+          <div class="payment-row"><span>Project</span><span style="color:var(--text);font-weight:600;">${escapeHtml(project)}</span></div>
+          <div class="payment-row"><span>Price</span><span style="color:#D4580A;font-weight:700;">$1.00 USDC</span></div>
+          <div class="payment-row"><span>Network</span><span><span class="network-badge">Base Mainnet</span></span></div>
+          <div class="payment-row"><span>What you get</span><span style="font-size:0.8rem;">5 sources · Grok 4.20 MultiAgent · BUY/HOLD/AVOID</span></div>
+          <div class="payment-error" id="payError" style="display:none;"></div>
+          <button class="pay-btn" id="payBtn">Connect Wallet &amp; Pay $1.00</button>
+          <button class="pay-cancel" id="payCancelBtn">Cancel — use free quick scan instead</button>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      document.getElementById('payCancelBtn').onclick = () => removePaymentModal();
+
+      const focusable = overlay.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])');
+      const firstFocus = focusable[0];
+      const lastFocus  = focusable[focusable.length - 1];
+      firstFocus?.focus();
+      overlay.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+          if (e.shiftKey) { if (document.activeElement === firstFocus) { e.preventDefault(); lastFocus?.focus(); } }
+          else            { if (document.activeElement === lastFocus)  { e.preventDefault(); firstFocus?.focus(); } }
+        }
+        if (e.key === 'Escape') removePaymentModal();
+      });
+
+      document.getElementById('payBtn').onclick = async () => {
+        const btn = document.getElementById('payBtn');
+        const errEl = document.getElementById('payError');
+        errEl.style.display = 'none';
+        btn.textContent = 'Connecting wallet...';
+        btn.disabled = true;
+        try {
+          btn.textContent = 'Confirm in wallet...';
+          const txHash = await sendUSDCPayment();
+          if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+            throw new Error('Invalid transaction hash received from wallet.');
+          }
+          btn.textContent = 'Verifying payment...';
+          await new Promise(r => setTimeout(r, 5000));
+          const safeProject = String(project).slice(0, 100);
+          const response = await fetch('/alpha/pay-verify', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ txHash, project: safeProject })
+          });
+          if (!response.ok) { const e = await response.json(); throw new Error(e.error||'Payment verification failed'); }
+          const result = await response.json();
+          removePaymentModal();
+          onSuccess(result);
+        } catch(e) {
+          btn.textContent = 'Connect Wallet & Pay $1.00';
+          btn.disabled = false;
+          errEl.textContent = e.code === 4001 ? 'Transaction cancelled.' : (e.message || 'Payment failed');
+          errEl.style.display = 'block';
+        }
+      };
+    }
+
+    // ── Main scan function ────────────────────────────────────────────
+    async function runScan(mode = 'full') {
+      clearError();
+      reportBox.classList.add('hidden');
+      closeDexDropdown();
+      const project = input.value.trim();
+      if (!project) {
+        showError('Enter a project name or contract address.', 'Example: solana, aave, uniswap, or paste a 0x… address');
+        return;
+      }
+      if (project.length > 100) {
+        showError('Project name too long', 'Please enter a shorter name or a valid contract address.');
+        return;
+      }
+
+      if (mode === 'quick') {
+        setLoading(true, mode);
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          let res;
+          try {
+            res = await fetch(`/alpha/quick?project=${encodeURIComponent(project)}`, { signal: controller.signal });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload?.error || `Server error (${res.status})`);
+          renderReport(payload);
+          history.replaceState({}, '', `/?project=${encodeURIComponent(project)}&mode=quick`);
+        } catch(err) {
+          const [msg, hint] = err.name === 'AbortError'
+            ? ['Request timed out', 'The quick scan took too long. Try again.']
+            : userFriendlyError(err);
+          showError(msg, hint);
+        } finally {
+          setLoading(false, mode);
+        }
+      } else {
+        // Bypass payment if API key is in URL
+        var urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+          setLoading(true, mode);
+          try {
+            var controller2 = new AbortController();
+            var tid2 = setTimeout(function() { controller2.abort(); }, 90000);
+            var res2;
+            try {
+              res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey), { signal: controller2.signal });
+            } finally { clearTimeout(tid2); }
+            var payload2 = await res2.json();
+            if (!res2.ok) throw new Error(payload2?.error || 'Server error (' + res2.status + ')');
+            renderReport(payload2);
+          } catch(err2) {
+            var pair2 = err2.name === 'AbortError' ? ['Request timed out', 'Full scan took too long.'] : userFriendlyError(err2);
+            showError(pair2[0], pair2[1]);
+          } finally { setLoading(false, mode); }
+        } else {
+          showPaymentModal(project, (result) => {
+            renderReport(result);
+            history.replaceState({}, '', '/?project=' + encodeURIComponent(project) + '&mode=full');
+          });
+        }
+      }
+    }
+
+    form.addEventListener('submit', e => { e.preventDefault(); runScan('full'); });
+    quickLink.addEventListener('click', e => { e.preventDefault(); runScan('quick'); });
+
+    // Auto-run from URL params
+    const params = new URLSearchParams(location.search);
+    const initProject = params.get('project');
+    if (initProject) {
+      input.value = initProject;
+      runScan(params.get('mode') === 'quick' ? 'quick' : 'full');
+    }
+  
+    // ── Round 5: Consolidated IntersectionObserver (removed duplicate) ──
+    const fadeObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            // Unobserve after reveal to save memory
+            fadeObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.10, rootMargin: '0px 0px -30px 0px' }
+    );
+    document.querySelectorAll('.scanner-fade-in, .fade-in:not(.visible)').forEach(el => fadeObserver.observe(el));
+
+    // ── Live stats: fetch /api/health ────────────────────────────────
+    (async () => {
+      try {
+        const res = await fetch('/api/health');
+        if (!res.ok) return;
+        const data = await res.json();
+        const count = data?.stats?.total_scans ?? data?.total_scans ?? data?.scans ?? null;
+        if (count !== null && count !== undefined) {
+          const el = document.getElementById('stat-projects-scan');
+          if (el) el.textContent = Number(count).toLocaleString();
+        }
+      } catch (_) {
+        // silently fail — stat is decorative
+      }
+    })();
+
+  </script>
+</body>
+</html>

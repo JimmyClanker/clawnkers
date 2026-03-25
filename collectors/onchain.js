@@ -17,6 +17,9 @@ function createEmptyOnchainResult(projectName) {
     category: null,
     fees_7d: null,
     revenue_7d: null,
+    // Round 4: revenue/fees ratio + treasury
+    revenue_to_fees_ratio: null,
+    treasury_balance: null,
     error: null,
   };
 }
@@ -173,6 +176,10 @@ export async function collectOnchain(projectName) {
         revenue7d = feeTotals?.revenue ?? null;
       } catch {}
 
+      const chainRevenueToFees = (revenue7d != null && fees7d != null && fees7d > 0)
+        ? revenue7d / fees7d
+        : null;
+
       return {
         ...fallback,
         slug: chainResult.slug,
@@ -183,6 +190,8 @@ export async function collectOnchain(projectName) {
         category: chainResult.category,
         fees_7d: fees7d,
         revenue_7d: revenue7d,
+        revenue_to_fees_ratio: chainRevenueToFees,
+        treasury_balance: null,
         error: null,
       };
     }
@@ -219,6 +228,28 @@ export async function collectOnchain(projectName) {
     const tvl30dAgo = getClosestHistoricalTvl(tvlHistory, 30);
     const feeTotals = sumLastNDays(fees?.totalDataChart || fees?.data || [], 7);
 
+    const fees7d = feeTotals?.fees ?? (fees?.total24h ? Number(fees.total24h) * 7 : null);
+    const revenue7d = feeTotals?.revenue ?? null;
+    const revenueToFeesRatio = (revenue7d != null && fees7d != null && fees7d > 0)
+      ? revenue7d / fees7d
+      : null;
+
+    // Round 4: treasury from DeFiLlama protocol data
+    let treasuryBalance = null;
+    if (protocol) {
+      const treasury = protocol?.treasury;
+      const ownTokens = protocol?.ownTokens;
+      if (typeof treasury === 'number') {
+        treasuryBalance = treasury;
+      } else if (typeof ownTokens === 'number') {
+        treasuryBalance = ownTokens;
+      } else if (treasury && typeof treasury === 'object') {
+        // Sometimes it's an object with token holdings — sum numeric values
+        const sum = Object.values(treasury).reduce((acc, val) => acc + (Number(val) || 0), 0);
+        if (sum > 0) treasuryBalance = sum;
+      }
+    }
+
     return {
       ...fallback,
       slug,
@@ -227,8 +258,10 @@ export async function collectOnchain(projectName) {
       tvl_change_30d: computePctChange(currentTvl, tvl30dAgo),
       chains: protocol?.chains || match.protocol?.chains || [],
       category: protocol?.category || match.protocol?.category || null,
-      fees_7d: feeTotals?.fees ?? (fees?.total24h ? Number(fees.total24h) * 7 : null),
-      revenue_7d: feeTotals?.revenue ?? null,
+      fees_7d: fees7d,
+      revenue_7d: revenue7d,
+      revenue_to_fees_ratio: revenueToFeesRatio,
+      treasury_balance: treasuryBalance,
       error: null,
     };
   } catch (error) {

@@ -16,16 +16,52 @@ function renderScoreLine(label, payload) {
   return `${label}: ${payload?.score ?? 'n/a'}/10 — ${payload?.reasoning || 'n/a'}`;
 }
 
+function fmtNumber(value, decimals = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return 'n/a';
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(decimals)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(decimals)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(decimals)}K`;
+  return `$${n.toFixed(decimals)}`;
+}
+
+function extractKeyMetrics(rawData, scores) {
+  const market = rawData?.market ?? {};
+  const onchain = rawData?.onchain ?? {};
+
+  const price = Number(market.current_price ?? market.price ?? 0);
+  const marketCap = Number(market.market_cap ?? 0);
+  const tvl = Number(onchain.tvl ?? 0);
+  const volume24h = Number(market.total_volume ?? market.volume_24h ?? 0);
+  const overallScore = Number(scores?.overall?.score ?? 0);
+
+  return {
+    price: price > 0 ? price : null,
+    market_cap: marketCap > 0 ? marketCap : null,
+    tvl: tvl > 0 ? tvl : null,
+    volume_24h: volume24h > 0 ? volume24h : null,
+    overall_score: overallScore,
+    price_fmt: price > 0 ? fmtNumber(price, price < 0.01 ? 6 : price < 1 ? 4 : 2) : 'n/a',
+    market_cap_fmt: marketCap > 0 ? fmtNumber(marketCap) : 'n/a',
+    tvl_fmt: tvl > 0 ? fmtNumber(tvl) : 'n/a',
+    volume_24h_fmt: volume24h > 0 ? fmtNumber(volume24h) : 'n/a',
+    overall_score_fmt: `${overallScore.toFixed(1)}/10`,
+  };
+}
+
 export function formatReport(projectName, rawData, scores, llmAnalysis) {
   const collectors = rawData?.metadata?.collectors || {};
   const failedCollectors = Object.entries(collectors)
     .filter(([, payload]) => payload?.ok === false || payload?.error)
     .map(([name, payload]) => `${name}: ${payload?.error || 'unknown error'}`);
 
+  const keyMetrics = extractKeyMetrics(rawData, scores);
+
   const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
     verdict: llmAnalysis?.verdict || 'HOLD',
+    key_metrics: keyMetrics,
     scores,
     llm_analysis: llmAnalysis,
     raw_data: rawData,
@@ -37,6 +73,13 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
     `🕒 Generated at: ${json.generated_at}`,
     `🧩 Data completeness: ${scores?.overall?.completeness ?? 'n/a'}%`,
     `🧪 Collector failures: ${failedCollectors.length ? failedCollectors.join(' | ') : 'none'}`,
+    '',
+    '💎 Key Metrics',
+    `- Price: ${keyMetrics.price_fmt}`,
+    `- Market Cap: ${keyMetrics.market_cap_fmt}`,
+    `- TVL: ${keyMetrics.tvl_fmt}`,
+    `- 24h Volume: ${keyMetrics.volume_24h_fmt}`,
+    `- Overall Score: ${keyMetrics.overall_score_fmt}`,
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -82,6 +125,32 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
           <div style="margin-top:10px;color:#ffd3b6;">Collector failures: ${escapeHtml(failedCollectors.length ? failedCollectors.join(' | ') : 'none')}</div>
         </div>
       </header>
+
+      <section style="margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.03);border:1px dashed rgba(181,199,211,0.28);border-radius:18px;">
+        <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 12px;color:#ffd3b6;">💎 Key Metrics</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Price</div>
+            <div style="font-size:18px;font-weight:700;color:#e8e8e8;">${escapeHtml(keyMetrics.price_fmt)}</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Market Cap</div>
+            <div style="font-size:18px;font-weight:700;color:#e8e8e8;">${escapeHtml(keyMetrics.market_cap_fmt)}</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">TVL</div>
+            <div style="font-size:18px;font-weight:700;color:#e8e8e8;">${escapeHtml(keyMetrics.tvl_fmt)}</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">24h Volume</div>
+            <div style="font-size:18px;font-weight:700;color:#e8e8e8;">${escapeHtml(keyMetrics.volume_24h_fmt)}</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Overall Score</div>
+            <div style="font-size:18px;font-weight:700;color:#a8e6cf;">${escapeHtml(keyMetrics.overall_score_fmt)}</div>
+          </div>
+        </div>
+      </section>
 
       <section style="margin-bottom:20px;">
         <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 10px;color:#b5c7d3;">📊 Scores</h2>

@@ -13,6 +13,19 @@ function createEmptyGithubResult(projectName) {
     last_commit: null,
     contributors: null,
     commits_90d: null,
+    // Commit trend: 'accelerating' | 'decelerating' | 'stable' | null
+    commit_trend: null,
+    // Commits in recent 30d vs prior 30d (within the 90d window)
+    commits_30d: null,
+    commits_30d_prev: null,
+    // Additional fields for LLM/scoring context
+    language: null,
+    description: null,
+    license: null,
+    watchers: null,
+    // Round 6: language breakdown + dependency count
+    languages: {},
+    dependency_count: null,
     error: null,
   };
 }
@@ -107,10 +120,12 @@ export async function collectGithub(projectName) {
       repo = topRepo.name;
     }
 
-    const [repoInfo, commitsInfo, contributorsInfo] = await Promise.allSettled([
+    const [repoInfo, commitsInfo, contributorsInfo, languagesInfo, packageJsonInfo] = await Promise.allSettled([
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}`),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=1`),
       fetchContributorStats(owner, repo),
+      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/languages`),
+      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/package.json`),
     ]);
 
     const repoData = repoInfo.status === 'fulfilled' ? repoInfo.value.data : topRepo;
@@ -118,12 +133,57 @@ export async function collectGithub(projectName) {
     const commitsHeader = commitsInfo.status === 'fulfilled' ? commitsInfo.value.headers.get('link') : null;
     const contributorStats = contributorsInfo.status === 'fulfilled' ? contributorsInfo.value.data : [];
 
-    const commits90d = Array.isArray(contributorStats)
-      ? contributorStats.reduce((sum, contributor) => {
-          const weeks = Array.isArray(contributor?.weeks) ? contributor.weeks.slice(-13) : [];
-          return sum + weeks.reduce((weekSum, week) => weekSum + Number(week?.c || 0), 0);
-        }, 0)
-      : null;
+    // Round 6: language breakdown
+    const languagesData = languagesInfo.status === 'fulfilled' ? (languagesInfo.value.data || {}) : {};
+
+    // Round 6: dependency count from package.json (if present)
+    let dependencyCount = null;
+    if (packageJsonInfo.status === 'fulfilled') {
+      try {
+        const fileContent = packageJsonInfo.value.data;
+        // GitHub API returns base64-encoded content
+        const decoded = Buffer.from(fileContent?.content || '', 'base64').toString('utf-8');
+        const pkg = JSON.parse(decoded);
+        const deps = Object.keys(pkg?.dependencies || {}).length;
+        const devDeps = Object.keys(pkg?.devDependencies || {}).length;
+        dependencyCount = deps + devDeps;
+      } catch {
+        dependencyCount = null;
+      }
+    }
+
+    // Compute commit stats from weekly contributor data (13 weeks = ~91 days)
+    let commits90d = null;
+    let commits30d = null;
+    let commits30dPrev = null;
+    let commitTrend = null;
+
+    if (Array.isArray(contributorStats) && contributorStats.length > 0) {
+      // Last 13 weeks (~90d), split into recent 4w vs prior 4w for trend
+      const allWeeklyCommits = new Array(13).fill(0);
+      for (const contributor of contributorStats) {
+        const weeks = Array.isArray(contributor?.weeks) ? contributor.weeks.slice(-13) : [];
+        for (let i = 0; i < weeks.length; i++) {
+          allWeeklyCommits[i] += Number(weeks[i]?.c || 0);
+        }
+      }
+      commits90d = allWeeklyCommits.reduce((s, c) => s + c, 0);
+      // Recent 4 weeks (last ~30d)
+      commits30d = allWeeklyCommits.slice(-4).reduce((s, c) => s + c, 0);
+      // Prior 4 weeks (weeks 5-8 from end)
+      commits30dPrev = allWeeklyCommits.slice(-8, -4).reduce((s, c) => s + c, 0);
+      // Trend classification
+      if (commits30dPrev > 0) {
+        const changeRatio = commits30d / commits30dPrev;
+        if (changeRatio >= 1.3) commitTrend = 'accelerating';
+        else if (changeRatio <= 0.7) commitTrend = 'decelerating';
+        else commitTrend = 'stable';
+      } else if (commits30d > 0) {
+        commitTrend = 'accelerating'; // Started from zero
+      } else {
+        commitTrend = 'inactive';
+      }
+    }
 
     return {
       ...fallback,
@@ -141,6 +201,15 @@ export async function collectGithub(projectName) {
         : null,
       contributors: Array.isArray(contributorStats) ? contributorStats.length : null,
       commits_90d: commits90d,
+      commit_trend: commitTrend,
+      commits_30d: commits30d,
+      commits_30d_prev: commits30dPrev,
+      language: repoData?.language || topRepo?.language || null,
+      description: repoData?.description || topRepo?.description || null,
+      license: repoData?.license?.spdx_id || repoData?.license?.name || null,
+      watchers: repoData?.watchers_count ?? null,
+      languages: languagesData,
+      dependency_count: dependencyCount,
       error: null,
     };
   } catch (error) {

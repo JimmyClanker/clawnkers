@@ -1,12 +1,38 @@
-const BULLISH_KEYWORDS = ['bullish', 'breakout', 'surge', 'growth', 'adoption', 'upside', 'momentum', 'accumulate', 'outperform'];
-const BEARISH_KEYWORDS = ['bearish', 'selloff', 'dump', 'decline', 'risk', 'downside', 'lawsuit', 'exploit', 'headwinds'];
+const BULLISH_KEYWORDS = [
+  'bullish', 'breakout', 'surge', 'growth', 'adoption', 'upside', 'momentum',
+  'accumulate', 'outperform', 'partnership', 'launch', 'integration', 'staking',
+  'airdrop', 'undervalued', 'gem', 'opportunity', 'rally', 'ath',
+];
+const BEARISH_KEYWORDS = [
+  'bearish', 'selloff', 'dump', 'decline', 'risk', 'downside', 'lawsuit',
+  'exploit', 'headwinds', 'rug', 'scam', 'hack', 'depegged', 'insolvent',
+  'bankruptcy', 'exit', 'dead', 'failed', 'abandoned', 'delisted',
+];
 const NEUTRAL_KEYWORDS = ['neutral', 'mixed', 'sideways', 'watchlist', 'monitor', 'range', 'unclear', 'consolidation'];
+
+// Heuristic bot indicators in article titles/content
+const BOT_SIGNAL_PATTERNS = [
+  /\bprice prediction\b/i,
+  /\b\d+\s*%\s*(gain|profit|return)\s+(guaranteed|sure|certain)\b/i,
+  /\b(buy|sell)\s+(before|now|immediately)\b/i,
+  /\bclick here\b/i,
+  /\bdon't miss\b/i,
+  /\bexclusive (offer|deal|bonus)\b/i,
+];
+
+function isBotLikeContent(text) {
+  const haystack = String(text || '');
+  return BOT_SIGNAL_PATTERNS.some((pattern) => pattern.test(haystack));
+}
 
 function emptySocialResult(projectName) {
   return {
     project_name: projectName,
     mentions: 0,
+    filtered_mentions: 0,
+    bot_filtered_count: 0,
     sentiment: 'neutral',
+    sentiment_score: 0, // -1 to +1 normalized
     sentiment_counts: {
       bullish: 0,
       bearish: 0,
@@ -105,7 +131,7 @@ export async function collectSocial(projectName, exaService) {
       .filter((entry) => entry.status === 'fulfilled')
       .flatMap((entry) => entry.value?.results || []);
 
-    const uniqueNews = [];
+    const rawItems = [];
     const seen = new Set();
 
     for (const item of items) {
@@ -113,13 +139,24 @@ export async function collectSocial(projectName, exaService) {
       const key = item?.url || `${normalizedTitle}-${item?.publishedDate || ''}`;
       if (!key || seen.has(key)) continue;
       seen.add(key);
-      uniqueNews.push({
+      rawItems.push({
         title: item?.title || 'Untitled',
         url: item?.url || null,
         date: item?.publishedDate || null,
         highlights: item?.highlights || [],
       });
     }
+
+    // Bot/spam filtering
+    let botFilteredCount = 0;
+    const uniqueNews = rawItems.filter((item) => {
+      const corpus = `${item.title} ${item.highlights.join(' ')}`;
+      if (isBotLikeContent(corpus)) {
+        botFilteredCount++;
+        return false;
+      }
+      return true;
+    });
 
     const sentimentCounts = uniqueNews.reduce(
       (acc, item) => {
@@ -131,6 +168,12 @@ export async function collectSocial(projectName, exaService) {
       { bullish: 0, bearish: 0, neutral: 0 }
     );
 
+    // Normalized sentiment score: -1 (fully bearish) to +1 (fully bullish)
+    const totalSentiment = sentimentCounts.bullish + sentimentCounts.bearish + sentimentCounts.neutral;
+    const sentimentScore = totalSentiment > 0
+      ? (sentimentCounts.bullish - sentimentCounts.bearish) / totalSentiment
+      : 0;
+
     const recentNews = [...uniqueNews]
       .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
       .slice(0, 5)
@@ -138,8 +181,11 @@ export async function collectSocial(projectName, exaService) {
 
     return {
       ...fallback,
-      mentions: uniqueNews.length,
+      mentions: rawItems.length,
+      filtered_mentions: uniqueNews.length,
+      bot_filtered_count: botFilteredCount,
       sentiment: decideSentiment(sentimentCounts),
+      sentiment_score: Math.round(sentimentScore * 100) / 100,
       sentiment_counts: sentimentCounts,
       key_narratives: extractNarratives(uniqueNews, projectName),
       recent_news: recentNews,

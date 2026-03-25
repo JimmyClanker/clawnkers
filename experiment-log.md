@@ -122,3 +122,38 @@
 - **Validation:** `public/alpha.html` inline JS parsed via `vm.Script`; `synthesis/templates.js` imported successfully.
 - **Test:** `node --test test/*.test.js` → 15/15 pass
 - **Result:** kept. UI and exported report now feel visually consistent and more professional.
+
+## Experiment 17 — Tokenomics base score normalization + circulating supply cap
+- **Hypothesis:** `scoreTokenomicsRisk` started at base 6 while all other dimensions used base 4-5, creating an upward bias. Also, `pct_circulating` wasn't capped at 100, allowing CoinGecko rounding artifacts (>100%) to add phantom bonus points.
+- **Change:** aligned base to 5 (consistent with other dimensions), capped `pct_circulating` at 100, adjusted the bonus curve to `pct/40` (max +2.5 at 100%), added a small +0.3 bonus for available `roi_data`.
+- **Files:** `synthesis/scoring.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. More accurate tokenomics scores; no free points from data artifacts.
+
+## Experiment 18 — GitHub collector: language, description, license, watchers fields
+- **Hypothesis:** GitHub API already returns `language`, `description`, `license`, and `watchers_count` in the repo response, but the collector was discarding them. These fields are useful for LLM context and future scoring dimensions.
+- **Change:** added `language`, `description`, `license`, `watchers` to `createEmptyGithubResult` and populated them from `repoData` in the return statement.
+- **Files:** `collectors/github.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Richer GitHub data at zero API cost; backward compatible (new optional fields).
+
+## Experiment 19 — Error-resilient scoring: safeCollector guard
+- **Hypothesis:** collectors that return `{ error: "...", totalVolume: ... }` would still have their numeric fields scored. If the collector has an error key, those numbers are unreliable — scoring should treat them as missing.
+- **Change:** added `safeCollector()` helper that returns `{}` for any collector with `error` set. Applied to all 5 scoring functions in `calculateScores`.
+- **Files:** `synthesis/scoring.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass; manual test confirmed error-keyed collectors score as 0-data.
+- **Result:** kept. Prevents phantom scores from partially-failed collectors.
+
+## Experiment 20 — Tokenomics timeout: per-collector fresh clock
+- **Hypothesis:** tokenomics must await market before starting Messari calls. Wrapped inside the global `withTimeout`, the tokenomics collector could have < 12s left if market took 8+s. This causes unnecessary timeouts.
+- **Change:** removed tokenomics from the main `Promise.allSettled` timeout; instead applied a fresh 12s `withTimeout` that starts only after market resolves via `.then()` chaining.
+- **Files:** `collectors/index.js`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Tokenomics gets a full 12s window regardless of market latency.
+
+## Experiment 21 — UX: GitHub card in market board + change colorization
+- **Hypothesis:** the new `language`, `description`, `license`, and `watchers` fields collected in Exp 18 weren't visible anywhere in the UI. Also, TVL change % values would benefit from green/red coloring to instantly signal direction.
+- **Change:** added `renderGithubCard()` function and CSS (`github-card`, `lang-badge`, `license-badge`, `stat-badge`); injected card below metric table. Added `pos-change`/`neg-change` CSS classes and `changeClass()` helper for TVL % rows.
+- **Files:** `public/alpha.html`
+- **Test:** `node --test test/*.test.js` → 15/15 pass
+- **Result:** kept. Market board now surfaces repo context inline; direction coloring improves data scanability.

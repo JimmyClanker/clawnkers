@@ -15,6 +15,7 @@
     "@nevermined-io/payments": "^1.1.18",
     "@x402/evm": "^2.8.0",
     "@x402/express": "^2.8.0",
+    "@x402/paywall": "^2.8.0",
     "better-sqlite3": "^12.8.0",
     "express": "^4.21.0",
     "express-rate-limit": "^8.3.1",
