@@ -786,11 +786,11 @@
     .trust-logo:hover { border-color: var(--border-hover); color: var(--text); opacity: 1; }
     .trust-logo span { font-size: 1rem; }
 
-    /* ── Differentiator section ─────────────────── */
+    /* ── Differentiator section — R329: fluid diff grid ─────────────── */
     .diff-section { background: var(--surface); border-top: 1px solid var(--border); padding: 72px 0; }
     .diff-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
       gap: 20px;
       margin-top: 40px;
     }
@@ -998,8 +998,8 @@
       .footer-links { flex-direction: column; gap: 8px; }
     }
 
-    /* ── Round 7: Performance — will-change for animated elements ── */
-    .btn-primary, .btn-secondary, .btn-nav, .product-card, .diff-card, .api-note {
+    /* ── Round 7 / R330: will-change — also cover testimonial cards ── */
+    .btn-primary, .btn-secondary, .btn-nav, .product-card, .diff-card, .api-note, .testimonial-card {
       will-change: transform;
     }
     /* Prevent layout shift from logo images */

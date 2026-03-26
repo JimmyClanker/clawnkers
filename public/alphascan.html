@@ -384,22 +384,26 @@
     }
 
     /* Round 98: styled rescan button */
+    /* R321: rescan button — better min-height touch target, cleaner icon gap */
     .rescan-btn {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.1);
       color: var(--muted2);
-      padding: 8px 20px;
+      padding: 9px 22px;
+      min-height: 40px; /* touch target */
       border-radius: 8px;
       font-size: 0.85rem;
       cursor: pointer;
       margin-bottom: 16px;
-      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.15s;
       font-family: 'Inter', sans-serif;
     }
     .rescan-btn:hover {
       border-color: rgba(212,88,10,0.3);
       color: var(--text);
       background: rgba(212,88,10,0.06);
+      transform: translateY(-1px);
     }
 
     /* ══════════════════════════════════════════════════════════════
@@ -461,9 +465,17 @@
     /* Shift input padding to make room for clear btn */
     #project-input.has-value { padding-right: 40px; }
 
+    /* R322: hero note — flex layout for icon alignment, better color */
     .hero-note {
-      color: var(--muted); font-size: 0.82rem;
-      margin-top: 12px;
+      color: #7a7a7a;
+      font-size: 0.82rem;
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      line-height: 1.5;
     }
 
     /* ── Status / Loading — R310: min-height prevents CLS when loading bar appears ── */
@@ -667,6 +679,7 @@
       color: var(--muted); font-size: 0.72rem;
       letter-spacing: 0.14em; text-transform: uppercase;
     }
+    /* R324: verdict badge — entrance animation for dramatic reveal */
     .verdict {
       font-size: clamp(1.4rem, 3.5vw, 2rem);
       padding: 10px 22px; border-radius: 999px;
@@ -675,6 +688,11 @@
       background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
       position: relative;
       transition: box-shadow 0.3s;
+      animation: verdictPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+    }
+    @keyframes verdictPop {
+      from { opacity: 0; transform: scale(0.8); }
+      to   { opacity: 1; transform: scale(1); }
     }
     .verdict.buy { box-shadow: 0 0 20px rgba(212,88,10,0.18); }
     .verdict.hold { box-shadow: 0 0 20px rgba(255,211,182,0.12); }
@@ -717,11 +735,13 @@
       box-shadow: none;
     }
     .project-intro-panel:hover { transform: none; border-color: transparent; box-shadow: none; }
+    /* R325: project intro card — improved gradient and border for visual hierarchy */
     .project-intro-card {
-      background: linear-gradient(180deg, rgba(212,88,10,0.08), rgba(255,255,255,0.02));
-      border: 1px solid rgba(212,88,10,0.16);
+      background: linear-gradient(160deg, rgba(212,88,10,0.07) 0%, rgba(255,255,255,0.015) 60%);
+      border: 1px solid rgba(212,88,10,0.2);
       border-radius: var(--radius-sm);
-      padding: 16px 18px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
     }
     .project-intro-title {
       font-size: 0.95rem;
@@ -954,6 +974,13 @@
       border-color: rgba(212,88,10,0.28);
       transform: translateY(-4px);
       box-shadow: 0 12px 36px rgba(0,0,0,0.3), 0 0 0 1px rgba(212,88,10,0.08);
+    }
+    /* R323: how-step focus state for keyboard navigation */
+    .how-step:focus-visible {
+      border-color: rgba(212,88,10,0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 3px rgba(212,88,10,0.2), var(--shadow-lg);
+      outline: none;
     }
     /* Step number badge — top-right corner */
     .how-step::after {

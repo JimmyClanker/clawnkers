@@ -24,17 +24,29 @@
     .live-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-    /* Stats Cards */
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 30px; }
-    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; transition: border-color 0.2s; }
-    .stat:hover { border-color: rgba(212,88,10,0.2); }
+    /* Stats Cards — R327: fluid stat cards with smooth hover lift */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 12px; margin-bottom: 30px; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+    .stat:hover { border-color: rgba(212,88,10,0.2); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
     .stat .value { font-size: 1.8rem; font-weight: 800; color: var(--accent); font-family: 'IBM Plex Mono', monospace; }
     .stat .label { font-size: 0.75rem; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
 
-    /* Filters */
-    .filters { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .filters select, .filters input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; }
-    .filters select:focus, .filters input:focus { outline: none; border-color: var(--accent); }
+    /* Filters — R328: focus ring improvement + touch-friendly height */
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filters select, .filters input {
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--text); padding: 9px 13px;
+      min-height: 40px; /* touch comfort */
+      border-radius: 6px; font-size: 0.85rem;
+      font-family: 'Inter', -apple-system, sans-serif;
+      transition: border-color 0.18s;
+    }
+    .filters select:focus, .filters input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(212,88,10,0.12);
+    }
+    .filters select:hover, .filters input:hover { border-color: rgba(255,255,255,0.14); }
 
     /* Signal Table */
     .signals-table { width: 100%; border-collapse: collapse; }
@@ -60,7 +72,7 @@
     .footer { text-align: center; padding: 30px 0; color: var(--muted); font-size: 0.8rem; }
     .update-time { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
 
-    /* Round 87: responsive — card view on mobile */
+    /* Round 87 / R326: signal card hover states and mobile improvements */
     @media (max-width: 680px) {
       .signals-table { display: none; }
       .signals-cards { display: grid !important; gap: 10px; }
@@ -71,6 +83,11 @@
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 14px 16px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .signal-card:hover {
+      border-color: rgba(212,88,10,0.25);
+      transform: translateY(-2px);
     }
     .signal-card-header {
       display: flex; align-items: center; justify-content: space-between;
