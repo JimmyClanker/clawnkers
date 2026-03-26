@@ -182,6 +182,8 @@ export async function collectSocial(projectName, exaService) {
       `${projectName} whale wallet OR institutional OR fund OR investment 2026`,
       // Round 154 (AutoResearch): governance and roadmap signals
       `${projectName} governance proposal OR roadmap OR upgrade OR mainnet 2026`,
+      // Round 238 (AutoResearch): airdrop and listing signals — high-alpha catalyst queries
+      `${projectName} airdrop OR listing OR coinbase OR binance 2026`,
     ];
     const settled = await Promise.allSettled(queries.map((query) => exaService.exaSearch(query)));
     const items = settled
@@ -310,6 +312,18 @@ export async function collectSocial(projectName, exaService) {
       return /\blisting\b|\blisted\b|coinbase|binance|kraken|bybit|okx|kucoin|added to|now on/.test(text);
     }).length;
 
+    // Round 238 (AutoResearch): airdrop_mentions — high airdrop coverage = potential demand driver
+    const airdropMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /\bairdrop\b|airdropping|token distribution|claim\b|eligible holders/.test(text);
+    }).length;
+
+    // Round 238 (AutoResearch): hack_exploit_mentions — critical security signal
+    const hackExploitMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /\bhack\b|\bexploit\b|stolen|drained|compromised|bridge.*attack|attack.*bridge|rugpull/.test(text);
+    }).length;
+
     // Round 9 (AutoResearch batch): sentiment dominance — are bulls clearly in control?
     const sentimentDominance = totalSentiment > 0
       ? Math.max(sentimentCounts.bullish, sentimentCounts.bearish, sentimentCounts.neutral) / totalSentiment
@@ -368,6 +382,8 @@ export async function collectSocial(projectName, exaService) {
       governance_mentions: governanceMentions,
       competitor_comparison_mentions: competitorComparisonMentions,
       listing_mentions: listingMentions,
+      airdrop_mentions: airdropMentions,
+      hack_exploit_mentions: hackExploitMentions,
       avg_article_quality_score: avgArticleQualityScore,
       // Round 12 (AutoResearch nightly): news recency signals
       very_recent_news_count: veryRecentCount,

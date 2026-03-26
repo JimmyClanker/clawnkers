@@ -2,16 +2,26 @@ import { fetchJson } from './fetch.js';
 
 const REDDIT_SEARCH_URL = 'https://www.reddit.com/search.json';
 
-// Reuse keyword lists mirroring social.js for consistent sentiment scoring
+// Round 238 (AutoResearch): expanded keyword lists mirroring social.js + 2025 crypto narratives
 const BULLISH_KEYWORDS = [
   'bullish', 'breakout', 'surge', 'growth', 'adoption', 'upside', 'momentum',
   'accumulate', 'outperform', 'partnership', 'launch', 'integration', 'staking',
   'airdrop', 'undervalued', 'gem', 'opportunity', 'rally', 'ath',
+  // 2025 narratives
+  'etf approval', 'spot etf', 'restaking', 'rwa', 'tokenization', 'ai agent',
+  'depin', 'buyback', 'revenue share', 'fee switch', 'treasury buy',
+  'bullrun', 'parabolic', 'moon', 'new ath', 'institutional', 'whale buy',
+  'mainnet', 'upgrade', 'v2', 'v3', 'milestone', 'grant', 'launchpad',
 ];
 const BEARISH_KEYWORDS = [
   'bearish', 'selloff', 'dump', 'decline', 'risk', 'downside', 'lawsuit',
   'exploit', 'headwinds', 'rug', 'scam', 'hack', 'depegged', 'insolvent',
   'bankruptcy', 'exit', 'dead', 'failed', 'abandoned', 'delisted',
+  // 2025 threat patterns
+  'sec subpoena', 'doj investigation', 'emergency pause', 'oracle manipulation',
+  'flash loan attack', 'governance attack', 'infinite mint', 'stolen funds',
+  'critical bug', 'mass exodus', 'whale dump', 'token unlock', 'vesting cliff',
+  'rug pull', 'exit scam', 'bridge hack', 'drain',
 ];
 
 function countKeywords(text, keywords) {

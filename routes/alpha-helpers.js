@@ -161,6 +161,11 @@ const INJECTION_PATTERNS = [
   /javascript:/i,                   // protocol injection
   /\x00/,                           // null byte
   /[\x01-\x08\x0b\x0c\x0e-\x1f]/,  // other control chars
+  // Round 238 (AutoResearch): additional security patterns
+  /data:/i,                          // data: URI scheme
+  /vbscript:/i,                      // VBScript injection
+  /on\w+\s*=/i,                      // inline event handlers (onload=, onclick= etc)
+  /expression\s*\(/i,                // CSS expression() injection
 ];
 
 export function normalizeProject(project) {

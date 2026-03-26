@@ -233,6 +233,12 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     }
   }
 
+  // Round 238 (AutoResearch): propagate community_score from market into social result
+  // scoring.js reads social.community_score but it only exists in market — bridge the gap
+  if (social.data && market.data?.community_score != null && social.data.community_score == null) {
+    social.data = { ...social.data, community_score: market.data.community_score };
+  }
+
   return {
     project_name: projectName,
     market: market.data,

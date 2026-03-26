@@ -218,7 +218,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 18. Round 24: Social-sourced exploit mentions
-  const exploitMentions = safeN(social.exploit_mentions ?? 0);
+  // Round 238 (AutoResearch): also check new hack_exploit_mentions field for richer coverage
+  const exploitMentions = safeN((social.exploit_mentions ?? 0) + (social.hack_exploit_mentions ?? 0));
   if (exploitMentions >= 2) {
     flags.push({
       flag: 'exploit_mentions_social',
@@ -669,6 +670,72 @@ export function checkLowRangeFdvTrap(market = {}) {
       flag: 'low_range_fdv_trap',
       severity: 'critical',
       detail: `Price near 52-week low (${vs52w.pct_from_52w_high.toFixed(1)}% from 52w high) with FDV/MCap ratio ${fdvRatio.toFixed(1)}x — structural distribution trap: price at lows while major supply unlocks loom.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 238 (AutoResearch nightly): Additional red flag detectors ──────────
+
+/**
+ * Detect 30-day revenue collapse — protocol losing monetization rapidly.
+ * @param {object} rawData
+ * @returns {object|null}
+ */
+export function detectRevenueCollapse(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const fees7d = Number(onchain.fees_7d ?? 0);
+  const fees30d = Number(onchain.fees_30d ?? 0);
+  if (fees30d <= 0 || fees7d < 0) return null;
+  // If last 7d fees are < 10% of (30d fees / 4 = weekly avg), revenue collapsed
+  const weeklyAvg30d = fees30d / 4;
+  if (weeklyAvg30d > 10_000 && fees7d > 0 && fees7d < weeklyAvg30d * 0.1) {
+    return {
+      flag: 'revenue_collapse',
+      severity: 'critical',
+      detail: `7d fees ($${fees7d.toLocaleString('en-US', { maximumFractionDigits: 0 })}) are <10% of 30d weekly avg ($${weeklyAvg30d.toLocaleString('en-US', { maximumFractionDigits: 0 })}) — protocol revenue has collapsed.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Detect social-price divergence: price up >30% but sentiment bearish/neutral.
+ * Signals possible manipulation or smart money exit.
+ */
+export function detectSocialPriceDivergence(rawData = {}) {
+  const market = rawData.market ?? {};
+  const social = rawData.social ?? {};
+  const change7d = Number(market.price_change_pct_7d ?? NaN);
+  const sentScore = Number(social.sentiment_score ?? NaN);
+  if (!Number.isFinite(change7d) || !Number.isFinite(sentScore)) return null;
+  if (change7d > 30 && sentScore < -0.1) {
+    return {
+      flag: 'social_price_divergence',
+      severity: 'warning',
+      detail: `Price up ${change7d.toFixed(0)}% in 7d but sentiment is ${sentScore < -0.3 ? 'bearish' : 'slightly negative'} (${sentScore.toFixed(2)}) — community not participating in the pump, possible exit liquidity scenario.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Detect TVL-to-MCap imbalance: very high TVL vs tiny market cap = either unlocked alpha or red flag.
+ * When TVL >> MCap, protocol may be bootstrapped with incentivized liquidity about to leave.
+ */
+export function detectInvertedTvlMcap(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const market = rawData.market ?? {};
+  const tvl = Number(onchain.tvl ?? 0);
+  const mcap = Number(market.market_cap ?? 0);
+  if (tvl <= 0 || mcap <= 0) return null;
+  const ratio = tvl / mcap;
+  // TVL > 10x MCap = likely incentivized/mercenary capital that will leave
+  if (ratio > 10 && tvl > 5_000_000) {
+    return {
+      flag: 'mercenary_tvl_dominance',
+      severity: 'warning',
+      detail: `TVL ($${(tvl / 1e6).toFixed(1)}M) is ${ratio.toFixed(0)}x MCap ($${(mcap / 1e6).toFixed(1)}M) — likely incentivized mercenary capital vulnerable to farm-and-dump dynamics.`,
     };
   }
   return null;

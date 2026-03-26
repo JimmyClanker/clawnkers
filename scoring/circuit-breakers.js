@@ -375,6 +375,54 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Round 238 (AutoResearch): Security breach circuit breaker
+  // When multiple news articles report active hacks/exploits, cap score aggressively
+  const hackMentions = safeN((rawData?.social?.hack_exploit_mentions ?? 0) + (rawData?.social?.exploit_mentions ?? 0));
+  if (hackMentions >= 4) {
+    breakers.push({
+      cap: 3.5,
+      reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
+      severity: 'critical',
+    });
+  } else if (hackMentions >= 2) {
+    breakers.push({
+      cap: 5.5,
+      reason: `${hackMentions} articles mention security exploits — potential security incident, elevated caution warranted`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 238 (AutoResearch): Revenue collapse breaker — 7d fees < 10% of 30d weekly avg
+  // Sudden fee collapse signals a broken protocol, liquidity exit, or exploit aftermath
+  const fees7dR238 = safeN(onchain.fees_7d ?? 0);
+  const fees30dR238 = safeN(onchain.fees_30d ?? 0);
+  const tvlR238 = safeN(onchain.tvl ?? 0);
+  if (fees30dR238 > 0 && fees7dR238 > 0 && tvlR238 > 10_000_000) {
+    const weeklyAvg = fees30dR238 / 4;
+    if (weeklyAvg > 50_000 && fees7dR238 < weeklyAvg * 0.1) {
+      breakers.push({
+        cap: 5.0,
+        reason: `Revenue collapse: 7d fees ($${(fees7dR238 / 1000).toFixed(0)}K) < 10% of 30d weekly avg ($${(weeklyAvg / 1000).toFixed(0)}K) — protocol may be broken or exploited`,
+        severity: 'critical',
+      });
+    }
+  }
+
+  // Round 238b (AutoResearch): Mercenary TVL trap — TVL > 10x MCap = incentivized capital at risk
+  // When TVL is massively > MCap, it often means unsustainable yield farming is holding capital
+  const tvlR238b = safeN(onchain.tvl ?? 0);
+  const mcapR238b = safeN(market.market_cap ?? 0);
+  if (tvlR238b > 0 && mcapR238b > 0 && mcapR238b > 500_000) {
+    const tvlMcapRatio = tvlR238b / mcapR238b;
+    if (tvlMcapRatio > 15) {
+      breakers.push({
+        cap: 6.0,
+        reason: `TVL ($${(tvlR238b / 1e6).toFixed(1)}M) is ${tvlMcapRatio.toFixed(0)}x market cap ($${(mcapR238b / 1e6).toFixed(1)}M) — likely mercenary incentivized capital that will exit when rewards end`,
+        severity: 'warning',
+      });
+    }
+  }
+
   // Applica il cap più restrittivo
   if (breakers.length === 0) {
     return { score: overallScore, breakers: [], capped: false };

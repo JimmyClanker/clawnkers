@@ -151,6 +151,11 @@ function buildFactRegistry(rawData = {}) {
       : null
   );
   push('onchain.ptvl_ratio', _ptvlForFacts != null ? parseFloat(_ptvlForFacts.toFixed(3)) : null);
+  // Round 238 (AutoResearch): new signals in fact registry
+  push('social.airdrop_mentions', rawData?.social?.airdrop_mentions);
+  push('social.hack_exploit_mentions', rawData?.social?.hack_exploit_mentions);
+  push('onchain.fees_7d_prev', rawData?.onchain?.fees_7d_prev);
+  push('dex.dex_price_change_m5', rawData?.dex?.dex_price_change_m5);
 
   return facts;
 }
@@ -237,6 +242,12 @@ export function buildDataSummary(rawData = {}) {
     onchainLines.push(add('TVL 7d Change', onchain.tvl_change_7d, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
     onchainLines.push(add('TVL 30d Change', onchain.tvl_change_30d, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
     onchainLines.push(add('Fees 7d', onchain.fees_7d, formatNumber));
+    // Round 238 (AutoResearch): surface fees_7d_prev for trend comparison in LLM context
+    if (onchain.fees_7d != null && onchain.fees_7d_prev != null && onchain.fees_7d_prev > 0) {
+      const feeChangePct = ((onchain.fees_7d - onchain.fees_7d_prev) / onchain.fees_7d_prev) * 100;
+      const feeChangeLabel = feeChangePct > 20 ? '📈 growing' : feeChangePct < -20 ? '📉 declining' : '→ stable';
+      onchainLines.push(`- Fees trend: ${feeChangeLabel} (${feeChangePct > 0 ? '+' : ''}${feeChangePct.toFixed(0)}% vs prior 7d, prev: ${formatNumber(onchain.fees_7d_prev)})`);
+    }
     onchainLines.push(add('Revenue 7d', onchain.revenue_7d, formatNumber));
     onchainLines.push(add('Treasury', onchain.treasury_balance, formatNumber));
     // Round R156: Revenue-to-fees ratio (protocol efficiency — what % of fees become protocol revenue)
@@ -246,8 +257,12 @@ export function buildDataSummary(rawData = {}) {
       onchainLines.push(`- Revenue Capture: ${(ratio * 100).toFixed(1)}% of fees → protocol (${ratioLabel})`);
     }
     // Round R156: TVL stickiness with context
+    // Round 238 (AutoResearch): added 'growing' tier context
     if (onchain.tvl_stickiness) {
-      const stickinessContext = onchain.tvl_stickiness === 'sticky' ? 'capital retention — users committed' : onchain.tvl_stickiness === 'fleeing' ? 'capital exit — users withdrawing' : 'stable but cautious';
+      const stickinessContext = onchain.tvl_stickiness === 'growing' ? 'capital actively inflowing — strong demand signal'
+        : onchain.tvl_stickiness === 'sticky' ? 'capital retention — users committed'
+        : onchain.tvl_stickiness === 'fleeing' ? 'capital exit — users withdrawing'
+        : 'stable but cautious';
       onchainLines.push(`- TVL Stickiness: ${onchain.tvl_stickiness} (${stickinessContext})`);
     }
     if (onchain.protocol_maturity) {
@@ -307,8 +322,14 @@ export function buildDataSummary(rawData = {}) {
       const credLabel = social.sentiment_credibility_score >= 60 ? 'high credibility' : social.sentiment_credibility_score >= 30 ? 'moderate credibility' : 'low credibility (noise risk)';
       socialLines.push(`- Sentiment credibility: ${social.sentiment_credibility_score}/100 (${credLabel})`);
     }
-    if (social.exploit_mentions != null && social.exploit_mentions > 0) {
-      socialLines.push(`- Exploit/hack mentions: ${social.exploit_mentions} ⚠️`);
+    // Round 238 (AutoResearch): combine exploit + hack_exploit mentions for fuller coverage
+    const totalExploitMentions = (social.exploit_mentions ?? 0) + (social.hack_exploit_mentions ?? 0);
+    if (totalExploitMentions > 0) {
+      socialLines.push(`- Exploit/hack mentions: ${totalExploitMentions} ⚠️`);
+    }
+    // Round 238 (AutoResearch): airdrop mentions — positive catalyst signal for Grok analysis
+    if (social.airdrop_mentions != null && social.airdrop_mentions > 0) {
+      socialLines.push(`- Airdrop mentions: ${social.airdrop_mentions} (potential demand catalyst)`);
     }
 
     const validSocial = socialLines.filter(Boolean);
@@ -791,6 +812,8 @@ function buildPrompt(projectName, rawData, scores) {
           `Top DEX: ${rawData.dex.top_dex_name || 'n/a'}`,
           `DEX Price: $${rawData.dex.dex_price_usd || 'n/a'}`,
           `DEX Liquidity: $${rawData.dex.dex_liquidity_usd ? Number(rawData.dex.dex_liquidity_usd).toLocaleString() : 'n/a'}`,
+          // Round 238 (AutoResearch): m5 change for ultra-short-term momentum context
+          ...(rawData.dex.dex_price_change_m5 != null ? [`DEX 5m change: ${rawData.dex.dex_price_change_m5 > 0 ? '+' : ''}${rawData.dex.dex_price_change_m5}%`] : []),
           `DEX 1h change: ${rawData.dex.dex_price_change_h1 != null ? rawData.dex.dex_price_change_h1 + '%' : 'n/a'}`,
           `DEX 24h change: ${rawData.dex.dex_price_change_h24 != null ? rawData.dex.dex_price_change_h24 + '%' : 'n/a'}`,
           `DEX pair count: ${rawData.dex.dex_pair_count || 'n/a'} pairs across ${(rawData.dex.dex_chains || []).join(', ') || 'n/a'}`,

@@ -61,6 +61,15 @@ const SIGNAL_PHRASES = {
   '52w_high_breakout':           'near 52-week high price discovery',
   exchange_listing_catalyst:     'potential major exchange listing',
   low_range_fdv_trap:            'structural distribution trap (52w low + FDV overhang)',
+  // Round 238 (AutoResearch): new signal phrases
+  ptvl_deep_value:               'trading below protocol TVL (deep DeFi value opportunity)',
+  airdrop_catalyst:              'pending airdrop driving demand and new user acquisition',
+  dex_momentum_burst:            'ultra-short-term DEX momentum burst in progress',
+  near_ath_breakout_attempt:     'price approaching all-time high (breakout zone)',
+  revenue_acceleration:          'revenue growing faster than TVL (expanding margins)',
+  deep_multichain_presence:      'deeply integrated across 5+ chains',
+  distributed_dev_plus_active_shipping: 'distributed team actively shipping code',
+  governance_activity:           'active DAO governance participation',
 };
 
 const FLAG_PHRASES = {

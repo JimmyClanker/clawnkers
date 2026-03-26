@@ -12,6 +12,8 @@ function createEmptyDexResult(projectName) {
     dex_price_usd: null,
     dex_chains: [],
     // Round 3: price change from DexScreener (h1, h24, h6) for freshness
+    // Round 238 (AutoResearch): added m5 for ultra-short-term momentum
+    dex_price_change_m5: null,
     dex_price_change_h1: null,
     dex_price_change_h24: null,
     dex_price_change_h6: null,
@@ -116,9 +118,11 @@ export async function collectDexScreener(projectName) {
     }
 
     // Round 3: price changes from top pair
+    // Round 238 (AutoResearch): also capture 5m change for ultra-short-term momentum signal
     const dexPriceChangeH1 = topPair?.priceChange?.h1 != null ? Number(topPair.priceChange.h1) : null;
     const dexPriceChangeH24 = topPair?.priceChange?.h24 != null ? Number(topPair.priceChange.h24) : null;
     const dexPriceChangeH6 = topPair?.priceChange?.h6 != null ? Number(topPair.priceChange.h6) : null;
+    const dexPriceChangeM5 = topPair?.priceChange?.m5 != null ? Number(topPair.priceChange.m5) : null;
 
     // Round 3: top pair liquidity concentration (how dominant the top pair is)
     const topPairLiq = Number(topPair?.liquidity?.usd || 0);
@@ -255,6 +259,7 @@ export async function collectDexScreener(projectName) {
       h6_volume_pct_of_24h: (h6Vol > 0 && h24Vol > 0)
         ? parseFloat(((h6Vol / h24Vol) * 100).toFixed(1))
         : null,
+      dex_price_change_m5: dexPriceChangeM5,
       dex_price_change_h1: dexPriceChangeH1,
       dex_price_change_h24: dexPriceChangeH24,
       dex_price_change_h6: dexPriceChangeH6,

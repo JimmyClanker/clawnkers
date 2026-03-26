@@ -281,6 +281,24 @@ function getRecentScans(db, limit) {
 export function calculateMetrics(dbOverride) {
   const db = dbOverride || getCalibrationDb();
 
+  // Round 238 (AutoResearch): additional calibration metadata
+  const avgScore = (() => {
+    try {
+      const row = db.prepare('SELECT AVG(score) AS avg FROM token_snapshots WHERE score IS NOT NULL').get();
+      return row?.avg != null ? parseFloat(Number(row.avg).toFixed(2)) : null;
+    } catch { return null; }
+  })();
+  const scoreStdDev = (() => {
+    try {
+      const rows = db.prepare('SELECT score FROM token_snapshots WHERE score IS NOT NULL').all();
+      if (rows.length < 2) return null;
+      const scores = rows.map(r => Number(r.score));
+      const mean = scores.reduce((s, v) => s + v, 0) / scores.length;
+      const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / scores.length;
+      return parseFloat(Math.sqrt(variance).toFixed(3));
+    } catch { return null; }
+  })();
+
   return {
     generated_at: new Date().toISOString(),
     coverage: getCoverageStats(db),
@@ -290,6 +308,14 @@ export function calculateMetrics(dbOverride) {
     category_performance: getCategoryPerformance(db),
     verdict_distribution: getVerdictDistribution(db),
     recent_scans: getRecentScans(db, 20),
+    // Round 238 (AutoResearch): score distribution health metrics
+    score_distribution: {
+      avg_score: avgScore,
+      score_std_dev: scoreStdDev,
+      calibration_note: avgScore != null && (avgScore < 4 || avgScore > 7)
+        ? 'Score distribution skewed — check category weights or circuit breakers'
+        : 'Distribution looks healthy',
+    },
   };
 }
 

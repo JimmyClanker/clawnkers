@@ -120,13 +120,19 @@ async function _fetchJsonImpl(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, re
       recordDomainSuccess(url); // clear failure counter on success
       // Round 203 (AutoResearch): attach latency as non-enumerable metadata for diagnostics
       // (Does not affect JSON serialization but available to callers who want timing)
+      const latencyMs = Date.now() - _reqStart;
       if (result && typeof result === 'object') {
         try {
           Object.defineProperty(result, '_fetchLatencyMs', {
-            value: Date.now() - _reqStart,
+            value: latencyMs,
             writable: false, configurable: true, enumerable: false,
           });
         } catch { /* non-critical */ }
+      }
+      // Round 238 (AutoResearch): warn on slow requests (>5s) for performance monitoring
+      if (latencyMs > 5000) {
+        const domain = extractDomain(url);
+        console.warn(`[fetch] Slow request: ${domain} took ${latencyMs}ms (attempt ${attempt + 1})`);
       }
       return result;
     } catch (err) {

@@ -1778,3 +1778,53 @@
 - **Change:** `section` padding portato a `90px 0` (era 80px) per dare più respiro verticale su desktop.
 - **Files:** public/index.html
 - **Tests:** 177/177 pass
+
+### Round 281 — Miglioramento Open Graph image meta tag
+- **Change:** Aggiunti `og:image:width`, `og:image:height`, e `twitter:image` per migliorare la preview social (dimensioni standard 1200x630).
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 282 — Structured data JSON-LD per SEO
+- **Change:** Aggiunto JSON-LD structured data (schema.org `SoftwareApplication`) per migliorare SEO e rich snippet Google.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 283 — Canonical URL meta tag
+- **Change:** Aggiunto `<link rel="canonical" href="https://clawnkers.com/">` per evitare duplicati SEO.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 284 — Preload font files per performance
+- **Change:** Aggiunto `<link rel="preload">` per il font Inter (woff2) per ridurre il tempo di render bloccante.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 285 — Meta theme-color per mobile browser
+- **Change:** Aggiunto `<meta name="theme-color" content="#0a0a0a">` per colorare la status bar mobile (Android Chrome, Safari iOS).
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 286 — Manifest.json PWA icons completi
+- **Change:** Creato `public/manifest.json` per PWA con icon reference (192x192, 512x512). Aggiunto `<link rel="manifest">` in HTML.
+- **Files:** public/manifest.json, public/index.html
+- **Tests:** 177/177 pass
+
+### Round 287 — Service worker cache strategy ottimizzata
+- **Change:** Aggiornato `CACHE_NAME` a `clawnkers-v2-2026-03` con comment per forzare refresh su deploy. Nessun cambio di logica, solo versioning.
+- **Files:** public/sw.js
+- **Tests:** 177/177 pass
+
+### Round 288 — Responsive font-size hero-badge mobile
+- **Change:** `.hero-badge` ora usa `font-size: clamp(0.78rem, 1.8vw, 0.85rem)` (era 0.82rem fisso) per adattarsi meglio su schermi piccoli/grandi.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 289 — Hover su logo header più smooth
+- **Change:** Logo header ora ha transition su `transform` e `filter`. Al `:hover` applica leggera rotazione (-3deg), scale (1.05), e saturazione aumentata per feedback visivo.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 290 — Smooth fade-in animation più fluida
+- **Change:** `.fade-in` ora usa `cubic-bezier(0.16, 1, 0.3, 1)` (easing più naturale) e durata `0.7s` (era 0.6s ease) per animazioni d'ingresso più eleganti.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass

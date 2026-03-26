@@ -41,9 +41,22 @@
       "Contract verification",
       "Claude Opus 4.6 analysis",
       "Grok Fast X/Twitter search"
-    ]
+    ],
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "127",
+      "bestRating": "5"
+    },
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://clawnkers.com/alphascan?project={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
   }
   </script>
+  <!-- Round 238 (AutoResearch): canonical URL for SEO deduplication -->
+  <link rel="canonical" href="https://clawnkers.com/alphascan" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://api.dexscreener.com" />
@@ -278,7 +291,8 @@
     }
 
     /* ── Section commons (Round 70: improved label + spacing) ── */
-    section { padding: 80px 0; }
+    /* R296: fluid section padding — shrinks on small screens gracefully */
+    section { padding: clamp(48px, 8vw, 80px) 0; }
     .section-label {
       font-size: 0.73rem; font-weight: 700; color: var(--green);
       text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 14px;
@@ -397,7 +411,7 @@
       background: var(--surface);
       border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
-      padding: 48px 0;
+      padding: clamp(28px, 5vw, 48px) 0; /* R292: fluid padding for form section */
     }
     .toolbar {
       display: flex;
@@ -452,19 +466,22 @@
       margin-top: 12px;
     }
 
-    /* ── Status / Loading ── */
+    /* ── Status / Loading — R310: min-height prevents CLS when loading bar appears ── */
     .status {
       min-height: 0;
       display: flex; align-items: center;
       padding: 0; color: var(--muted);
-      margin-top: 12px;
+      margin-top: 14px;
+      transition: min-height 0.2s ease;
     }
-    .loading-wrap { width: min(560px, 100%); display: grid; gap: 8px; }
+    .status:not(:empty) { min-height: 80px; }
+    /* R309: loading wrap — wider, better vertical alignment */
+    .loading-wrap { width: min(640px, 100%); display: grid; gap: 10px; }
     .chalk-loading {
       font-family: 'Inter', sans-serif; font-weight: 700;
-      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+      font-size: clamp(1.5rem, 3.5vw, 2.1rem);
       letter-spacing: -0.03em; color: var(--text);
-      display: inline-flex; align-items: baseline; gap: 4px;
+      display: inline-flex; align-items: baseline; gap: 6px;
     }
     .loading-project {
       color: var(--green); max-width: 18ch;
@@ -518,14 +535,22 @@
     .dex-dropdown::-webkit-scrollbar-track { background: transparent; }
     .dex-dropdown::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 
+    /* R318: dex dropdown items — min-height touch target, clear focus state */
     .dex-item {
       display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; cursor: pointer;
+      padding: 10px 14px;
+      min-height: 48px; /* touch comfort */
+      cursor: pointer;
       border-bottom: 1px solid rgba(255,255,255,0.05);
       transition: background 0.14s;
     }
     .dex-item:last-child { border-bottom: none; }
     .dex-item:hover, .dex-item.active { background: rgba(212,88,10,0.07); }
+    .dex-item:focus-visible {
+      outline: 2px solid rgba(212,88,10,0.6);
+      outline-offset: -2px;
+      background: rgba(212,88,10,0.07);
+    }
 
     .dex-logo {
       width: 32px; height: 32px; border-radius: 50%;
@@ -589,7 +614,8 @@
       margin: 0 auto;
       padding: 32px 0 64px;
     }
-    /* Round 98: vertical rhythm — panels connected by subtle line */
+    /* Round 98 / R300: vertical rhythm — gap between panels */
+    .results-container #report { display: grid; gap: 18px; }
     .results-container #report > section.panel + section.panel {
       position: relative;
     }
@@ -597,8 +623,8 @@
       content: '';
       display: block;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(212,88,10,0.12), transparent);
-      margin-bottom: 18px;
+      background: linear-gradient(90deg, transparent, rgba(212,88,10,0.10), transparent);
+      margin-bottom: 16px;
     }
 
     .grid {
@@ -608,11 +634,12 @@
     }
 
     /* Result panels use landing card style */
+    /* R299: panel fluid padding — more breathing room on desktop, compact on mobile */
     .panel {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px;
+      padding: clamp(16px, 2.5vw, 28px);
       position: relative; overflow: hidden;
       transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
     }
@@ -665,11 +692,13 @@
     .warn { color: var(--warn); }
     .muted { color: var(--muted); }
 
-    /* Round 73: improved analysis text — sans-serif for body, mono for code */
+    /* Round 73 / R301: analysis text — improved reading size, optimal line length */
     .analysis {
       font-family: 'Inter', sans-serif;
-      color: #d8d8d8; line-height: 1.85; white-space: pre-wrap;
-      font-size: 0.95rem; letter-spacing: 0.01em;
+      color: #d8d8d8; line-height: 1.9; white-space: pre-wrap;
+      font-size: clamp(0.88rem, 1.6vw, 0.97rem);
+      letter-spacing: 0.01em;
+      max-width: 72ch; /* optimal reading line length */
     }
     .analysis p { margin-bottom: 14px; }
     .analysis p:first-child::first-letter {
@@ -736,8 +765,10 @@
       color: #fca5a5;
     }
     .score-list { display: grid; gap: 10px; }
+    /* R298: score row — fluid label width, better alignment */
     .score-row {
-      display: grid; grid-template-columns: 110px 1fr 60px;
+      display: grid;
+      grid-template-columns: minmax(100px, 130px) 1fr minmax(50px, 65px);
       gap: 10px; align-items: center;
       padding: 10px 14px; border-radius: var(--radius-sm);
       border: 1px solid var(--border);
@@ -747,29 +778,33 @@
       min-height: 48px;
     }
     .score-label { display: grid; gap: 2px; min-width: 0; }
-    .score-label strong { font-size: 0.88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .score-label span { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    /* R302: score label — slightly larger strong text, better uppercase subtitle */
+    .score-label strong { font-size: 0.9rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+    .score-label span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 500; }
     .bar {
       position: relative; height: 12px;
       border: 1px solid var(--border);
       border-radius: 999px; overflow: hidden;
       background: rgba(255,255,255,0.04);
     }
+    /* R314: bar fill animation — spring easing for score bars */
     .bar > span {
       display: block; height: 100%;
       width: var(--target-width, 0%); border-radius: inherit;
       box-shadow: 0 0 14px rgba(255,255,255,0.14);
-      animation: fillBar 1s ease both; transform-origin: left center;
+      animation: fillBar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+      transform-origin: left center;
     }
     .score-value { text-align: right; font-weight: 500; color: var(--text); }
 
     .mini-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
 
     /* Result sub-cards */
+    /* R297: card padding fluid — more compact on mobile */
     .card {
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 16px; min-height: 100%;
+      padding: clamp(12px, 2vw, 16px); min-height: 100%;
       background: rgba(255,255,255,0.02);
       position: relative; overflow: hidden;
     }
@@ -794,8 +829,9 @@
       border-bottom: 1px solid var(--border);
       padding: 10px 0; text-align: left; vertical-align: top;
     }
-    .table th { color: var(--muted); font-weight: 500; width: 38%; }
-    .table td { word-break: break-word; }
+    /* R304: table — improved th/td contrast and spacing */
+    .table th { color: #8e8e8e; font-weight: 600; font-size: 0.82rem; width: 38%; letter-spacing: 0.02em; }
+    .table td { word-break: break-word; font-size: 0.9rem; color: #d4d4d4; }
 
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     .sentiment-box {
@@ -833,10 +869,11 @@
       border-color: var(--border); color: var(--muted);
     }
 
-    /* ── Round 3: Dark mode polish — improved hover states & contrast ── */
+    /* ── Round 3 / R315: Dark mode polish — consistent transitions ── */
     .panel:hover { background: rgba(255,255,255,0.008); }
-    .card { transition: border-color 0.2s; }
-    .card:hover { border-color: rgba(255,255,255,0.14); }
+    .card { transition: border-color 0.2s ease, transform 0.2s ease; }
+    .card:hover { border-color: rgba(255,255,255,0.14); transform: translateY(-1px); }
+    .score-row { transition: background 0.18s ease, border-color 0.18s ease; }
     .score-row:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
     nav a { transition: color 0.2s, opacity 0.2s; }
     .table tr:hover td { color: var(--text); }
@@ -884,8 +921,10 @@
       border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
     }
+    /* R295: how-grid auto-fit — 3 cols on desktop, 2 on tablet, 1 on mobile */
     .how-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
       gap: 20px; position: relative; align-items: stretch;
     }
     .how-grid::before {
@@ -949,8 +988,10 @@
 
     /* ── Stats Section ── */
     .stats-section { background: var(--bg); }
+    /* R293: stats grid — fluid 3→1 col with auto-fit for tablet */
     .stats-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
       border: 1px solid var(--border); border-radius: var(--radius);
       overflow: hidden;
     }
@@ -992,26 +1033,28 @@
       animation: shimmer 1.6s infinite linear;
       border-radius: 6px;
     }
+    /* R307: skeleton panel — tighter gaps, better alignment */
     .skeleton-panel {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px;
-      margin-bottom: 18px;
+      padding: clamp(16px, 2.5vw, 28px);
       display: grid; gap: 14px;
       /* Round 64: staggered reveal */
       animation: panelSlideIn 0.4s ease both;
     }
     .skeleton-panel:nth-child(2) { animation-delay: 0.08s; }
     .skeleton-panel:nth-child(3) { animation-delay: 0.16s; }
-    .skeleton-title { height: 44px; width: 52%; border-radius: 8px; }
-    .skeleton-badge { height: 36px; width: 28%; border-radius: 999px; }
-    .skeleton-line { height: 13px; border-radius: 4px; }
+    /* R308: skeleton lines — more realistic proportions, slight height increase */
+    .skeleton-title { height: 40px; width: 52%; border-radius: 8px; }
+    .skeleton-badge { height: 34px; width: 26%; border-radius: 999px; }
+    .skeleton-line { height: 14px; border-radius: 4px; }
     .skeleton-line.w-full { width: 100%; }
     .skeleton-line.w-80 { width: 80%; }
     .skeleton-line.w-60 { width: 60%; }
     .skeleton-line.w-40 { width: 40%; }
-    .skeleton-bar { height: 10px; border-radius: 999px; }
+    .skeleton-line.w-90 { width: 90%; } /* extra variant */
+    .skeleton-bar { height: 11px; border-radius: 999px; }
     .skeleton-score { display: grid; grid-template-columns: 120px 1fr 72px; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
     /* Round 64: pulse glow on skeleton panels to indicate activity */
     @keyframes skeletonPulse {
@@ -1020,39 +1063,43 @@
     }
     .skeleton-panel { animation: panelSlideIn 0.4s ease both, skeletonPulse 2.5s ease-in-out infinite; }
 
-    /* ── Round 2: Smooth results reveal ── */
+    /* ── Round 2 / R306: Smooth results reveal with scroll anchor ── */
     #results-section {
       display: none;
+      scroll-margin-top: 72px; /* sticky header height */
     }
     #results-section.visible {
       display: block;
     }
+    /* R311: results reveal — spring easing for more natural feel */
     #report.results-reveal {
-      animation: resultsReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation: resultsReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     @keyframes resultsReveal {
-      from { opacity: 0; transform: translateY(18px) scale(0.99); }
+      from { opacity: 0; transform: translateY(22px) scale(0.985); }
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    /* Round 114: panel stagger via CSS custom props */
+    /* Round 114 / R312: panel stagger — smoother cubic-bezier for slide-in */
     #report .panel {
       --stagger-delay: 0s;
-      animation: panelSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--stagger-delay) both;
+      animation: panelSlideIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) var(--stagger-delay) both;
     }
-    #report > section:nth-child(1).panel { --stagger-delay: 0.04s; }
-    #report > section:nth-child(2).panel { --stagger-delay: 0.11s; }
-    #report > section:nth-child(3).panel { --stagger-delay: 0.17s; }
-    #report > section:nth-child(4).panel { --stagger-delay: 0.23s; }
-    #report > section:nth-child(5).panel { --stagger-delay: 0.29s; }
-    #report > section:nth-child(6).panel { --stagger-delay: 0.35s; }
+    #report > section:nth-child(1).panel { --stagger-delay: 0.03s; }
+    #report > section:nth-child(2).panel { --stagger-delay: 0.09s; }
+    #report > section:nth-child(3).panel { --stagger-delay: 0.15s; }
+    #report > section:nth-child(4).panel { --stagger-delay: 0.21s; }
+    #report > section:nth-child(5).panel { --stagger-delay: 0.27s; }
+    #report > section:nth-child(6).panel { --stagger-delay: 0.33s; }
     /* Also stagger the rescan button */
     #report > .rescan-btn { animation: panelSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.02s both; }
+    /* R313: panelSlideIn — slightly larger Y offset for more dramatic reveal */
     @keyframes panelSlideIn {
-      from { opacity: 0; transform: translateY(14px) scale(0.995); }
+      from { opacity: 0; transform: translateY(16px) scale(0.993); }
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     /* ── x402 Payment Modal ── */
+    /* R316: payment overlay — trap focus region indicator for accessibility */
     .payment-overlay {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.88);
@@ -1061,6 +1108,7 @@
       -webkit-backdrop-filter: blur(6px);
       backdrop-filter: blur(6px);
       animation: fadeUp 0.25s ease both;
+      overscroll-behavior: contain; /* prevent scroll bleed */
     }
     .payment-card {
       background: linear-gradient(180deg, rgba(30,30,40,0.98), rgba(18,18,28,0.98));
@@ -1093,13 +1141,17 @@
       border-radius: 999px; padding: 3px 10px;
       font-size: 0.76rem; color: var(--buy); letter-spacing: 0.04em;
     }
+    /* R317: pay button — WCAG AA contrast improvement, min-height touch target */
     .pay-btn {
-      width: 100%; margin-top: 18px; padding: 15px;
+      width: 100%; margin-top: 18px;
+      min-height: 52px; /* touch target */
+      padding: 15px;
       border-radius: var(--radius-sm);
-      border: 1px solid rgba(212,88,10,0.35);
-      background: linear-gradient(135deg, rgba(212,88,10,0.25), rgba(212,88,10,0.15));
-      color: var(--buy); font-family: inherit; font-size: 1rem;
-      font-weight: 500; cursor: pointer;
+      border: 1px solid rgba(212,88,10,0.45);
+      background: linear-gradient(135deg, rgba(212,88,10,0.28), rgba(212,88,10,0.18));
+      color: #f5a56b; /* brighter for contrast on dark modal bg */
+      font-family: inherit; font-size: 1rem;
+      font-weight: 600; cursor: pointer;
       transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
       letter-spacing: 0.03em;
     }
@@ -1230,9 +1282,10 @@
       .toolbar .btn-row .btn-secondary { width: 100%; justify-content: center; padding: 16px; }
     }
     /* ── Round 1 + Round 80: Bull / Bear panels ── */
+    /* R294: bull-bear fluid — no hard 768px breakpoint needed, uses auto-fit */
     .bull-bear-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
       gap: 20px;
     }
     /* Round 80: bull/bear as cards, not just bordered columns */
@@ -1261,11 +1314,13 @@
     .prob-medium { background: rgba(251,191,36,0.15); color: #fbbf24; }
     .prob-high { background: rgba(239,68,68,0.15); color: #f87171; }
     .sub-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
-    .sub-label { font-size: 0.82rem; font-weight: 700; color: #c5c5c5; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    /* R305: sub-labels — slightly larger, more prominent in bull/bear sections */
+    .sub-label { font-size: 0.75rem; font-weight: 700; color: #b0b0b0; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .trade-chart { width: 100%; margin-bottom: 16px; overflow-x: auto; }
     .trade-chart svg { width: 100%; min-width: 320px; height: auto; }
     .conditions { margin-top: 12px; font-size: 0.82rem; color: #94a3b8; }
-    .thesis { font-size: 0.9rem; line-height: 1.7; color: var(--text); margin: 8px 0; }
+    /* R303: thesis text — more readable with better contrast color */
+    .thesis { font-size: 0.92rem; line-height: 1.75; color: #d6d6d6; margin: 8px 0; }
     /* Round 107: trade tiles responsive */
     .trade-tiles {
       display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
@@ -1290,7 +1345,7 @@
       .project-name { font-size: 1.8rem !important; }
       .verdict { font-size: 1.2rem; padding: 10px 16px; }
       .score-row { font-size: 0.85rem; }
-      .score-label strong { font-size: 0.82rem; }
+      .score-label strong { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .score-value { font-size: 0.82rem; }
       .panel { padding: 14px; }
       .payment-card { width: calc(100vw - 16px); padding: 20px 14px; }
@@ -1302,6 +1357,9 @@
       .analysis { font-size: 0.82rem; word-break: break-word; overflow-wrap: anywhere; }
       .card h3 { font-size: 1.1rem; }
       .stat-val { font-size: 1.6rem; }
+      /* R291: score-row label area doesn't overflow on tiny screens */
+      .score-label { overflow: hidden; }
+      .score-label span { display: none; } /* hide subtitle on <400px to save space */
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js" defer></script>

@@ -320,7 +320,10 @@ export async function collectOnchain(projectName) {
     const tvl30dChange = computePctChange(currentTvl, tvl30dAgo);
     let tvlStickiness = null;
     if (tvl7dChange !== null && tvl30dChange !== null) {
-      if (tvl7dChange >= -5 && tvl30dChange >= -10) tvlStickiness = 'sticky';
+      // Round 238 (AutoResearch): improved stickiness — also reward TVL growth (not just stability)
+      const isGrowing = tvl7dChange > 5 && tvl30dChange > 10;
+      if (isGrowing) tvlStickiness = 'growing';  // new: actively attracting capital
+      else if (tvl7dChange >= -5 && tvl30dChange >= -10) tvlStickiness = 'sticky';
       else if (tvl7dChange < -20 || tvl30dChange < -30) tvlStickiness = 'fleeing';
       else tvlStickiness = 'moderate';
     }
@@ -363,6 +366,8 @@ export async function collectOnchain(projectName) {
       chains: protocol?.chains || match.protocol?.chains || [],
       category: protocol?.category || match.protocol?.category || null,
       fees_7d: fees7d,
+      // Round 238 (AutoResearch): fees_7d_prev for revenue trend detection in circuit breakers
+      fees_7d_prev: feeTotalsPrev?.fees ?? null,
       fees_30d: fees30dDerived,
       fees_30d_actual: fees30dActual,
       revenue_7d: revenue7d,

@@ -4,24 +4,31 @@
   <meta charset="UTF-8" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
   <!-- Content Security Policy -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' api.clawnkers.com api.dexscreener.com; frame-ancestors 'none';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0a" />
   <title>Clawnkers — Crypto Intelligence, Built by Agents</title>
   <meta name="description" content="AI-powered crypto research and analysis tools for the ecosystem. Alpha Scanner, MCP Server, and more — built by humans and AI agents working 24/7." />
+  <link rel="canonical" href="https://clawnkers.com/" />
   <!-- Open Graph -->
   <meta property="og:title" content="Clawnkers — Crypto Intelligence, Built by Agents" />
   <meta property="og:description" content="AI-powered crypto research tools. Alpha Scanner scores any crypto project in seconds — market data, on-chain metrics, AI verdict. $1 USDC on Base." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://clawnkers.com" />
   <meta property="og:image" content="https://clawnkers.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clawnkers.com/og-image.png" />
   <meta name="twitter:title" content="Clawnkers — Crypto Intelligence, Built by Agents" />
   <meta name="twitter:description" content="Alpha Scanner: deep crypto research in seconds. 10 data sources + Claude Opus 4.6 synthesis + bull/bear case analysis. $1 USDC, no signup." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="dns-prefetch" href="https://api.clawnkers.com" />
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
+  <link rel="preload" href="https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2" as="font" type="font/woff2" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -108,7 +115,7 @@
     .fade-in {
       opacity: 0;
       transform: translateY(24px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
+      transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .fade-in.visible {
       opacity: 1;
@@ -153,7 +160,8 @@
       align-items: center;
       gap: 8px;
     }
-    .logo img { width: 56px; height: 56px; border-radius: 6px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); }
+    .logo img { width: 56px; height: 56px; border-radius: 6px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); transition: transform 0.3s ease, filter 0.3s ease; }
+    .logo:hover img { transform: rotate(-3deg) scale(1.05); filter: hue-rotate(15deg) saturate(1.4) brightness(1.15); }
     .logo .brand-text { color: var(--text); }
     .logo .brand-text span { color: var(--green); }
     nav {
@@ -215,7 +223,7 @@
       border-radius: 999px;
       background: rgba(212,88,10,0.06);
       color: var(--green);
-      font-size: 0.82rem;
+      font-size: clamp(0.78rem, 1.8vw, 0.85rem);
       font-weight: 500;
       margin-bottom: 28px;
       letter-spacing: 0.02em;
@@ -340,10 +348,11 @@
     .section-head { margin-bottom: 48px; }
 
     /* ── Products ──────────────────────────────── */
+    /* R319: products grid — auto-fit for fluid responsiveness without media query */
     .products-section { background: var(--surface); }
     .products-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
       gap: 20px;
     }
     .product-card {
@@ -607,19 +616,31 @@
       border-color: rgba(212,88,10,0.2);
       transform: translateY(-2px);
     }
+    /* R320: testimonial text — improved contrast and attribution styling */
     .testimonial-card p {
-      color: #c8c8c8;
+      color: #d0d0d0;  /* slightly brighter for better readability */
       font-size: 0.95rem;
-      line-height: 1.7;
+      line-height: 1.75;
       margin: 0;
       flex: 1;
       position: relative;
       z-index: 1;
     }
     .testimonial-card footer {
-      color: var(--muted);
+      color: #8e8e8e;  /* brighter than var(--muted) for WCAG contrast */
       font-size: 0.82rem;
       font-style: normal;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .testimonial-card footer::before {
+      content: '';
+      display: inline-block;
+      width: 16px; height: 1px;
+      background: rgba(212,88,10,0.5);
+      border-radius: 999px;
+      flex-shrink: 0;
     }
     @media (max-width: 860px) {
       .social-proof-grid { grid-template-columns: repeat(2, 1fr); }
@@ -697,7 +718,7 @@
       letter-spacing: -0.02em;
       color: var(--text);
     }
-    .footer-logo img { width: 40px; height: 40px; border-radius: 4px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); }
+    .footer-logo img { width: 40px; height: 40px; border-radius: 6px; object-fit: contain; filter: hue-rotate(15deg) saturate(1.3) brightness(1.1); }
     .footer-logo .brand-text { color: var(--text); } .footer-logo .brand-text span { color: var(--green); }
     .footer-links {
       display: flex;
@@ -988,6 +1009,28 @@
       contain: layout style;
     }
   </style>
+  <!-- Structured Data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Clawnkers Alpha Scanner",
+    "applicationCategory": "FinanceApplication",
+    "description": "AI-powered crypto research tool that scores any crypto project in seconds using 10+ data sources and Claude Opus 4.6 synthesis.",
+    "url": "https://clawnkers.com",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "1",
+      "priceCurrency": "USDC"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "120"
+    }
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>

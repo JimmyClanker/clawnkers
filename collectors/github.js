@@ -181,6 +181,16 @@ export async function collectGithub(projectName) {
       Array.isArray(workflowsInfo.value?.data) &&
       workflowsInfo.value.data.length > 0;
 
+    // Round 238 (AutoResearch): detect test files via workflow names or typical test patterns
+    // Heuristic: CI workflows mentioning "test", "jest", "mocha", "vitest" = has test suite
+    const hasTestSuite = (() => {
+      if (!Array.isArray(workflowsInfo.value?.data)) return null;
+      return workflowsInfo.value.data.some((w) => {
+        const name = (w?.name || '').toLowerCase();
+        return /test|jest|mocha|vitest|pytest|coverage|spec/.test(name);
+      });
+    })();
+
     // Round 51: latest release data
     const latestRelease = (() => {
       if (releasesInfo.status !== 'fulfilled') return null;
@@ -350,6 +360,7 @@ export async function collectGithub(projectName) {
       languages: languagesData,
       dependency_count: dependencyCount,
       has_ci: hasCI,
+      has_test_suite: hasTestSuite, // Round 238: test coverage signal from CI workflow names
       latest_release: latestRelease,
       repo_health_tier: repoHealthTier,
       repo_health_score: repoHealthScore,

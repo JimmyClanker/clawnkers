@@ -477,7 +477,9 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
 
   // Round 7: TVL stickiness adjustment
   const tvlStickiness = onchain.tvl_stickiness;
-  if (tvlStickiness === 'sticky') raw += 0.4;
+  // Round 238 (AutoResearch): 'growing' TVL stickiness gets highest bonus (actively attracting capital)
+  if (tvlStickiness === 'growing') raw += 0.6;   // > sticky: actively growing capital = strong signal
+  else if (tvlStickiness === 'sticky') raw += 0.4;
   else if (tvlStickiness === 'fleeing') raw -= 0.5;
 
   // Round 218 (AutoResearch): revenue trend — improving revenue is a bullish fundamental signal
@@ -570,7 +572,8 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
     fees > 0 ? Math.min(Math.log10(fees) / 6, 1) * 25 : 0,  // fee generation (0-25)
     Math.max(0, Math.min((trend7d + 15) / 30, 1)) * 20,      // TVL stability 7d (0-20)
     Math.max(0, Math.min((trend30d + 20) / 40, 1)) * 15,     // TVL stability 30d (0-15)
-    tvlStickiness === 'sticky' ? 15 : tvlStickiness === 'moderate' ? 8 : tvlStickiness === 'fleeing' ? 0 : 7.5, // stickiness (0-15)
+    // Round 238: 'growing' gets full 15 (attracting capital), 'sticky' = 13, 'moderate' = 8, 'fleeing' = 0
+    tvlStickiness === 'growing' ? 15 : tvlStickiness === 'sticky' ? 13 : tvlStickiness === 'moderate' ? 8 : tvlStickiness === 'fleeing' ? 0 : 7.5, // stickiness (0-15)
     chainCount >= 5 ? 10 : chainCount >= 3 ? 6 : chainCount >= 2 ? 3 : 0, // chain diversification (0-10)
     activeAddresses7d > 10_000 ? 10 : activeAddresses7d > 1_000 ? 5 : activeAddresses7d > 100 ? 2 : 0, // active users (0-10)
     revenueToFees !== null && revenueToFees > 0 ? Math.min(revenueToFees * 10, 5) : 0, // value capture (0-5)
@@ -739,6 +742,8 @@ function scoreDevelopment(github = {}) {
 
   // Round 29: CI bonus — having CI workflows = professional dev practice
   if (github.has_ci === true) raw += 0.3;
+  // Round 238 (AutoResearch): test suite bonus — having explicit test workflows = higher code quality
+  if (github.has_test_suite === true) raw += 0.2;  // additional 0.2 on top of CI bonus
 
   // Round R17 (AutoResearch batch): Issue health signal — healthy issue tracker = active maintenance
   const issueHealthSignal = github.issue_health_signal;

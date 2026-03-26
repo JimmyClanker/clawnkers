@@ -145,7 +145,12 @@ export function createApp({
 
   app.use((req, res, next) => {
     if (req.path === '/mcp') return next();
-    return express.json({ limit: '100kb' })(req, res, next);
+    return express.json({
+      limit: '100kb',
+      verify: (req, _res, buf) => {
+        req.rawBody = buf ? buf.toString('utf8') : '';
+      },
+    })(req, res, next);
   });
 
   // Route /alphascan → serve alphascan.html

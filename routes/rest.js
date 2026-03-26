@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import { appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
@@ -50,33 +51,87 @@ function calculateConfidence(results) {
 }
 
 function normalizeMoltifyTask(body = {}) {
+  const data = getMoltifyData(body);
+  const requestor = data.requestor && typeof data.requestor === 'object' ? data.requestor : null;
   return {
     received_at: new Date().toISOString(),
     source: 'moltify',
     status: 'received',
-    task_id: String(body.task_id || '').trim(),
-    title: String(body.title || '').trim(),
-    description: String(body.description || '').trim(),
-    deliverable_type: body.deliverable_type ? String(body.deliverable_type).trim() : null,
-    project: body.project ? String(body.project).trim() : null,
-    price_usd: Number(body.price_usd),
-    priority: body.priority ? String(body.priority).trim() : 'normal',
+    event: body.event ? String(body.event) : 'task.submitted',
+    task_id: String(data.task_id || data.taskId || '').trim(),
+    title: String(data.title || '').trim(),
+    description: String(data.description || '').trim(),
+    requirements: data.requirements ? String(data.requirements).trim() : null,
+    deliverable_type: data.deliverable_type ? String(data.deliverable_type).trim() : null,
+    project: data.project ? String(data.project).trim() : null,
+    price_usd: Number(data.price_usd ?? data.priceUsd ?? data.agreedPrice),
+    priority: data.priority ? String(data.priority).trim() : 'normal',
     buyer: body.buyer && typeof body.buyer === 'object' ? {
       id: body.buyer.id ? String(body.buyer.id) : null,
       name: body.buyer.name ? String(body.buyer.name) : null,
+    } : requestor ? {
+      id: requestor.id ? String(requestor.id) : null,
+      name: requestor.name ? String(requestor.name) : null,
+      type: requestor.type ? String(requestor.type) : null,
+      trust_tier: requestor.trustTier ? String(requestor.trustTier) : null,
     } : null,
-    callback_url: body.callback_url ? String(body.callback_url).trim() : null,
+    callback_url: data.callback_url ? String(data.callback_url).trim() : (data.callbackUrl ? String(data.callbackUrl).trim() : null),
     raw: body,
   };
 }
 
 function validateMoltifyPayload(body = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body must be a JSON object';
-  if (!String(body.task_id || '').trim()) return 'task_id is required';
-  if (!String(body.title || '').trim()) return 'title is required';
-  if (!String(body.description || '').trim()) return 'description is required';
-  if (!Number.isFinite(Number(body.price_usd))) return 'price_usd must be a number';
+  const data = body?.data && typeof body.data === 'object' ? body.data : body;
+  const taskId = data.task_id || data.taskId;
+  const title = data.title;
+  const description = data.description;
+  const price = data.price_usd ?? data.priceUsd ?? data.agreedPrice;
+  if (!String(taskId || '').trim()) return 'task_id/taskId is required';
+  if (!String(title || '').trim()) return 'title is required';
+  if (!String(description || '').trim()) return 'description is required';
+  if (!Number.isFinite(Number(price))) return 'price_usd/agreedPrice must be a number';
   return null;
+}
+
+function getMoltifyData(body = {}) {
+  return body?.data && typeof body.data === 'object' ? body.data : body;
+}
+
+function normalizeHeaderValue(value) {
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+}
+
+function timingSafeEqualHex(a, b) {
+  const ab = Buffer.from(String(a), 'utf8');
+  const bb = Buffer.from(String(b), 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
+function verifyMoltifyAuth(req, secret) {
+  const auth = normalizeHeaderValue(req.headers.authorization);
+  if (auth && auth === `Bearer ${secret}`) {
+    return { ok: true, mode: 'bearer' };
+  }
+
+  const rawBody = String(req.rawBody || '');
+  const signatureHeader =
+    normalizeHeaderValue(req.headers['x-moltify-signature']) ||
+    normalizeHeaderValue(req.headers['x-webhook-signature']) ||
+    normalizeHeaderValue(req.headers['x-signature']);
+
+  if (!signatureHeader || !rawBody) {
+    return { ok: false, mode: 'missing' };
+  }
+
+  const provided = signatureHeader.replace(/^sha256=/i, '').trim();
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  if (timingSafeEqualHex(provided, expected)) {
+    return { ok: true, mode: 'hmac' };
+  }
+
+  return { ok: false, mode: 'invalid' };
 }
 
 export function createRestRouter({ config, exaService, signalsService }) {
@@ -202,7 +257,7 @@ export function createRestRouter({ config, exaService, signalsService }) {
       })(),
       // Round 233 (AutoResearch nightly): surface scan engine version and latest features
       engine: {
-        scoring_version: 'v3.233',
+        scoring_version: 'v3.238',
         features: [
           'P/TVL valuation scoring (R233)',
           'Sentiment credibility score (R233)',
@@ -213,6 +268,20 @@ export function createRestRouter({ config, exaService, signalsService }) {
           'P/TVL alpha signal (R233)',
           'Score tier labels in calibration (R233)',
           'Social credibility circuit breaker (R233)',
+          // Round 238 (AutoResearch nightly)
+          'DEX 5m price change momentum (R238)',
+          'Airdrop catalyst alpha signal (R238)',
+          'Hack/exploit circuit breaker (R238)',
+          'Revenue collapse circuit breaker (R238)',
+          'Mercenary TVL trap breaker (R238)',
+          'Community score propagation market→social (R238)',
+          'GitHub test suite signal (R238)',
+          'Reddit expanded keyword coverage (R238)',
+          'Near-ATH breakout detector (R238)',
+          'P/TVL deep value alpha signal (R238)',
+          'Slow request performance monitoring (R238)',
+          'Social price divergence red flag (R238)',
+          'SEO aggregate rating schema (R238)',
         ],
       },
     });
@@ -223,9 +292,8 @@ export function createRestRouter({ config, exaService, signalsService }) {
       return res.status(503).json({ ok: false, error: 'webhook_not_configured' });
     }
 
-    const auth = String(req.headers.authorization || '');
-    const expected = `Bearer ${config.moltifyWebhookSecret}`;
-    if (auth !== expected) {
+    const authCheck = verifyMoltifyAuth(req, config.moltifyWebhookSecret);
+    if (!authCheck.ok) {
       return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
 
@@ -236,10 +304,13 @@ export function createRestRouter({ config, exaService, signalsService }) {
 
     try {
       const normalized = normalizeMoltifyTask(req.body);
+      if (req.body?.data?.test === true || req.body?.test === true) {
+        return res.json({ ok: true, source: 'moltify', task_id: normalized.task_id, status: 'test_ok', auth_mode: authCheck.mode });
+      }
       const logPath = join(process.cwd(), 'ops', 'moltify-task-log.jsonl');
       mkdirSync(dirname(logPath), { recursive: true });
       appendFileSync(logPath, JSON.stringify(normalized) + '\n');
-      return res.json({ ok: true, source: 'moltify', task_id: normalized.task_id, status: normalized.status });
+      return res.json({ ok: true, source: 'moltify', task_id: normalized.task_id, status: normalized.status, auth_mode: authCheck.mode });
     } catch (error) {
       console.error('[moltify-webhook]', error.message);
       return res.status(500).json({ ok: false, error: 'internal_error' });

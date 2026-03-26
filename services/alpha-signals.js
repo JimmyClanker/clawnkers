@@ -706,6 +706,27 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 238 (AutoResearch): Airdrop catalyst signal — community demand driver
+  const airdropMentions = safeN(social.airdrop_mentions ?? 0);
+  if (airdropMentions >= 2) {
+    signals.push({
+      signal: 'airdrop_catalyst',
+      strength: airdropMentions >= 5 ? 'strong' : 'moderate',
+      detail: `${airdropMentions} news articles cover airdrops/token distributions — upcoming airdrops drive wallet activity, new user acquisition, and short-term price demand.`,
+    });
+  }
+
+  // Round 238b (AutoResearch): Volume acceleration on DEX — m5 + h1 both bullish = momentum burst
+  const m5Change = safeN(dex.dex_price_change_m5 ?? NaN);
+  const h1Change = safeN(dex.dex_price_change_h1 ?? NaN);
+  if (Number.isFinite(m5Change) && Number.isFinite(h1Change) && m5Change > 3 && h1Change > 5) {
+    signals.push({
+      signal: 'dex_momentum_burst',
+      strength: m5Change > 8 || h1Change > 15 ? 'strong' : 'moderate',
+      detail: `DEX price up ${m5Change.toFixed(1)}% in 5m and ${h1Change.toFixed(1)}% in 1h — ultra-short-term momentum burst, potential breakout in progress.`,
+    });
+  }
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {
@@ -768,6 +789,81 @@ export function detectFdvEfficiencySignal(market = {}) {
       signal: 'low_fdv_inflation_risk',
       strength: ratio >= 0.95 ? 'strong' : 'moderate',
       detail: `MCap/FDV ratio ${(ratio * 100).toFixed(0)}% — ${(ratio * 100).toFixed(0)}% of supply already circulating, minimal future inflation dilution risk.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 238 (AutoResearch nightly): New alpha signals ─────────────────────
+
+/**
+ * Detect near-ATH breakout signal — price within 5% of ATH is a momentum breakout zone.
+ * Added to detectAlphaSignals via patch below.
+ */
+export function detectNearAthBreakout(rawData = {}) {
+  const market = rawData.market ?? {};
+  const athDist = Number(market.ath_distance_pct ?? NaN);
+  if (!Number.isFinite(athDist)) return null;
+  if (athDist >= -5 && athDist < 0) {
+    return {
+      signal: 'near_ath_breakout_attempt',
+      strength: athDist >= -2 ? 'strong' : 'moderate',
+      detail: `Price within ${Math.abs(athDist).toFixed(1)}% of ATH — breakout zone with strong momentum confirmation potential.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Revenue acceleration signal: revenue growing faster than TVL over 30d.
+ */
+export function detectRevenueAcceleration(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  if (onchain.fee_revenue_acceleration !== 'accelerating') return null;
+  const fees7d = Number(onchain.fees_7d ?? 0);
+  if (fees7d < 10_000) return null; // Min threshold for signal credibility
+  return {
+    signal: 'revenue_acceleration',
+    strength: fees7d > 1_000_000 ? 'strong' : 'moderate',
+    detail: `Protocol revenue is growing faster than TVL (fee_revenue_acceleration: accelerating). Weekly fees: $${fees7d.toLocaleString('en-US', { maximumFractionDigits: 0 })} — expanding margin signal.`,
+  };
+}
+
+/**
+ * Multi-chain expansion alpha: recently added to new chains = growth catalyst.
+ */
+export function detectMultichainExpansion(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const chainCount = Array.isArray(onchain.chains) ? onchain.chains.length : 0;
+  const tvl = Number(onchain.tvl ?? 0);
+  if (chainCount >= 5 && tvl > 50_000_000) {
+    return {
+      signal: 'deep_multichain_presence',
+      strength: chainCount >= 8 ? 'strong' : 'moderate',
+      detail: `Deployed on ${chainCount} chains with $${(tvl / 1e6).toFixed(1)}M TVL — deep ecosystem integration reduces platform risk.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 238b (AutoResearch nightly): P/TVL undervaluation signal ───────────
+
+/**
+ * P/TVL deep value signal: MCap < TVL = market pricing protocol below its locked value.
+ * Classic DeFi "buy below book" opportunity signal.
+ */
+export function detectPtvlUndervaluation(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const market = rawData.market ?? {};
+  const tvl = Number(onchain.tvl ?? 0);
+  const mcap = Number(market.market_cap ?? 0);
+  if (tvl <= 0 || mcap <= 0 || tvl < 1_000_000) return null;
+  const ptvl = mcap / tvl;
+  if (ptvl < 0.5) {
+    return {
+      signal: 'ptvl_deep_value',
+      strength: ptvl < 0.2 ? 'strong' : 'moderate',
+      detail: `P/TVL ratio ${ptvl.toFixed(3)} — market cap ($${(mcap / 1e6).toFixed(1)}M) is below locked TVL ($${(tvl / 1e6).toFixed(1)}M). Historically a DeFi deep value entry zone.`,
     };
   }
   return null;

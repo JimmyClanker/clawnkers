@@ -171,6 +171,16 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
       if (cov >= 0.5 && (scores?.overall?.completeness ?? 0) >= 40) return 'medium';
       return 'low';
     })(),
+    // Round 238 (AutoResearch): surface which specific collectors failed for better diagnostics
+    failed_collector_names: failedCollectors.slice(0, 5), // max 5 for brevity
+    slow_collectors: (() => {
+      const SLOW_MS = 8000;
+      return Object.entries(collectorMeta)
+        .filter(([, c]) => c?.latency_ms != null && c.latency_ms > SLOW_MS)
+        .map(([name, c]) => ({ name, latency_ms: c.latency_ms }))
+        .sort((a, b) => b.latency_ms - a.latency_ms)
+        .slice(0, 3);
+    })(),
   };
 
 const json = {
@@ -263,6 +273,10 @@ const json = {
     // Round 13 (AutoResearch batch): protocol maturity + DEX liquidity depth
     ...(rawData?.onchain?.protocol_maturity ? [`- Protocol Maturity: ${rawData.onchain.protocol_maturity}`] : []),
     ...(rawData?.dex?.liquidity_category ? [`- DEX Liquidity: ${rawData.dex.liquidity_category} (${ rawData?.dex?.dex_liquidity_usd ? fmtNumber(rawData.dex.dex_liquidity_usd) : 'n/a' })`] : []),
+    // Round 238 (AutoResearch): DEX ultra-short-term momentum in key metrics text
+    ...(rawData?.dex?.dex_price_change_m5 != null ? [`- DEX 5m Price Change: ${rawData.dex.dex_price_change_m5 > 0 ? '+' : ''}${rawData.dex.dex_price_change_m5.toFixed(2)}%`] : []),
+    ...(rawData?.social?.airdrop_mentions > 0 ? [`- 🪂 Airdrop Mentions: ${rawData.social.airdrop_mentions} articles`] : []),
+    ...(rawData?.social?.hack_exploit_mentions > 0 ? [`- 🚨 Hack/Exploit Mentions: ${rawData.social.hack_exploit_mentions} ⚠️`] : []),
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,

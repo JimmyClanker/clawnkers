@@ -708,6 +708,8 @@
     }
 
     function renderReport(payload) {
+      // Round 238 (AutoResearch): store full scan result for JSON copy button
+      window._lastScanResult = payload;
       const verdict   = payload?.verdict || 'HOLD';
       const raw       = payload?.raw_data || {};
       const analysis  = payload?.llm_analysis || {};
@@ -1042,11 +1044,33 @@
         }
       });
 
+      // Round 238 (AutoResearch): Copy JSON button — for agent/developer consumers
+      const copyJsonBtn = document.createElement('button');
+      copyJsonBtn.textContent = '{ } Copy JSON';
+      copyJsonBtn.className = 'rescan-btn';
+      copyJsonBtn.title = 'Copy full scan data as JSON (for agent/developer use)';
+      copyJsonBtn.style.fontFamily = 'IBM Plex Mono, monospace';
+      copyJsonBtn.style.fontSize = '0.72rem';
+      copyJsonBtn.addEventListener('click', () => {
+        // data is available via closure from the calling scope (lastScanData or similar)
+        const jsonData = window._lastScanResult || {};
+        const jsonStr = JSON.stringify(jsonData, null, 2);
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(jsonStr).then(
+            () => { if (window.showToast) showToast('JSON copied to clipboard!', 'success'); },
+            () => { if (window.showToast) showToast('Copy failed', 'error'); }
+          );
+        } else {
+          if (window.showToast) showToast('Clipboard API not available in this browser', 'error');
+        }
+      });
+
       // Rescan button — wired via event delegation (no inline handlers)
       const rescanBtn = document.createElement('button');
       rescanBtn.textContent = '🔄 Rescan this project';
       rescanBtn.className = 'rescan-btn';
       rescanBtn.addEventListener('click', () => runScan(_persistedKey ? 'full' : 'quick'));
+      reportBox.insertBefore(copyJsonBtn, reportBox.firstChild);   // Round 238: JSON copy for devs
       reportBox.insertBefore(copyReportBtn, reportBox.firstChild);
       reportBox.insertBefore(rescanBtn, reportBox.firstChild);
       resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1520,6 +1544,24 @@
     }
 
     // ── Main scan function ────────────────────────────────────────────
+    // Round 238 (AutoResearch): session-level scan cache for instant browser reload
+    // Stores last 3 scan results (project+mode key → payload) for zero-wait rescan on back/reload
+    const _browserScanCache = new Map();
+    const _BROWSER_CACHE_MAX = 3;
+
+    function getBrowserCached(project, mode) {
+      return _browserScanCache.get(`${mode}:${project.toLowerCase()}`);
+    }
+    function setBrowserCached(project, mode, payload) {
+      const key = `${mode}:${project.toLowerCase()}`;
+      _browserScanCache.set(key, payload);
+      // Evict oldest if over limit
+      if (_browserScanCache.size > _BROWSER_CACHE_MAX) {
+        const firstKey = _browserScanCache.keys().next().value;
+        _browserScanCache.delete(firstKey);
+      }
+    }
+
     async function runScan(mode = 'full') {
       clearError();
       reportBox.classList.add('hidden');
