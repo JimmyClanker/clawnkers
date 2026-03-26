@@ -152,7 +152,7 @@ export async function collectGithub(projectName) {
       repo = topRepo.name;
     }
 
-    const [repoInfo, commitsInfo, contributorsInfo, languagesInfo, packageJsonInfo, workflowsInfo, releasesInfo, closedIssuesInfo] = await Promise.allSettled([
+    const [repoInfo, commitsInfo, contributorsInfo, languagesInfo, packageJsonInfo, workflowsInfo, releasesInfo, closedIssuesInfo, openPrsInfo] = await Promise.allSettled([
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}`),
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=1`),
       fetchContributorStats(owner, repo),
@@ -164,6 +164,8 @@ export async function collectGithub(projectName) {
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/releases?per_page=1`),
       // Round 156 (AutoResearch): fetch count of recently closed issues for resolution rate
       fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=closed&per_page=1&page=1`),
+      // Round 223 (AutoResearch): open pull requests count — signals active dev pipeline
+      fetchJson(`${GITHUB_API_BASE}/repos/${owner}/${repo}/pulls?state=open&per_page=1`),
     ]);
 
     const repoData = repoInfo.status === 'fulfilled' ? repoInfo.value.data : topRepo;
@@ -269,6 +271,14 @@ export async function collectGithub(projectName) {
       : issueStarRatio < 0.2 ? 'moderate'
       : 'issue_heavy'; // many open issues = technical debt signal
 
+    // Round 223 (AutoResearch): open PRs count from Link header last-page count
+    const openPrsHeader = openPrsInfo.status === 'fulfilled'
+      ? openPrsInfo.value?.headers?.get('link') : null;
+    const openPrsCount = openPrsHeader ? parseLastPage(openPrsHeader)
+      : (openPrsInfo.status === 'fulfilled' && Array.isArray(openPrsInfo.value?.data)
+        ? openPrsInfo.value.data.length
+        : null);
+
     // Round 156 (AutoResearch): issue resolution rate — closed vs total issues
     const closedIssuesHeader = closedIssuesInfo.status === 'fulfilled'
       ? closedIssuesInfo.value?.headers?.get('link') : null;
@@ -321,6 +331,7 @@ export async function collectGithub(projectName) {
       commit_frequency: commitFrequency,
       // Round 215 (AutoResearch): contributor_bus_factor — risk when 1-2 contributors dominate activity
       // High bus factor = decentralized dev; low = single point of failure
+      open_prs_count: openPrsCount,
       contributor_bus_factor: (() => {
         if (!Array.isArray(contributorStats) || contributorStats.length === 0) return null;
         // Calculate what % of commits the top contributor accounts for

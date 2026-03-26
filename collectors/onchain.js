@@ -258,9 +258,12 @@ export async function collectOnchain(projectName) {
     const tvlHistory = Array.isArray(protocol?.tvl) ? protocol.tvl : [];
     const tvl7dAgo = getClosestHistoricalTvl(tvlHistory, 7);
     const tvl30dAgo = getClosestHistoricalTvl(tvlHistory, 30);
-    const feeTotals = sumLastNDays(fees?.totalDataChart || fees?.data || [], 7);
+    const feeDataArr = fees?.totalDataChart || fees?.totalDataChartBreakdown || fees?.data || [];
+    const feeTotals = sumLastNDays(feeDataArr, 7);
     // Round 153 (AutoResearch): also compute fees for prior 7d window (days 8-14) to detect trend
-    const feeTotalsPrev = sumLastNDays(fees?.totalDataChart || fees?.data || [], 14, 7);
+    const feeTotalsPrev = sumLastNDays(feeDataArr, 14, 7);
+    // Round 229 (AutoResearch): fees_30d_actual from actual 30-day sum (more accurate than 7d × 4.3)
+    const feeTotals30d = sumLastNDays(feeDataArr, 30);
 
     const fees7d = feeTotals?.fees ?? (fees?.total24h ? Number(fees.total24h) * 7 : null);
     const revenue7d = feeTotals?.revenue ?? null;
@@ -335,8 +338,11 @@ export async function collectOnchain(projectName) {
     }
 
     // Round 5 (AutoResearch batch): Derive fees_30d and revenue_30d from 7d data if missing
-    const fees30dDerived = fees7d != null ? fees7d * (30 / 7) : null;
-    const revenue30dDerived = revenue7d != null ? revenue7d * (30 / 7) : null;
+    // Round 229: prefer actual 30d sum over derived estimate
+    const fees30dActual = feeTotals30d?.fees != null && feeTotals30d.fees > 0 ? feeTotals30d.fees : null;
+    const revenue30dActual = feeTotals30d?.revenue != null ? feeTotals30d.revenue : null;
+    const fees30dDerived = fees30dActual ?? (fees7d != null ? fees7d * (30 / 7) : null);
+    const revenue30dDerived = revenue30dActual ?? (revenue7d != null ? revenue7d * (30 / 7) : null);
 
     // Round 5 (AutoResearch batch): Protocol maturity tier based on TVL + fees
     let protocolMaturity = null;
@@ -358,6 +364,7 @@ export async function collectOnchain(projectName) {
       category: protocol?.category || match.protocol?.category || null,
       fees_7d: fees7d,
       fees_30d: fees30dDerived,
+      fees_30d_actual: fees30dActual,
       revenue_7d: revenue7d,
       revenue_30d: revenue30dDerived,
       revenue_to_fees_ratio: revenueToFeesRatio,

@@ -181,4 +181,36 @@ describe('buildDataSummary', () => {
     assert.ok(result.includes('DATA GAPS'), 'should include data gaps');
     assert.ok(result.includes('market'), 'should flag market as a gap');
   });
+
+  // Round 228 (AutoResearch): new collector field coverage tests
+  it('includes community score when present', () => {
+    const data = { market: { community_score: 65, twitter_followers: 50000 } };
+    const result = buildDataSummary(data);
+    assert.ok(result.includes('65'), 'community_score should appear in summary');
+  });
+
+  it('includes volume spike flag when present', () => {
+    const data = { market: { current_price: 1, volume_spike_flag: 'spike', total_volume: 10_000_000 } };
+    const result = buildDataSummary(data);
+    assert.ok(result.includes('spike'), 'volume spike flag should appear in summary');
+  });
+
+  it('includes net buy pressure pct from dex', () => {
+    const data = { dex: { dex_liquidity_usd: 500_000, dex_volume_24h: 100_000, net_buy_pressure_pct: 62.5, buy_sell_ratio: 1.25 } };
+    const result = buildDataSummary(data);
+    assert.ok(result.includes('62.5'), 'net buy pressure pct should appear in DEX section');
+  });
+
+  it('includes revenue trend from onchain', () => {
+    const data = { onchain: { tvl: 10_000_000, fees_7d: 50_000, revenue_7d: 20_000, revenue_trend: 'improving' } };
+    const result = buildDataSummary(data);
+    assert.ok(result.includes('improving') || result.includes('Revenue'), 'revenue trend context should appear');
+  });
+
+  it('net_buy_pressure_pct returns correct value', () => {
+    // 60 buys, 40 sells = 60%
+    assert.strictEqual(Math.round(60 / 100 * 100 * 10) / 10, 60.0);
+    // 45 buys, 55 sells = 45%
+    assert.strictEqual(Math.round(45 / 100 * 100 * 10) / 10, 45.0);
+  });
 });

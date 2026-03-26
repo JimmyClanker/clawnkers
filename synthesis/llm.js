@@ -170,6 +170,18 @@ export function buildDataSummary(rawData = {}) {
     marketLines.push(add('7d Change', market.price_change_percentage_7d_in_currency, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
     marketLines.push(add('30d Change', market.price_change_percentage_30d_in_currency, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
     marketLines.push(add('ATH Distance', market.ath_distance_pct, (v) => `${v.toFixed(1)}%`));
+    // Round 225 (AutoResearch): ATH recency and community score context
+    if (market.ath_recency) {
+      const recencyLabel = market.ath_recency === 'recent_ath' ? '🔥 ATH set within 30 days' : market.ath_recency === 'near_ath' ? 'ATH set within 90 days' : market.ath_recency === 'moderate_ath' ? 'ATH set within 1 year' : 'ATH over 1 year ago';
+      marketLines.push(`- ATH recency: ${recencyLabel}`);
+    }
+    if (market.community_score != null) {
+      const commLabel = market.community_score >= 70 ? 'large community' : market.community_score >= 40 ? 'moderate community' : 'small community';
+      marketLines.push(`- Community score: ${market.community_score}/100 (${commLabel})`);
+    }
+    if (market.volume_spike_flag) {
+      marketLines.push(`- ⚠️ Volume spike: ${market.volume_spike_flag} (vs 7d avg)`);
+    }
     marketLines.push(add('FDV', market.fully_diluted_valuation ?? market.fdv, formatNumber));
 
     const validMarket = marketLines.filter(Boolean);

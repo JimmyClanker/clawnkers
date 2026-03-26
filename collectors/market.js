@@ -245,6 +245,45 @@ export async function collectMarket(projectName) {
       telegram_channel_user_count: communityData?.telegram_channel_user_count ?? null,
       // Round 201 (AutoResearch): Reddit subscribers from CoinGecko community data
       reddit_subscribers: communityData?.reddit_subscribers ?? null,
+      // Round 227 (AutoResearch): price_momentum_score (0-100) — composite of all timeframes
+      // High score = consistently positive momentum across 1h/24h/7d/30d
+      price_momentum_score: (() => {
+        const changes = [
+          { val: marketData?.price_change_percentage_1h_in_currency?.usd, weight: 15 },
+          { val: marketData?.price_change_percentage_24h_in_currency?.usd, weight: 25 },
+          { val: marketData?.price_change_percentage_7d_in_currency?.usd, weight: 30 },
+          { val: marketData?.price_change_percentage_30d_in_currency?.usd, weight: 30 },
+        ].filter((c) => c.val != null && Number.isFinite(Number(c.val)));
+        if (changes.length === 0) return null;
+        const totalWeight = changes.reduce((s, c) => s + c.weight, 0);
+        let score = 0;
+        for (const { val, weight } of changes) {
+          const pct = Number(val);
+          // Sigmoid-like: map pct change to 0-1 contribution
+          // +20% → 0.9, 0% → 0.5, -20% → 0.1
+          const normalized = 1 / (1 + Math.exp(-pct / 15));
+          score += normalized * (weight / totalWeight);
+        }
+        return Math.round(score * 100);
+      })(),
+      // Round 224 (AutoResearch): coin_age_days — how old is this token/coin?
+      coin_age_days: (() => {
+        const gDate = coinData?.genesis_date;
+        if (!gDate) return null;
+        const days = Math.floor((Date.now() - new Date(gDate).getTime()) / 86400000);
+        return days >= 0 ? days : null;
+      })(),
+      // Round 222 (AutoResearch): ATH recency flag — was the ATH set recently?
+      // Recent ATH = strong momentum; ATH years ago = long-term underperformance
+      ath_recency: (() => {
+        const athDate = marketData?.ath_date?.usd;
+        if (!athDate) return null;
+        const daysSinceAth = (Date.now() - new Date(athDate).getTime()) / 86400000;
+        if (daysSinceAth <= 30) return 'recent_ath';      // within 30 days
+        if (daysSinceAth <= 90) return 'near_ath';        // within 90 days
+        if (daysSinceAth <= 365) return 'moderate_ath';   // within 1 year
+        return 'old_ath';                                  // over 1 year ago
+      })(),
       // Round 214 (AutoResearch): contract addresses per chain from CoinGecko platforms field
       // Provides direct contract lookup without requiring a separate API call
       contract_addresses: (() => {

@@ -81,21 +81,29 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     return collectorCache.withCache(name, projectName, fn);
   }
 
+  // Round 226 (AutoResearch): track per-collector start time for latency reporting
+  const collectorStartTimes = {};
+  function timedCollect(name, fn) {
+    collectorStartTimes[name] = Date.now();
+    return maybeCached(name, fn);
+  }
+
   // --- Phase 1: Independent collectors (run in parallel) ---
-  const marketPromise = maybeCached('market', () => collectMarket(projectName));
-  const onchainPromise = maybeCached('onchain', () => collectOnchain(projectName));
-  const socialPromise = maybeCached('social', () => collectSocial(projectName, exaService));
-  const githubPromise = maybeCached('github', () => collectGithub(projectName));
-  const dexPromise = maybeCached('dex', () => collectDexScreener(projectName));
-  const redditPromise = maybeCached('reddit', () => collectReddit(projectName));
-  const xSocialPromise = maybeCached('x_social', () => collectXSocial(projectName));
+  const marketPromise = timedCollect('market', () => collectMarket(projectName));
+  const onchainPromise = timedCollect('onchain', () => collectOnchain(projectName));
+  const socialPromise = timedCollect('social', () => collectSocial(projectName, exaService));
+  const githubPromise = timedCollect('github', () => collectGithub(projectName));
+  const dexPromise = timedCollect('dex', () => collectDexScreener(projectName));
+  const redditPromise = timedCollect('reddit', () => collectReddit(projectName));
+  const xSocialPromise = timedCollect('x_social', () => collectXSocial(projectName));
 
   const TOKENOMICS_OWN_TIMEOUT_MS = 12000;
   const tokenomicsPromise = marketPromise
     .catch(() => null)
     .then((marketCacheResult) => {
       const market = marketCacheResult?.data || null;
-      return maybeCached('tokenomics', () =>
+      collectorStartTimes['tokenomics'] = Date.now();
+    return maybeCached('tokenomics', () =>
         withTimeout(
           collectTokenomics(projectName, market?.coin_id || null, market),
           'tokenomics',
@@ -177,17 +185,17 @@ export async function collectAll(projectName, exaService, collectorCache = null)
 
   const phase2Results = await Promise.allSettled([
     withTimeout(
-      maybeCached('holders', () => collectHolders(projectName, contractAddress)),
+      timedCollect('holders', () => collectHolders(projectName, contractAddress)),
       'holders',
       15000,
     ),
     withTimeout(
-      maybeCached('ecosystem', () => collectEcosystem(projectName, onchainData, dexData)),
+      timedCollect('ecosystem', () => collectEcosystem(projectName, onchainData, dexData)),
       'ecosystem',
       10000,
     ),
     withTimeout(
-      maybeCached('contract', () => collectContractStatus(projectName, platforms, contractAddress)),
+      timedCollect('contract', () => collectContractStatus(projectName, platforms, contractAddress)),
       'contract',
       12000,
     ),
@@ -200,18 +208,20 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const contract = unwrapCache(contractResult, 'contract');
 
   // Round 189 (AutoResearch): record per-collector status with age_ms for cache diagnostics
+  // Round 226 (AutoResearch): add latency_ms for each collector
+  const now226 = Date.now();
   const collectorsInfo = {
-    market:     { ok: market.ok,     error: market.error,     source: market.source,     age_ms: market.age_ms },
-    onchain:    { ok: onchain.ok,    error: onchain.error,    source: onchain.source,    age_ms: onchain.age_ms },
-    social:     { ok: social.ok,     error: social.error,     source: social.source,     age_ms: social.age_ms },
-    github:     { ok: github.ok,     error: github.error,     source: github.source,     age_ms: github.age_ms },
-    tokenomics: { ok: tokenomics.ok, error: tokenomics.error, source: tokenomics.source, age_ms: tokenomics.age_ms },
-    dex:        { ok: dex.ok,        error: dex.error,        source: dex.source,        age_ms: dex.age_ms },
-    reddit:     { ok: reddit.ok,     error: reddit.error,     source: reddit.source,     age_ms: reddit.age_ms },
-    holders:    { ok: holders.ok,    error: holders.error,    source: holders.source,    age_ms: holders.age_ms },
-    ecosystem:  { ok: ecosystem.ok,  error: ecosystem.error,  source: ecosystem.source,  age_ms: ecosystem.age_ms },
-    contract:   { ok: contract.ok,   error: contract.error,   source: contract.source,   age_ms: contract.age_ms },
-    x_social:   { ok: xSocial.ok,    error: xSocial.error,    source: xSocial.source,    age_ms: xSocial.age_ms },
+    market:     { ok: market.ok,     error: market.error,     source: market.source,     age_ms: market.age_ms,     latency_ms: collectorStartTimes.market ? now226 - collectorStartTimes.market : null },
+    onchain:    { ok: onchain.ok,    error: onchain.error,    source: onchain.source,    age_ms: onchain.age_ms,    latency_ms: collectorStartTimes.onchain ? now226 - collectorStartTimes.onchain : null },
+    social:     { ok: social.ok,     error: social.error,     source: social.source,     age_ms: social.age_ms,     latency_ms: collectorStartTimes.social ? now226 - collectorStartTimes.social : null },
+    github:     { ok: github.ok,     error: github.error,     source: github.source,     age_ms: github.age_ms,     latency_ms: collectorStartTimes.github ? now226 - collectorStartTimes.github : null },
+    tokenomics: { ok: tokenomics.ok, error: tokenomics.error, source: tokenomics.source, age_ms: tokenomics.age_ms, latency_ms: collectorStartTimes.tokenomics ? now226 - collectorStartTimes.tokenomics : null },
+    dex:        { ok: dex.ok,        error: dex.error,        source: dex.source,        age_ms: dex.age_ms,        latency_ms: collectorStartTimes.dex ? now226 - collectorStartTimes.dex : null },
+    reddit:     { ok: reddit.ok,     error: reddit.error,     source: reddit.source,     age_ms: reddit.age_ms,     latency_ms: collectorStartTimes.reddit ? now226 - collectorStartTimes.reddit : null },
+    holders:    { ok: holders.ok,    error: holders.error,    source: holders.source,    age_ms: holders.age_ms,    latency_ms: collectorStartTimes.holders ? now226 - collectorStartTimes.holders : null },
+    ecosystem:  { ok: ecosystem.ok,  error: ecosystem.error,  source: ecosystem.source,  age_ms: ecosystem.age_ms,  latency_ms: collectorStartTimes.ecosystem ? now226 - collectorStartTimes.ecosystem : null },
+    contract:   { ok: contract.ok,   error: contract.error,   source: contract.source,   age_ms: contract.age_ms,   latency_ms: collectorStartTimes.contract ? now226 - collectorStartTimes.contract : null },
+    x_social:   { ok: xSocial.ok,    error: xSocial.error,    source: xSocial.source,    age_ms: xSocial.age_ms,    latency_ms: collectorStartTimes.x_social ? now226 - collectorStartTimes.x_social : null },
   };
 
   const dataSourceSummary = buildDataSourceSummary(collectorsInfo);

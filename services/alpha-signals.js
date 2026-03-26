@@ -475,6 +475,18 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 230 (AutoResearch): Veteran protocol with strong fees signal
+  // A protocol that's been live for 2+ years and still generating significant fees is battle-tested
+  const protocolAgeDays = safeN(onchain.protocol_age_days ?? 0);
+  const fees7dVet = safeN(onchain.fees_7d ?? 0);
+  if (protocolAgeDays >= 730 && fees7dVet > 500_000) {
+    signals.push({
+      signal: 'veteran_protocol_strong_fees',
+      strength: fees7dVet > 2_000_000 ? 'strong' : 'moderate',
+      detail: `Protocol ${Math.floor(protocolAgeDays / 365)}+ years old with $${(fees7dVet / 1000).toFixed(0)}K/week fees — battle-tested with proven product-market fit.`,
+    });
+  }
+
   // Round 219 (AutoResearch): Volume spike + buy pressure = high-conviction breakout signal
   // When volume spikes significantly AND buyers are in control, it's a potential breakout setup
   const volumeSpike = market.volume_spike_flag;
