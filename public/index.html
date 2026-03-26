@@ -124,7 +124,13 @@
       -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      /* Round 68: needed so absolute mobile-nav positions relative to header */
+      /* Round 93: smooth height transition when scrolled */
+      transition: border-color 0.3s;
+    }
+    /* Round 93: header shrinks slightly on scroll (JS adds .scrolled) */
+    header.scrolled {
+      border-bottom-color: rgba(255,255,255,0.1);
+      background: rgba(10,10,10,0.97);
     }
     .header-inner {
       display: flex;
@@ -132,7 +138,9 @@
       justify-content: space-between;
       height: 64px;
       gap: 24px;
+      transition: height 0.3s ease;
     }
+    header.scrolled .header-inner { height: 56px; }
     .logo {
       font-size: 1.4rem;
       font-weight: 800;
@@ -222,9 +230,28 @@
       color: var(--text);
       margin-bottom: 20px;
     }
+    /* Round 95: animated gradient on highlighted word */
     h1.hero-headline em {
       font-style: normal;
-      color: var(--green);
+      background: linear-gradient(90deg, #D4580A, #ff8c42, #D4580A);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradientShift 4s linear infinite;
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% center; }
+      100% { background-position: 200% center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      h1.hero-headline em {
+        animation: none;
+        background: var(--green);
+        background-clip: unset;
+        -webkit-background-clip: unset;
+        -webkit-text-fill-color: var(--green);
+      }
     }
     .hero-sub {
       font-size: clamp(1rem, 2vw, 1.2rem);

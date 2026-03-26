@@ -15,3 +15,21 @@ if (hamburgerBtn && mobileNavMenu) {
     }
   });
 }
+
+// Round 93: header scroll-aware shrink
+(function() {
+  const hdr = document.querySelector('header');
+  if (!hdr) return;
+  var ticking = false;
+  function onScroll() {
+    if (!ticking) {
+      requestAnimationFrame(function() {
+        hdr.classList.toggle('scrolled', window.scrollY > 40);
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll(); // initial state
+})();

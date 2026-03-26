@@ -120,7 +120,15 @@
       -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
+      transition: border-color 0.3s;
     }
+    /* Round 93: header shrinks on scroll */
+    header.scrolled {
+      border-bottom-color: rgba(255,255,255,0.1);
+      background: rgba(10,10,10,0.97);
+    }
+    .header-inner { transition: height 0.3s ease; }
+    header.scrolled .header-inner { height: 56px; }
     .header-inner {
       display: flex; align-items: center;
       justify-content: space-between;
@@ -318,6 +326,25 @@
       font-size: 0.85em; color: var(--green);
     }
 
+    /* Round 98: styled rescan button */
+    .rescan-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted2);
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .rescan-btn:hover {
+      border-color: rgba(212,88,10,0.3);
+      color: var(--text);
+      background: rgba(212,88,10,0.06);
+    }
+
     /* ══════════════════════════════════════════════════════════════
        ALPHA SCANNER — SPECIFIC STYLES
        ══════════════════════════════════════════════════════════════ */
@@ -507,6 +534,17 @@
       margin: 0 auto;
       padding: 32px 0 64px;
     }
+    /* Round 98: vertical rhythm — panels connected by subtle line */
+    .results-container #report > section.panel + section.panel {
+      position: relative;
+    }
+    .results-container #report > section.panel + section.panel::before {
+      content: '';
+      display: block;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212,88,10,0.12), transparent);
+      margin-bottom: 18px;
+    }
 
     .grid {
       display: grid;
@@ -642,18 +680,20 @@
       background: rgba(248,113,113,0.05);
       color: #fca5a5;
     }
-    .score-list { display: grid; gap: 12px; }
+    .score-list { display: grid; gap: 10px; }
     .score-row {
-      display: grid; grid-template-columns: 120px 1fr 72px;
-      gap: 12px; align-items: center;
-      padding: 10px 12px; border-radius: var(--radius-sm);
+      display: grid; grid-template-columns: 110px 1fr 60px;
+      gap: 10px; align-items: center;
+      padding: 10px 14px; border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.02);
       animation: fadeUp 0.45s ease both;
+      /* Round 94: min-height for touch comfort */
+      min-height: 48px;
     }
-    .score-label { display: grid; gap: 2px; }
-    .score-label strong { font-size: 0.9rem; color: var(--text); }
-    .score-label span { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .score-label { display: grid; gap: 2px; min-width: 0; }
+    .score-label strong { font-size: 0.88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .score-label span { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
     .bar {
       position: relative; height: 12px;
       border: 1px solid var(--border);
@@ -785,6 +825,8 @@
       opacity: 0.5;
       pointer-events: none;
     }
+    /* Round 92: step counter via CSS counters */
+    .how-grid { counter-reset: how-step; }
     .how-step {
       padding: 28px 24px;
       text-align: center;
@@ -793,11 +835,27 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      transition: border-color 0.2s, transform 0.2s;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      position: relative;
+      counter-increment: how-step;
     }
     .how-step:hover {
-      border-color: rgba(212,88,10,0.2);
-      transform: translateY(-2px);
+      border-color: rgba(212,88,10,0.28);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.3), 0 0 0 1px rgba(212,88,10,0.08);
+    }
+    /* Step number badge — top-right corner */
+    .how-step::after {
+      content: counter(how-step);
+      position: absolute; top: 14px; right: 16px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(212,88,10,0.12);
+      border: 1px solid rgba(212,88,10,0.25);
+      color: var(--green);
+      font-size: 0.72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+      font-family: 'IBM Plex Mono', monospace;
     }
     .how-num {
       width: 54px; height: 54px; border-radius: 50%;
@@ -1050,18 +1108,19 @@
     }
     @media (max-width: 720px) {
       .toolbar { grid-template-columns: 1fr; gap: 8px; }
-      /* Round 63: score rows stack vertically — label + score on same row, bar below */
+      /* Round 63/94: score rows stack vertically — label + score on same row, bar below */
       .score-row {
         grid-template-columns: 1fr auto;
         grid-template-rows: auto auto;
-        gap: 4px 8px;
+        gap: 6px 8px;
+        padding: 10px 12px;
       }
       .score-row .bar {
         grid-column: 1 / -1;
-        height: 10px;
+        height: 8px;
       }
       .score-row .score-label { grid-column: 1; }
-      .score-row .score-value { grid-column: 2; align-self: center; font-size: 0.88rem; }
+      .score-row .score-value { grid-column: 2; align-self: center; font-size: 0.9rem; font-weight: 700; }
       .header-row { align-items: flex-start; flex-direction: column; gap: 12px; }
       .verdict-wrap { justify-items: start; width: 100%; }
       .verdict { width: 100%; text-align: center; font-size: 1.4rem; padding: 12px 20px; }
@@ -1320,7 +1379,10 @@
   <!-- Round 79: scroll-to-top button -->
   <button id="scroll-top-btn" aria-label="Scroll to top" style="position:fixed;bottom:24px;right:20px;width:40px;height:40px;background:rgba(17,17,17,0.92);border:1px solid rgba(255,255,255,0.1);border-radius:50%;color:var(--muted2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s,transform 0.2s,border-color 0.2s,color 0.2s;z-index:1000;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">↑</button>
 
-  <script src="js/alphascan.js?v=90d"></script>
+  <!-- Round 91: Toast notification container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="false" style="position:fixed;bottom:72px;right:20px;z-index:9500;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
+
+  <script src="js/alphascan.js?v=91"></script>
   <script src="js/utils.js"></script>
   <script src="js/hamburger.js"></script>
 </body>

@@ -132,31 +132,62 @@
       reportBox.classList.remove('hidden');
       errorBox.classList.add('hidden');
       reportBox.classList.remove('results-reveal');
+      // Round 96: 3-panel skeleton matching real report layout
       reportBox.innerHTML = `
+        <!-- Panel 1: header + analysis -->
         <div class="skeleton-panel">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
-            <div style="display:grid;gap:10px;flex:1;">
-              <div class="skeleton skeleton-line w-40" style="height:12px;"></div>
+            <div style="display:grid;gap:10px;flex:1;min-width:0;">
+              <div class="skeleton skeleton-line w-40" style="height:11px;"></div>
               <div class="skeleton skeleton-title"></div>
             </div>
-            <div class="skeleton skeleton-badge"></div>
+            <div style="display:grid;gap:8px;align-items:end;">
+              <div class="skeleton skeleton-badge" style="height:40px;width:110px;border-radius:999px;"></div>
+              <div class="skeleton skeleton-line w-60" style="height:22px;margin-left:auto;width:60px;"></div>
+            </div>
           </div>
-          <div class="skeleton skeleton-line w-full"></div>
-          <div class="skeleton skeleton-line w-80"></div>
-          <div class="skeleton skeleton-line w-60"></div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px;">
-            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
-            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
-            <div class="skeleton" style="height:80px;border-radius:12px;"></div>
+          <!-- intro card shimmer -->
+          <div class="skeleton" style="height:72px;border-radius:10px;"></div>
+          <!-- analysis lines -->
+          <div style="display:grid;gap:8px;margin-top:4px;">
+            <div class="skeleton skeleton-line w-full"></div>
+            <div class="skeleton skeleton-line w-full"></div>
+            <div class="skeleton skeleton-line w-80"></div>
+            <div class="skeleton skeleton-line w-full"></div>
+            <div class="skeleton skeleton-line w-60"></div>
           </div>
         </div>
-        <div class="skeleton-panel" style="display:grid;gap:10px;">
-          <div class="skeleton skeleton-line w-40" style="height:12px;"></div>
-          ${[0,1,2,3,4].map(i => `<div class="skeleton-score">
-            <div class="skeleton skeleton-line w-full"></div>
-            <div class="skeleton skeleton-bar"></div>
-            <div class="skeleton skeleton-line w-40"></div>
-          </div>`).join('')}
+        <!-- Panel 2: radar + market board -->
+        <div class="skeleton-panel" style="margin-top:18px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+            <div style="display:grid;gap:10px;">
+              <div class="skeleton skeleton-line w-40" style="height:11px;"></div>
+              <div class="skeleton" style="height:160px;border-radius:12px;"></div>
+              ${[0,1,2,3,4,5].map(() => `<div class="skeleton-score" style="display:grid;grid-template-columns:110px 1fr 60px;gap:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.05);border-radius:8px;">
+                <div class="skeleton skeleton-line w-full" style="height:11px;"></div>
+                <div class="skeleton skeleton-bar"></div>
+                <div class="skeleton skeleton-line w-full" style="height:11px;"></div>
+              </div>`).join('')}
+            </div>
+            <div style="display:grid;gap:8px;align-content:start;">
+              <div class="skeleton skeleton-line w-40" style="height:11px;"></div>
+              ${[0,1,2,3,4,5,6].map((i) => `<div class="skeleton skeleton-line" style="width:${[100,70,90,55,80,65,45][i]}%;height:11px;"></div>`).join('')}
+            </div>
+          </div>
+        </div>
+        <!-- Panel 3: bull/bear -->
+        <div class="skeleton-panel" style="margin-top:18px;">
+          <div class="skeleton skeleton-line w-40" style="height:11px;margin-bottom:4px;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div style="display:grid;gap:8px;padding:14px;border:1px solid rgba(34,197,94,0.12);border-radius:10px;">
+              <div class="skeleton skeleton-line w-60" style="height:16px;"></div>
+              ${[100,90,75,80].map(w=>`<div class="skeleton skeleton-line" style="width:${w}%;height:10px;"></div>`).join('')}
+            </div>
+            <div style="display:grid;gap:8px;padding:14px;border:1px solid rgba(239,68,68,0.12);border-radius:10px;">
+              <div class="skeleton skeleton-line w-60" style="height:16px;"></div>
+              ${[100,85,70,90].map(w=>`<div class="skeleton skeleton-line" style="width:${w}%;height:10px;"></div>`).join('')}
+            </div>
+          </div>
         </div>`;
     }
 
@@ -797,17 +828,42 @@
           ${vw.length ? `<div style="font-size:0.75rem;color:#f97316;">🔍 ${vw.map(w=>escapeHtml(w)).join(' · ')}</div>` : ''}
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-top:6px;border-top:1px solid var(--border);">
             <div class="footnote">Powered by Claude Opus 4.6 + Grok Fast + CoinGecko + DeFiLlama</div>
-            <button onclick="window.scrollTo({top:0,behavior:'smooth'})" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 12px;font-size:0.75rem;cursor:pointer;font-family:inherit;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='';this.style.color=''">↑ New scan</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="share-report-btn" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 12px;font-size:0.75rem;cursor:pointer;font-family:inherit;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='';this.style.color=''">⇪ Share</button>
+              <button onclick="window.scrollTo({top:0,behavior:'smooth'})" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 12px;font-size:0.75rem;cursor:pointer;font-family:inherit;transition:border-color 0.2s,color 0.2s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='';this.style.color=''">↑ New scan</button>
+            </div>
           </div>
         </div>
       </section>`;
 
       reportBox.innerHTML = panel1 + panel2 + panel3 + panel4 + panel6;
+      // Round 91: Share button — copy URL to clipboard with toast feedback
+      const shareBtn = document.getElementById('share-report-btn');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', () => {
+          const url = location.href;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => {
+              if (window.showToast) showToast('Link copied to clipboard!', 'success');
+            }).catch(() => {
+              if (window.showToast) showToast('Copy not supported in this browser', 'error');
+            });
+          } else {
+            // Fallback: select + execCommand
+            const ta = document.createElement('textarea');
+            ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); if (window.showToast) showToast('Link copied!', 'success'); }
+            catch(_) { if (window.showToast) showToast('Could not copy link', 'error'); }
+            document.body.removeChild(ta);
+          }
+        });
+      }
+
       // Rescan button — wired via event delegation (no inline handlers)
       const rescanBtn = document.createElement('button');
       rescanBtn.textContent = '🔄 Rescan this project';
       rescanBtn.className = 'rescan-btn';
-      Object.assign(rescanBtn.style, { background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:'#c5c5c5', padding:'8px 20px', borderRadius:'8px', fontSize:'0.85rem', cursor:'pointer', marginBottom:'16px', transition:'all 0.15s' });
       rescanBtn.addEventListener('click', () => runScan(_persistedKey ? 'full' : 'quick'));
       reportBox.insertBefore(rescanBtn, reportBox.firstChild);
       resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
