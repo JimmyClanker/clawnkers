@@ -611,3 +611,147 @@
 - **Change:** trynow-steps arrows hidden on ≤400px to prevent overflow, font-size reduced. Footer links stack on very small screens. About chip letter-spacing. Section padding reduced on ultra-small.
 - **Files:** `public/index.html`
 - **Tests:** 164/164 pass
+
+### Round 91 — Toast notification system
+- **Change:** Added global `window.showToast(message, type, durationMs)` in utils.js. Toast container fixed bottom-right, stacked column. Share button in report footer copies URL + shows toast feedback. Type=success/error/info with matching colors.
+- **Files:** `public/alphascan.html`, `public/js/utils.js`, `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 92 — How-it-works steps: step counter badges + hover lift
+- **Change:** CSS counters on `.how-grid` reset + `.how-step::after` shows step number (1/2/3) in branded badge top-right. Hover lift increased to -4px with box-shadow glow.
+- **Files:** `public/alphascan.html`
+- **Tests:** 164/164 pass
+
+### Round 93 — Scroll-aware header shrink
+- **Change:** `header.scrolled` class added via rAF-throttled scroll listener in hamburger.js (shared). Header-inner height transitions from 64px to 56px; background darkens slightly.
+- **Files:** `public/alphascan.html`, `public/index.html`, `public/js/hamburger.js`
+- **Tests:** 164/164 pass
+
+### Round 94 — Score bars: min-height touch comfort + mobile layout
+- **Change:** score-row min-height 48px for touch comfort. Mobile score-row font-weight 700 on value. Label text-overflow ellipsis for long labels.
+- **Files:** `public/alphascan.html`
+- **Tests:** 164/164 pass
+
+### Round 95 — Hero headline: animated gradient text
+- **Change:** `h1.hero-headline em` gets CSS animated linear-gradient shifting 90deg over 4s. Respects prefers-reduced-motion (fallback to flat color).
+- **Files:** `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 96 — Skeleton screens v2: 3-panel layout
+- **Change:** showSkeleton() now renders 3 skeleton panels matching real report: header+analysis, radar+market board, bull/bear. Bull/bear has green/red tinted borders.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 97 — metrics.html: Inter font + IBM Plex Mono for stat values
+- **Change:** Added Inter + IBM Plex Mono Google Font imports. body font-family updated to Inter. stat-value uses IBM Plex Mono.
+- **Files:** `public/metrics.html`
+- **Tests:** 164/164 pass
+
+### Round 98 — Panel visual rhythm + rescan-btn CSS class
+- **Change:** Added CSS rule for panel+panel::before separator line (gradient). rescan-btn moved from inline JS styles to CSS class.
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 99 — signals.html: consistent design system
+- **Change:** Inter + IBM Plex Mono fonts added. CSS vars updated to match main design system (--bg, --card, --border, --accent = #D4580A). Stat values use IBM Plex Mono + orange accent. CTA button solid black text.
+- **Files:** `public/signals.html`
+- **Tests:** 164/164 pass
+
+### Round 100 — Commit R91-100
+- **Commit:** 6499fa0 — 287 lines changed across 7 files. Pushed to main.
+
+### Round 101 — diff-card: icon wrapper + hover glow
+- **Change:** `.diff-icon-wrap` 48×48px rounded box with orange border/bg. Hover: box-shadow glow + card lift -3px + radial gradient overlay. Diff icons wrapped in `.diff-icon-wrap` in HTML.
+- **Files:** `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 102 — Project intro card: market cap chip
+- **Change:** Ticker badge uses orange styling. Added market cap chip (IBM Plex Mono, dim badge). Category label now shows "Category" label before the badge. Website link has border+hover transition.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 103 — Footer links: underline slide-in animation
+- **Change:** `.footer-links a::after` pseudo-element: 1px underline scales from 0 to 1 on hover (transform-origin left). Applied to both alphascan.html and index.html.
+- **Files:** `public/alphascan.html`, `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 104 — Error panel: structured layout + retry button
+- **Change:** `.error` now flex-column with `.error-hint`, `.error-actions`. Added "Retry" button alongside "Try quick scan". Visual separation: hint in muted, actions as bordered links.
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 105 — Try-it-now steps: pill badge style
+- **Change:** `.trynow-steps span` gets border+background pill styling (not just plain text). Arrow spans keep no border. More visual structure.
+- **Files:** `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 106 — Volatility badge: softer colors, border style
+- **Change:** Volatility badge now uses semi-transparent bg + border (matching design system). elevated=yellow, high=orange, extreme=red. No more solid colored bg that breaks on dark bg.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 107 — Trade tiles: .trade-tiles class + mobile 2-col
+- **Change:** Trade setup tiles use `.trade-tiles` CSS class with flex-wrap. `flex: 1 1 120px`. On ≤560px: 2-column grid. Chart SVG gets `min-width: 320px; overflow-x: auto`.
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 108 — Product tag badge redesign
+- **Change:** `.product-tag` now shows a pulsing dot `::before` pseudo-element. Added `font-weight:600` and `letter-spacing`. `.dim` variant hides the dot.
+- **Files:** `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 109 — Input clear button
+- **Change:** Added `#input-clear-btn` (×) absolutely positioned inside `.input-wrap`. JS shows/hides via `.visible` class based on input length. Clears value + focuses input. Works for both DexScreener and CoinGecko item selection.
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 110 — Commit R101-110
+- **Commit:** be39986 — 169 lines changed. Pushed to main.
+
+### Round 111 — Mobile hero CTAs: aligned stretch layout
+- **Change:** alphascan.html ≤560px: hero-ctas flex-column stretch with max-width 320px centered. Both buttons 100% width, justify center.
+- **Files:** `public/alphascan.html`
+- **Tests:** 164/164 pass
+
+### Round 112 — Score bars: tone pill with icon
+- **Change:** Tone labels now use icon prefix (↑→~↓) + colored pill with bg/border per level. toneData array drives the mapping. More readable at a glance.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 113 — About chips: hover transition
+- **Change:** `.about-chip` gets hover state: orange border + slightly lighter bg. More interactive, consistent with rest of design.
+- **Files:** `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 114 — Panel stagger: CSS custom props
+- **Change:** `#report .panel` uses `--stagger-delay` CSS var for animation-delay. Cleaner than :nth-child inline delays. Also staggered rescan-btn.
+- **Files:** `public/alphascan.html`
+- **Tests:** 164/164 pass
+
+### Round 115 — Analysis text: key sentence emphasis
+- **Change:** formatAnalysisText() now escapes HTML then adds `<strong>` with color on BUY/HOLD/AVOID/bullish/bearish/etc matches. Positive=orange, negative=red/pink, neutral=warm. Improves scannability.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 116 — Focus visible: thicker ring + glow
+- **Change:** :focus-visible outline 2.5px + box-shadow 4px rgba(212,88,10,0.12). Buttons get outline-offset:2px. Applied to both alphascan.html and index.html.
+- **Files:** `public/alphascan.html`, `public/index.html`
+- **Tests:** 164/164 pass
+
+### Round 117 — metrics.html: card hover glow
+- **Change:** `.card` gets transform -1px + box-shadow + orange border-color on hover. Removed duplicate Round 86 hover rule.
+- **Files:** `public/metrics.html`
+- **Tests:** 164/164 pass
+
+### Round 118 — Stat values: text-shadow glow + stat-box hover
+- **Change:** `.stat-val` gets orange text-shadow glow. stat-box hover adds orange tint bg.
+- **Files:** `public/alphascan.html`
+- **Tests:** 164/164 pass
+
+### Round 119 — Score bars: reasoning tooltip
+- **Change:** Each score-row gets `title` attribute from `dim.reasoning` (truncated 140 chars). Provides hover context for power users without cluttering the UI.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 164/164 pass
+
+### Round 120 — Commit R111-120
+- **Commit:** b803b89 — 88 lines changed. Pushed to main.
