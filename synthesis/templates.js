@@ -182,6 +182,9 @@ const json = {
     `🕒 Generated at: ${json.generated_at}`,
     `🧩 Data completeness: ${scores?.overall?.completeness ?? 'n/a'}%`,
     `🧪 Collector failures: ${failedCollectors.length ? failedCollectors.join(' | ') : 'none'}`,
+    `📡 Data quality: ${json.data_quality.quality_tier} (${json.data_quality.coverage_pct ?? 'n/a'}% coverage, ${json.data_quality.completeness_pct ?? 'n/a'}% completeness)`,
+    ...(llmAnalysis?.headline ? [`📰 Headline: ${llmAnalysis.headline}`] : []),
+    ...(json.composite_alpha_index != null ? [`⚡ Alpha Index: ${json.composite_alpha_index}/100`] : []),
     '',
     '💎 Key Metrics',
     `- Price: ${keyMetrics.price_fmt}`,
@@ -189,6 +192,7 @@ const json = {
     `- TVL: ${keyMetrics.tvl_fmt}`,
     `- 24h Volume: ${keyMetrics.volume_24h_fmt}`,
     `- Overall Score: ${keyMetrics.overall_score_fmt}`,
+    ...(rawData?.conviction ? [`- Conviction: ${rawData.conviction.score}/100 (${rawData.conviction.label})`] : []),
     ...(keyMetrics.dex_pressure ? [`- DEX Pressure: ${keyMetrics.dex_pressure} (ratio: ${keyMetrics.dex_buy_sell_ratio ?? 'n/a'})`] : []),
     ...(keyMetrics.tvl_stickiness ? [`- TVL Stickiness: ${keyMetrics.tvl_stickiness}`] : []),
     // Round 13 (AutoResearch batch): protocol maturity + DEX liquidity depth
@@ -214,6 +218,8 @@ const json = {
     '🚀 Catalysts',
     ...(llmAnalysis?.catalysts?.length ? llmAnalysis.catalysts.map((item) => `- ${item}`) : ['- n/a']),
     '',
+    `🚨 Risk flags: ${json.red_flags_summary.total} total (${json.red_flags_summary.critical} critical, ${json.red_flags_summary.warnings} warnings) — risk level: ${json.red_flags_summary.risk_level}`,
+    '',
     '🐦 X sentiment',
     llmAnalysis?.x_sentiment_summary || 'n/a',
     // Round 35 (AutoResearch): Surface raw x_social KOL data when available
@@ -224,8 +230,11 @@ const json = {
       ? [`- Narratives: ${rawData.x_social.key_narratives.slice(0, 3).join('; ')}`]
       : []),
     '',
-    '🔎 Key findings',
+    `🔎 Key findings (${llmAnalysis?.key_findings?.length ?? 0})`,
     ...(llmAnalysis?.key_findings?.length ? llmAnalysis.key_findings.map((item) => `- ${item}`) : ['- n/a']),
+    ...(Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length
+      ? ['', `🔍 Alpha signals (${rawData.alpha_signals.length})`, ...rawData.alpha_signals.slice(0,5).map(s => `- [${s.strength || '?'}] ${s.signal}: ${s.detail || ''}`)]
+      : []),
     '',
     '🥊 Competitor comparison',
     llmAnalysis?.competitor_comparison || 'n/a',
@@ -234,6 +243,7 @@ const json = {
     '📝 Analysis',
     llmAnalysis?.analysis_text || 'n/a',
     '',
+    ...(rawData?.elevator_pitch ? ['', `💡 Elevator pitch: ${rawData.elevator_pitch}`] : []),
     // Round 28: Investment thesis section
     ...(rawData?.thesis
       ? [
@@ -243,6 +253,11 @@ const json = {
           `🔄 Neutral: ${rawData.thesis.neutral_case || 'n/a'}`,
         ]
       : []),
+    ...(rawData?.trade_setup?.entry_zone ? [
+      '',
+      '📐 Trade Setup',
+      renderTradeSetup(rawData.trade_setup) || 'n/a',
+    ] : []),
   ].join('\n');
 
   const html = `
@@ -256,6 +271,7 @@ const json = {
         <div style="text-align:right;min-width:220px;">
           <div style="color:#888888;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">Research verdict</div>
           <div style="display:inline-block;padding:12px 20px;border-radius:999px;border:1px dashed rgba(232,232,232,0.28);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(255,255,255,0.04);color:${verdictColor(json.verdict)};">${escapeHtml(json.verdict)}</div>${volatileRegimeBadge(rawData?.volatility)}
+          ${json.composite_alpha_index != null ? `<div style="margin-top:8px;color:#b5c7d3;font-size:12px;">⚡ Alpha Index: <strong style="color:#ffd3b6;">${json.composite_alpha_index}/100</strong></div>` : ''}
           <div style="margin-top:10px;color:#ffd3b6;">Collector failures: ${escapeHtml(failedCollectors.length ? failedCollectors.join(' | ') : 'none')}</div>
         </div>
       </header>
@@ -300,6 +316,13 @@ const json = {
         </ul>
       </section>
 
+      ${json.red_flags_summary.total > 0 ? `
+      <section style="margin-bottom:20px;padding:16px;background:rgba(255,100,100,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:18px;">
+        <h2 style="font-family:'Caveat',cursive;font-size:30px;margin:0 0 8px;color:#ef4444;">🚨 Risk Summary</h2>
+        <p style="margin:0;color:#f87171;">Risk level: <strong>${json.red_flags_summary.risk_level}</strong> — ${json.red_flags_summary.total} flag(s): ${json.red_flags_summary.critical} critical, ${json.red_flags_summary.warnings} warnings</p>
+        ${json.red_flags_summary.worst_flag ? `<p style="margin:4px 0 0;color:#888;font-size:12px;">Worst: ${escapeHtml(json.red_flags_summary.worst_flag.flag)} [${json.red_flags_summary.worst_flag.severity}]</p>` : ''}
+      </section>` : ''}
+
       <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:20px;">
         <div style="border:1px dashed rgba(168,230,207,0.28);border-radius:18px;padding:16px;background:rgba(255,255,255,0.03);">
           <h2 style="font-family:'Caveat',cursive;font-size:30px;margin:0 0 8px;color:#a8e6cf;">🛡️ Moat</h2>
@@ -325,6 +348,22 @@ const json = {
           <p style="margin:0;line-height:1.8;">${escapeHtml(llmAnalysis?.competitor_comparison || 'n/a')}</p>
         </div>
       </section>
+
+      ${rawData?.thesis ? `
+      <section style="margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
+        <div style="border:1px dashed rgba(34,197,94,0.28);border-radius:18px;padding:16px;background:rgba(34,197,94,0.04);">
+          <h3 style="font-family:'Caveat',cursive;font-size:24px;margin:0 0 8px;color:#22c55e;">🐂 Bull Case</h3>
+          <p style="margin:0;line-height:1.7;color:#d1d5db;">${escapeHtml(rawData.thesis.bull_case || 'n/a')}</p>
+        </div>
+        <div style="border:1px dashed rgba(248,113,113,0.28);border-radius:18px;padding:16px;background:rgba(248,113,113,0.04);">
+          <h3 style="font-family:'Caveat',cursive;font-size:24px;margin:0 0 8px;color:#f87171;">🐻 Bear Case</h3>
+          <p style="margin:0;line-height:1.7;color:#d1d5db;">${escapeHtml(rawData.thesis.bear_case || 'n/a')}</p>
+        </div>
+        <div style="border:1px dashed rgba(251,191,36,0.28);border-radius:18px;padding:16px;background:rgba(251,191,36,0.04);">
+          <h3 style="font-family:'Caveat',cursive;font-size:24px;margin:0 0 8px;color:#fbbf24;">🔄 Neutral Case</h3>
+          <p style="margin:0;line-height:1.7;color:#d1d5db;">${escapeHtml(rawData.thesis.neutral_case || 'n/a')}</p>
+        </div>
+      </section>` : ''}
 
       <section style="margin-bottom:20px;">
         <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 8px;color:#b5c7d3;">🔎 Key findings</h2>

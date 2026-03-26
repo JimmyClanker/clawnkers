@@ -508,6 +508,31 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     }
   }
 
+  // Round 232 (AutoResearch nightly): Old ATH stagnation — token hasn't recovered in 2+ years
+  // Indicates structural demand failure; market has forgotten about this project
+  const athRecency = market.ath_recency;
+  const c200d = safeN(market.price_change_pct_200d ?? null, null);
+  if (athRecency === 'old_ath' && c200d !== null && c200d < -30) {
+    flags.push({
+      flag: 'old_ath_stagnation',
+      severity: c200d < -60 ? 'warning' : 'info',
+      detail: `All-time high was over 1 year ago and price is down ${Math.abs(c200d).toFixed(0)}% over 200 days — structural demand failure, not just a dip.`,
+    });
+  }
+
+  // Round 232 (AutoResearch nightly): Community score collapse — large following but zero engagement signals
+  // High follower count + zero recent mentions = ghost followers / dead community
+  const communityScore = safeN(market.community_score ?? null, null);
+  const twitterFollowers = safeN(market.twitter_followers ?? 0);
+  const mentionsForCS = safeN(social.mentions ?? social.filtered_mentions ?? 0);
+  if (twitterFollowers > 100_000 && mentionsForCS === 0 && communityScore !== null && communityScore < 10) {
+    flags.push({
+      flag: 'ghost_community',
+      severity: 'warning',
+      detail: `${(twitterFollowers / 1000).toFixed(0)}K Twitter followers but zero recent social mentions and low community score — inflated follower count or dead community.`,
+    });
+  }
+
   // Deduplicate flags by flag key (keep highest severity)
   const severityOrder = { critical: 3, warning: 2, info: 1 };
   const flagMap = new Map();

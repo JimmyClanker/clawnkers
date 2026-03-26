@@ -18,6 +18,7 @@
       ['development',       'Dev',          '#c5b3e6'],
       ['tokenomics_health', 'Tokenomics',   '#ffdfba'],
       ['distribution',      'Distribution', '#a8e6cf'],
+      ['risk',              'Risk',         '#ff8b94'],
     ];
 
     // ── Helpers ───────────────────────────────────────────────────────
@@ -82,6 +83,9 @@
         case 'tvl_change_7d': case 'tvl_change_30d': return formatPercent(value,1,true);
         case 'pct_circulating': return formatPercent(value,1);
         case 'inflation_rate': return formatPercent(value,2);
+        case 'realized_vol_90d': return formatPercent(value,1) + ' ann.';
+        case 'community_score': return `${Number(value).toFixed(0)}/100`;
+        case 'coin_age_days': { const days=Number(value); if(!Number.isFinite(days)) return 'n/a'; if(days<90) return `${days}d`; if(days<730) return `${(days/30.44).toFixed(0)}mo`; return `${(days/365).toFixed(1)}yr`; }
         default: return formatNumber(value,k);
       }
     }
@@ -300,9 +304,14 @@
         // Truncate reasoning to 120 chars for tooltip
         const reasoning = String(dim.reasoning || '').trim();
         const tooltip = reasoning ? ` title="${escapeHtml(reasoning.slice(0, 140))}${reasoning.length > 140 ? '…' : ''}"` : '';
+        // Round 232: show confidence label if available
+        const confLabel = dim.confidence_label;
+        const confBadge = confLabel && confLabel !== 'High'
+          ? `<span style="font-size:0.6rem;padding:1px 5px;border-radius:999px;background:rgba(255,255,255,0.06);color:${confLabel==='Unreliable'?'#f87171':confLabel==='Low'?'#fdba74':'#fbbf24'};margin-left:4px;">${confLabel}</span>`
+          : '';
         return `<div class="score-row"${tooltip}>
           <div class="score-label">
-            <strong>${label}</strong>
+            <strong>${label}</strong>${confBadge}
             <span style="color:${t.color};font-size:0.65rem;background:${t.bg};border:1px solid ${t.border};border-radius:999px;padding:1px 6px;display:inline-flex;align-items:center;gap:3px;font-weight:600;">${t.icon} ${t.label}</span>
           </div>
           <div class="bar">
@@ -332,6 +341,9 @@
         ['Inflation rate','inflation_rate',raw?.tokenomics?.inflation_rate,null],
         ['DEX liquidity','dex_liquidity_usd',raw?.dex?.dex_liquidity_usd,null],
         ['DEX buy/sell','buy_sell_ratio',raw?.dex?.buy_sell_ratio,null],
+        ['Coin age (days)','coin_age_days',raw?.market?.coin_age_days,null],
+        ['Community score','community_score',raw?.market?.community_score,null],
+        ['Realized vol 90d','realized_vol_90d',raw?.market?.realized_vol_90d,'pct'],
       ];
       return rows.filter(([,,value])=> value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a').map(([label,key,value,type])=>{
         const cls=type==='change'?` class="${changeClass(value)}"`:''

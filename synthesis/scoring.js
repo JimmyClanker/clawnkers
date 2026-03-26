@@ -228,6 +228,13 @@ function scoreMarketStrength(market = {}) {
     }
   }
 
+  // Round 231 (AutoResearch nightly): ATH recency bonus — recent ATH = momentum confirmation
+  // Tokens setting new ATHs in last 30d signal strong demand; old ATHs penalize structurally broken assets
+  const athRecency = market.ath_recency;
+  if (athRecency === 'recent_ath') raw += 0.5;        // ATH within 30 days = price discovery phase
+  else if (athRecency === 'near_ath') raw += 0.25;    // ATH within 90 days = still in strong range
+  else if (athRecency === 'old_ath') raw -= 0.15;     // ATH over 1 year ago = structural underperformance
+
   // Round 6: price_momentum_tier bonus — reward consistent multi-TF trends
   const momentumTier = market.price_momentum_tier;
   if (momentumTier === 'strong_uptrend') raw += 0.4;
@@ -398,6 +405,14 @@ function scoreOnchainHealth(onchain = {}) {
   else if (chainCount >= 2) multichainBonus = 0.15;
   raw += multichainBonus;
 
+  // Round 232 (AutoResearch nightly): chain TVL concentration penalty
+  // A protocol on 3+ chains but with 95%+ on one chain is effectively single-chain
+  const chainTvlDominance = safeNumber(onchain.chain_tvl_dominance_pct ?? null);
+  if (chainTvlDominance !== null && chainCount >= 2) {
+    if (chainTvlDominance > 95) raw -= 0.2;    // almost entirely on one chain despite multi-chain claim
+    else if (chainTvlDominance < 60) raw += 0.15; // genuinely diversified across chains
+  }
+
   // Round 18: active users signal (if available)
   const activeUsers = safeNumber(onchain.active_users_24h);
   if (activeUsers > 10000) raw += 0.5;
@@ -536,6 +551,13 @@ function scoreSocialMomentum(social = {}) {
   // Partnership mentions
   if (partnershipMentions >= 3) raw += 0.25;
   else if (partnershipMentions >= 1) raw += 0.1;
+
+  // Round 232 (AutoResearch nightly): community_score bonus from market collector
+  // Higher community score (CoinGecko-derived: twitter + telegram + reddit) = established community
+  const communityScore = safeNumber(social.community_score ?? 0);
+  if (communityScore >= 70) raw += 0.4;
+  else if (communityScore >= 40) raw += 0.2;
+  else if (communityScore >= 20) raw += 0.1;
 
   // Round 48 (AutoResearch): social_health_index — 0-100 normalized composite
   // Measures community health: volume, sentiment quality, narrative depth, engagement quality

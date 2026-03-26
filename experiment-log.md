@@ -1308,3 +1308,53 @@
 
 ### Round 231 — Commit R222-230 (Final)
 - **Commits:** ece354a. Pushed to main. Total: 177/177 tests. Net new lines: ~868 across 3 commits.
+
+### Round 232 — templates.js: headline + composite_alpha_index nel text report
+- **Change:** Aggiunte headline e composite_alpha_index dopo Collector failures, prima di Key Metrics nel text report. Migliora visibilità informazioni sintetiche top-level.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 233 — templates.js: red_flags_summary nel text report
+- **Change:** Aggiunto red_flags_summary dopo Catalysts. Espone total/critical/warnings/risk_level in modo compatto.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 234 — templates.js: trade setup nel text report
+- **Change:** Aggiunto trade_setup alla fine del text report (dopo investment thesis) usando renderTradeSetup().
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 235 — templates.js: elevator_pitch nel text report
+- **Change:** Aggiunto elevator_pitch prima di Investment Thesis. Migliora sintesi top-level del progetto.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 236 — templates.js: conviction score nel text report
+- **Change:** Aggiunto conviction score/label nei Key Metrics, dopo Overall Score.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 237 — templates.js: data quality tier nel text report
+- **Change:** Aggiunto data_quality summary (tier/coverage_pct/completeness_pct) dopo Collector failures.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 238 — templates.js: key_findings count + alpha signals nel text report
+- **Change:** Aggiunto count a Key Findings header, e sezione Alpha Signals (top 5) dopo i key findings.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 239 — templates.js: composite_alpha_index nell'HTML header
+- **Change:** Aggiunto Alpha Index badge nell'header HTML, dopo volatileRegimeBadge.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 240 — templates.js: red flags summary section nell'HTML
+- **Change:** Aggiunta sezione Risk Summary nell'HTML, dopo scores e prima di moat/risks/catalysts. Mostra solo se red_flags_summary.total > 0.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 241 — templates.js: investment thesis cards nell'HTML
+- **Change:** Aggiunte 3 thesis cards (bull/bear/neutral) nell'HTML dopo competitor comparison. Grid responsive.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass

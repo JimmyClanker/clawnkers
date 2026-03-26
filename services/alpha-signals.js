@@ -510,6 +510,21 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 232 (AutoResearch nightly): Social velocity spike — mentions growing fast vs momentum data
+  const mentionVelocity = rawData?.momentum?.social?.velocity_pct;
+  const filteredMentionsForVel = safeN(social.filtered_mentions ?? social.mentions);
+  if (mentionVelocity != null && mentionVelocity >= 150 && filteredMentionsForVel >= 10) {
+    signals.push({
+      signal: 'social_velocity_spike',
+      strength: mentionVelocity >= 300 ? 'strong' : 'moderate',
+      detail: `Social mention velocity +${mentionVelocity.toFixed(0)}% vs prior period with ${filteredMentionsForVel} filtered mentions — rapid community growth suggests incoming narrative momentum.`,
+    });
+  }
+
+  // Round 231 (AutoResearch nightly): Long-term reset breakout
+  const lthSignal = detectLongTermHolderSignal(market);
+  if (lthSignal) signals.push(lthSignal);
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {
@@ -531,4 +546,23 @@ export function getSignalStrengthScore(signals = []) {
   const WEIGHTS = { strong: 20, moderate: 12, weak: 6 };
   const raw = signals.reduce((sum, s) => sum + (WEIGHTS[s.strength] ?? 8), 0);
   return Math.min(100, raw);
+}
+
+// Round 231 (AutoResearch nightly): Long-term holder signal — price well above ATH set long ago (reset pattern)
+// If ATH is old AND price change over 1y is strongly positive, it suggests a true base breakout
+export function detectLongTermHolderSignal(market = {}) {
+  const c1y = Number(market.price_change_pct_1y ?? NaN);
+  const athRecency = market.ath_recency;
+  const change7d = Number(market.price_change_pct_7d ?? 0);
+  if (!Number.isFinite(c1y) || c1y < 100) return null;
+  if (athRecency === 'old_ath' || athRecency === 'moderate_ath') {
+    if (change7d > 5) {
+      return {
+        signal: 'long_term_reset_breakout',
+        strength: c1y > 500 ? 'strong' : 'moderate',
+        detail: `+${c1y.toFixed(0)}% over 1 year with old ATH and +${change7d.toFixed(1)}% 7d — possible fresh breakout from long-term base.`,
+      };
+    }
+  }
+  return null;
 }

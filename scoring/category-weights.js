@@ -83,6 +83,18 @@ export const CATEGORY_WEIGHTS = {
     market: 0.12, onchain: 0.25, social: 0.18, development: 0.15,
     tokenomics: 0.12, distribution: 0.10, risk: 0.08,
   },
+  // Round 232 (AutoResearch nightly): Consumer crypto apps (Base/Farcaster/social protocols)
+  // User adoption and social signals drive value; dev activity is critical for app quality
+  consumer_crypto: {
+    market: 0.10, onchain: 0.15, social: 0.28, development: 0.22,
+    tokenomics: 0.10, distribution: 0.10, risk: 0.05,
+  },
+  // Round 232 (AutoResearch nightly): Infrastructure/tooling (wallets, indexers, data protocols)
+  // Usage metrics + development quality are primary; social less important for B2B infra
+  infra_tooling: {
+    market: 0.10, onchain: 0.18, social: 0.08, development: 0.32,
+    tokenomics: 0.12, distribution: 0.10, risk: 0.10,
+  },
   default: {
     market: 0.14, onchain: 0.18, social: 0.14, development: 0.18,
     tokenomics: 0.14, distribution: 0.12, risk: 0.10,
@@ -155,6 +167,19 @@ export const CATEGORY_MAP = {
   'prediction-market': 'defi_dex', // prediction markets: onchain volume/usage
   'fan-token': 'meme_token',      // fan tokens behave like memes: social-driven
   'sports': 'meme_token',
+  // Round 232: consumer crypto & infra
+  'social-fi': 'consumer_crypto',
+  socialfi: 'consumer_crypto',
+  'consumer-crypto': 'consumer_crypto',
+  'farcaster': 'consumer_crypto',
+  'tooling': 'infra_tooling',
+  'infrastructure-service': 'infra_tooling',
+  'data-protocol': 'infra_tooling',
+  'indexer': 'infra_tooling',
+  'analytics': 'infra_tooling',
+  'data-availability': 'layer_2',
+  'rollup': 'layer_2',
+  'rollup-as-a-service': 'layer_2',
 };
 
 // ─── Boot-time validation ────────────────────────────────────────────────────
