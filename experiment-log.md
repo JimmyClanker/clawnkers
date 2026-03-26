@@ -899,3 +899,158 @@
 
 ### Round 150 — Commit R141-150
 - **Commit:** pending. Pushed to main.
+
+## AutoResearch Prompt Engineering Batch — 30 Rounds (2026-03-26 02:30 UTC)
+
+### Round 151 — buildDataSummary: P/TVL, volume velocity, fee efficiency
+- **Change:** Added derived efficiency metrics block: P/TVL ratio (MCap/TVL), volume velocity (24h vol as % of MCap), fee efficiency ($/M TVL/week). These give LLM concrete context for valuation vs fundamentals.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 152 — buildOpusPrompt: Bull/bear case concrete number anchoring
+- **Change:** Updated bull_case and bear_case output instructions to MANDATE at least 2 specific numbers from RAW_DATA in the thesis. Added data-backed catalyst format examples. Added "Do NOT soften bear cases."
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 153 — buildDataSummary: GitHub velocity context labels
+- **Change:** GitHub commits, contributors, stars now include human-readable context labels (e.g. "very active", "small team", "high traction"). Added language, license, watchers, dev_quality_index to GitHub block.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 154 — buildOpusPrompt: Category-specific deep analysis instructions
+- **Change:** Replaced generic "adjust for category" with category-specific analysis registers for meme_token, defi_lending, defi_dex, layer_1, layer_2, rwa, depin. Each includes specific metrics to focus on and benchmarks.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 155 — validateReport: Competitor hallucination guard
+- **Change:** Added validation: if competitor_comparison cites specific competitor TVL/MCap numbers but no sector_comparison data exists, replace with safe "No sector comparison data available" message. Added new hallucination pattern for invented competitor numbers.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 156 — buildDataSummary: Revenue capture ratio + TVL stickiness context
+- **Change:** Added revenue capture percentage (revenue_7d/fees_7d) with label (high/moderate/low capture). Added TVL stickiness with context string. Added protocol_maturity field.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 157 — Quick report: Enriched market snapshot
+- **Change:** Market snapshot now includes volume velocity (%), P/TVL ratio, market cap in B/M with rank, 30d price change, ATH distance. Uses both pct_24h and pct_percentage_24h field variants for compatibility.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 158 — buildOpusPrompt: Paragraph-level de-duplication instruction
+- **Change:** Updated analysis_text instruction: each paragraph MUST cover NEW information, never repeat the same metric across paragraphs. Clear per-paragraph scope: P1=thesis, P2=on-chain (different numbers), P3=market/sentiment, P4=outlook.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 159 — validateReport: Post-processing sentence deduplication
+- **Change:** Added automatic near-duplicate sentence detection and removal in analysis_text. Normalizes sentences (strips numbers/punctuation) for comparison, removes semantic duplicates. Logs warning with count.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 160 — Quick report: Anti-repetition paragraph structure
+- **Change:** Updated quick report analysis_text instruction to 3 paragraphs with strict non-repetition constraint: P1=verdict+top signal, P2=2-3 supporting points, P3=risk/reward.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 161 — buildDataSummary: Social quality context
+- **Change:** Social section now includes: mention count with volume label (viral/active/moderate/low), stronger sentiment gradient labels, bot ratio with quality label, sentiment breakdown (bullish%/bearish%), key narratives, unlock/exploit mention counts.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 162 — buildOpusPrompt: FINAL REMINDER anti-repetition + bull/bear number check
+- **Change:** Added rules 6/7/8 to FINAL REMINDER: check for repetition across paragraphs, verify bull/bear cases have ≥2 specific numbers, check verdict-narrative consistency.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 163 — buildOpusPrompt: Verdict consistency instruction
+- **Change:** Added instruction 8 to INSTRUCTIONS: verdict must be CONSISTENT with analysis_text, risks, catalysts, bull/bear cases. Inconsistent verdict/narrative = low credibility.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 164 — buildDataSummary: DEX liquidity quality labels
+- **Change:** DEX section now includes: liquidity quality label (deep/good/moderate/thin/very thin), pair count with chain list, buy/sell ratio with emoji (🟢/🔴), 24h txn count (buys/sells), primary venue name.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 165 — validateReport: Bull/bear thesis quality validation
+- **Change:** Added validation: if bull_case.thesis or bear_case.thesis contains no specific numbers, add a note prompting more specific language. Added probability field validation (must be high/medium/low).
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 166 — buildDataSummary: Tokenomics unlock risk context
+- **Change:** Tokenomics section now includes: unlock risk label (HIGH/moderate/low), inflation rate with label, team allocation with ⚠️ if >30%, vesting schedule summary from Messari.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 167 — buildOpusPrompt: Anti-generic moat instruction
+- **Change:** Moat instruction now explicitly FORBIDS generic phrases ("first mover", "network effects" without data, "strong community" without mentions). Requires concrete advantage backed by specific data or fallback to "No clear moat identified."
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 168 — buildDataSummary: Alpha signals and red flags summary
+- **Change:** buildDataSummary now includes alpha signals (top 5 with strength label) and red flags (top 5 with severity) from rawData at the bottom of the summary. Gives LLM pre-processed algorithmic signals inline with data.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 169 — Output format: key_findings structured format
+- **Change:** key_findings instruction now specifies format: "[Metric]: [value] — [what this means for investors]" with a concrete example. Applied to both Opus and quick report prompts.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 170 — buildScoreSummary: New export + inject into prompts
+- **Change:** Added new exported `buildScoreSummary(scores)` function — builds a compact ASCII bar chart of all 7 scoring dimensions with quality labels and completeness %. Injected into both Opus user message and quick report prompt.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 171 — validateReport: analysis_text quality assessment
+- **Change:** Added analysis word count and quality tier (none/minimal/brief/adequate/comprehensive) to _validation metadata. Warns if analysis_text is empty or < 50 words.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 172 — buildOpusPrompt: Risks structured format with banned generics
+- **Change:** Risks instruction now specifies format: "[Risk Type]: [detail+numbers]. [Why it matters]" with examples. FORBIDDEN: "regulatory uncertainty" without context, "smart contract risk" without audit data. Each risk must be actionable.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 173 — buildDataSummary: Holders whale context + Ecosystem chains
+- **Change:** Holders section now includes whale risk label (extreme/high/moderate/well-distributed). Added ECOSYSTEM section with chain count (highly multichain/multichain/cross-chain/single chain) and primary chain.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 174 — Quick report: Score dimension summary in context
+- **Change:** Injected buildScoreSummary into quick report prompt user message for score orientation context. Consistent with Opus prompt structure.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 175 — buildOpusPrompt: project_summary 3-sentence structure
+- **Change:** project_summary instruction now specifies 3-sentence structure: (1) what it IS with protocol type+chain, (2) key traction metric from data, (3) optional who uses it. No hype allowed.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 176 — validateReport: section_confidence auto-calibration
+- **Change:** section_confidence is now auto-capped based on data availability: fundamentals capped at 60 without onchain data, market_sentiment capped at 45 without social data, outlook capped at 40 without either. Overall is recalculated as weighted average if reported value is unrealistically high.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 177 — Quick report: Strengthened anti-hallucination rules
+- **Change:** Rewrote quick report anti-hallucination block with "VIOLATIONS = USELESS REPORT" header. Added explicit rule 5 banning X/Twitter sentiment invention (flagged as #1 hallucination vector). Strengthened all 10 rules.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 178 — buildOpusPrompt: Scoring calibration with downgrade/upgrade rules
+- **Change:** Added data completeness to calibration header. Added explicit DOWNGRADE rules (cap at HOLD if completeness <40%, cap at AVOID if critical red flags). Added UPGRADE rule (only upgrade if specific qualitative catalyst found in data).
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 179 — buildOpusPrompt: Composite indexes block
+- **Change:** Added COMPOSITE INDEXES section to Opus user message extracting market_efficiency_score, onchain_maturity_score, dev_quality_index, social_health_index, liquidity_risk_score from scoring output. Gives LLM normalized 0-100 summaries.
+- **Files:** `synthesis/llm.js`
+- **Tests:** 164/164 pass
+
+### Round 180 — Tests: buildScoreSummary + buildDataSummary test coverage
+- **Change:** Added 8 new tests for buildScoreSummary (valid scores, OVERALL label, empty scores, dimension labels) and buildDataSummary (empty data, P/TVL ratio, revenue capture, data gaps). Total tests: 172/172.
+- **Files:** `test/llm-opus.test.js`
+- **Tests:** 172/172 pass
+
+### Round 181 — Commit R151-180
+- **Commits:** fd51cdd (R151-160), 60f5f7d (R161-170), 722310b (R171-180). Pushed to main.
