@@ -147,6 +147,19 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
     notes.push('DEX volume decelerating intraday — EV adjusted downward 10%.');
   }
 
+  // Round 236 (AutoResearch): 52-week range EV adjustment
+  // Near 52w low + negative EV = structural bear trap risk; near 52w high = momentum confirmation
+  const vs52w = rawData?.market?.price_vs_52w;
+  if (vs52w && expectedValue !== null) {
+    if (vs52w.tier === 'near_low') {
+      volAdjustedEv = round(volAdjustedEv * 0.85, 4);
+      notes.push(`Price near 52-week low (${vs52w.pct_from_52w_high.toFixed(1)}% from 52w high) — structural weakness risk, EV adjusted down 15%.`);
+    } else if (vs52w.tier === 'near_high' && expectedValue > 0) {
+      volAdjustedEv = round(volAdjustedEv * 1.08, 4);
+      notes.push(`Price near 52-week high — momentum confirmation, EV adjusted up 8%.`);
+    }
+  }
+
   return {
     rr_ratio: rrRatio,
     probability_tp1: pTP1,

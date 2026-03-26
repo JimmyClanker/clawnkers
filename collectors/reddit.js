@@ -63,8 +63,15 @@ export async function collectReddit(projectName) {
     }
 
     const subredditCounts = new Map();
+    // Round 237 (AutoResearch nightly): upvote-weighted sentiment
+    // Posts with more upvotes represent stronger community signal
     const sentimentCounts = { bullish: 0, bearish: 0, neutral: 0 };
+    const upvoteWeightedCounts = { bullish: 0, bearish: 0, neutral: 0 };
     const topPosts = [];
+    let totalUpvotes = 0;
+    let recencyScore = 0; // higher = more recent posts
+
+    const now = Math.floor(Date.now() / 1000);
 
     for (const child of posts) {
       const post = child?.data;
@@ -72,33 +79,53 @@ export async function collectReddit(projectName) {
 
       const title = post.title || '';
       const subreddit = post.subreddit || 'unknown';
+      const postScore = Math.max(0, post.score ?? 0);
+      const upvoteWeight = Math.log10(postScore + 2); // log scale so viral posts don't dominate
 
       subredditCounts.set(subreddit, (subredditCounts.get(subreddit) || 0) + 1);
 
       const sentiment = classifySentiment(title);
       sentimentCounts[sentiment] += 1;
+      upvoteWeightedCounts[sentiment] += upvoteWeight;
+      totalUpvotes += postScore;
+
+      // Recency: posts from last 24h contribute more
+      const ageHours = (now - (post.created_utc ?? now)) / 3600;
+      if (ageHours < 24) recencyScore += 1;
+      else if (ageHours < 72) recencyScore += 0.5;
 
       if (topPosts.length < 5) {
         topPosts.push({
           title,
           subreddit,
-          score: post.score ?? 0,
+          score: postScore,
           url: post.url || null,
           created_utc: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : null,
         });
       }
     }
 
-    // Overall sentiment by majority
-    const { bullish, bearish, neutral } = sentimentCounts;
+    // Overall sentiment: blend raw counts (60%) with upvote-weighted (40%)
+    const blendedBullish = sentimentCounts.bullish * 0.6 + upvoteWeightedCounts.bullish * 0.4;
+    const blendedBearish = sentimentCounts.bearish * 0.6 + upvoteWeightedCounts.bearish * 0.4;
+    const blendedNeutral = sentimentCounts.neutral * 0.6 + upvoteWeightedCounts.neutral * 0.4;
     let overallSentiment = 'neutral';
-    if (bullish > bearish && bullish >= neutral) overallSentiment = 'bullish';
-    else if (bearish > bullish && bearish >= neutral) overallSentiment = 'bearish';
+    if (blendedBullish > blendedBearish && blendedBullish >= blendedNeutral) overallSentiment = 'bullish';
+    else if (blendedBearish > blendedBullish && blendedBearish >= blendedNeutral) overallSentiment = 'bearish';
 
     // Top subreddits by mention count
     const subreddits = [...subredditCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => name);
+
+    // Round 237b: reddit_activity_score (0-100)
+    const redditActivityScore = (() => {
+      const postScore = Math.min(40, posts.length * 4);           // 0-40: up to 10 posts
+      const upvoteScore = Math.min(30, Math.log10(totalUpvotes + 1) * 10); // 0-30
+      const recencyBonus = Math.min(20, recencyScore * 5);        // 0-20
+      const divScore = Math.min(10, subreddits.length * 3);       // 0-10: diversity
+      return Math.round(postScore + upvoteScore + recencyBonus + divScore);
+    })();
 
     return {
       ...fallback,
@@ -106,6 +133,13 @@ export async function collectReddit(projectName) {
       subreddits,
       sentiment: overallSentiment,
       sentiment_counts: sentimentCounts,
+      upvote_weighted_sentiment: {
+        bullish: parseFloat(upvoteWeightedCounts.bullish.toFixed(2)),
+        bearish: parseFloat(upvoteWeightedCounts.bearish.toFixed(2)),
+        neutral: parseFloat(upvoteWeightedCounts.neutral.toFixed(2)),
+      },
+      total_upvotes: totalUpvotes,
+      reddit_activity_score: redditActivityScore,
       top_posts: topPosts,
       error: null,
     };

@@ -57,6 +57,10 @@ const SIGNAL_PHRASES = {
   low_price_to_tvl:              'trading below on-chain value (P/TVL < 1x)',
   payments_network_growth:       'payment network adoption growth',
   accelerating_news_coverage:    'accelerating news coverage',
+  // Round 236 (AutoResearch): 52-week range signals
+  '52w_high_breakout':           'near 52-week high price discovery',
+  exchange_listing_catalyst:     'potential major exchange listing',
+  low_range_fdv_trap:            'structural distribution trap (52w low + FDV overhang)',
 };
 
 const FLAG_PHRASES = {

@@ -131,6 +131,20 @@ function buildFactRegistry(rawData = {}) {
   push('market.momentum_divergence', rawData?.market?.momentum_divergence);
   push('social.sentiment_credibility_score', rawData?.social?.sentiment_credibility_score);
   push('github.issue_health_score', rawData?.github?.issue_health_score);
+  // Round 236 (AutoResearch): new signals for richer analysis context
+  push('market.price_vs_52w_tier', rawData?.market?.price_vs_52w?.tier);
+  push('market.pct_from_52w_high', rawData?.market?.price_vs_52w?.pct_from_52w_high);
+  push('social.listing_mentions', rawData?.social?.listing_mentions);
+  push('social.competitor_comparison_mentions', rawData?.social?.competitor_comparison_mentions);
+  push('github.commits_per_contributor', rawData?.github?.commits_per_contributor);
+  push('dex.median_liquidity_per_pair', rawData?.dex?.median_liquidity_per_pair);
+  push('market.price_momentum_score', rawData?.market?.price_momentum_score);
+  // Round 237 (AutoResearch nightly): new engagement and activity signals in fact registry
+  push('market.holder_engagement_score', rawData?.market?.holder_engagement_score);
+  push('reddit.reddit_activity_score', rawData?.reddit?.reddit_activity_score);
+  push('social.competitor_content_ratio', rawData?.social?.competitor_content_ratio);
+  push('dex.sell_wall_risk', rawData?.dex?.sell_wall_risk);
+  push('github.bus_factor_score', rawData?.github?.bus_factor_score);
   const _ptvlForFacts = rawData?.ptvl_ratio ?? (
     rawData?.market?.market_cap != null && rawData?.onchain?.tvl != null && rawData.onchain.tvl > 0
       ? rawData.market.market_cap / rawData.onchain.tvl
@@ -378,6 +392,10 @@ export function buildDataSummary(rawData = {}) {
       const topChains = Object.entries(dex.chain_liquidity_breakdown).slice(0, 3).map(([c, v]) => `${c}: $${(v / 1000).toFixed(0)}K`).join(', ');
       dexLines.push(`- Liquidity by chain: ${topChains}`);
     }
+    // Round 237 (AutoResearch nightly): sell wall risk indicator
+    if (dex.sell_wall_risk && dex.sell_wall_risk !== 'low') {
+      dexLines.push(`- ⚠️ Sell wall risk: ${dex.sell_wall_risk.toUpperCase()} (ratio: ${dex.buy_sell_ratio ?? 'n/a'}, momentum: ${dex.volume_momentum ?? 'n/a'})`);
+    }
     // Round 221 (AutoResearch): net buy pressure % and volume/liquidity ratio
     if (dex.net_buy_pressure_pct != null) {
       const netBuyLabel = dex.net_buy_pressure_pct > 55 ? 'accumulation' : dex.net_buy_pressure_pct < 45 ? 'distribution' : 'balanced';
@@ -515,6 +533,22 @@ export function buildDataSummary(rawData = {}) {
     lines.push('');
   }
 
+  // Round 237 (AutoResearch nightly): Holder engagement and Reddit activity summary
+  const holderEngagement = rawData?.market?.holder_engagement_score;
+  const redditActivityScore = rawData?.reddit?.reddit_activity_score;
+  if (holderEngagement != null || redditActivityScore != null) {
+    lines.push('\nENGAGEMENT METRICS:');
+    if (holderEngagement != null) {
+      const engLabel = holderEngagement >= 70 ? 'very active' : holderEngagement >= 40 ? 'moderate' : 'low';
+      lines.push(`- Holder engagement: ${holderEngagement}/100 (${engLabel}) — combines volume velocity, community size, trending status`);
+    }
+    if (redditActivityScore != null) {
+      const redLabel = redditActivityScore >= 60 ? 'strong community discussion' : redditActivityScore >= 30 ? 'moderate discussion' : 'limited discussion';
+      lines.push(`- Reddit activity score: ${redditActivityScore}/100 (${redLabel}) — upvote-weighted, recency-adjusted`);
+    }
+    lines.push('');
+  }
+
   // Round R14: Global macro context section
   const btcDom = rawData?.market?.btc_dominance;
   const totalMcap = rawData?.market?.total_market_cap_usd;
@@ -642,6 +676,13 @@ function buildPrompt(projectName, rawData, scores) {
     '- Low BTC dominance (<45%) = altcoin season potential → factor into opportunity assessment',
     '- Global market down >3% 24h = risk-off → raise bear case weight',
     '- Global market up >3% 24h = risk-on → may inflate short-term scores',
+    '',
+    '## 52-WEEK RANGE CONTEXT (when available)',
+    'price_vs_52w.tier provides institutional-grade context:',
+    '- near_high (within 10% of 52w high): Price discovery / momentum leader — very bullish signal, mention in bull case',
+    '- mid_range: Normal trading range — neutral',
+    '- below_mid: Under pressure, possible recovery play — note in analysis',
+    '- near_low: Structural weakness or deep value — mandatory mention in risks/bear case',
     '',
     '## CRITICAL: ANTI-HALLUCINATION RULES',
     'These rules are ABSOLUTE and override everything else:',
@@ -798,6 +839,15 @@ function buildPrompt(projectName, rawData, scores) {
         ]
       : []),
 
+    // Round 234 (AutoResearch): narrative strength score in prompt
+    ...(rawData?.narrative_strength && rawData.narrative_strength.score > 0
+      ? [
+          `## NARRATIVE STRENGTH SCORE: ${rawData.narrative_strength.score}/100 (${rawData.narrative_strength.strength.toUpperCase()})`,
+          rawData.narrative_strength.detail,
+          'A higher narrative strength = stronger macro tailwind for this project. Weight this in your thesis and catalysts.',
+        ]
+      : []),
+
     // Round 18 (AutoResearch batch): trend reversal signal
     ...(rawData?.trend_reversal && rawData.trend_reversal.pattern !== 'none'
       ? [
@@ -831,6 +881,43 @@ function buildPrompt(projectName, rawData, scores) {
           `24h price move: ${rawData.volatility.volatility_pct_24h != null ? rawData.volatility.volatility_pct_24h.toFixed(1) + '%' : 'n/a'}`,
           ...(rawData.volatility.notes.length ? rawData.volatility.notes.map((n) => `- ${n}`) : []),
           'NOTE: High volatility regimes require extra caution — reduce position sizing and tighten stops accordingly.',
+        ]
+      : []),
+
+    // Round 234 (AutoResearch): Supply unlock risk context
+    ...(rawData?.tokenomics && !rawData.tokenomics.error && rawData.tokenomics.unlock_overhang_pct != null
+      ? [
+          '## SUPPLY UNLOCK RISK',
+          `Circulating supply: ${rawData.tokenomics.pct_circulating != null ? rawData.tokenomics.pct_circulating.toFixed(1) + '%' : 'n/a'} of total`,
+          `Unlock overhang: ${rawData.tokenomics.unlock_overhang_pct != null ? rawData.tokenomics.unlock_overhang_pct.toFixed(1) + '%' : 'n/a'} not yet released`,
+          `Dilution risk: ${rawData.tokenomics.dilution_risk || 'n/a'}`,
+          ...(rawData.tokenomics.inflation_rate != null
+            ? [`Annual inflation rate: ${rawData.tokenomics.inflation_rate.toFixed(1)}%`]
+            : []),
+          'Factor this into your risk assessment — high unlock overhang means current token holders face significant future dilution.',
+        ]
+      : []),
+
+    // Round 237 (AutoResearch nightly): Sell wall risk context — surface when distribution pattern detected
+    ...(rawData?.dex?.sell_wall_risk && rawData.dex.sell_wall_risk !== 'low'
+      ? [
+          `## ⚠️ SELL WALL RISK: ${rawData.dex.sell_wall_risk.toUpperCase()}`,
+          `DEX data shows coordinated selling pattern: buy/sell ratio ${rawData.dex.buy_sell_ratio ?? 'n/a'}, ` +
+          `volume momentum ${rawData.dex.volume_momentum ?? 'n/a'}, top pair concentration ${rawData.dex.top_pair_liquidity_pct != null ? `${rawData.dex.top_pair_liquidity_pct.toFixed(0)}%` : 'n/a'}.`,
+          'Factor this into your bear case — active distribution on DEX is a significant near-term risk.',
+        ]
+      : []),
+
+    // Round 235 (AutoResearch): Volume trend context
+    ...(rawData?.market?.volume_trend_7d && rawData.market.volume_trend_7d !== 'stable'
+      ? [
+          `## VOLUME TREND (7d): ${rawData.market.volume_trend_7d.toUpperCase()}`,
+          rawData.market.volume_trend_7d === 'increasing'
+            ? 'Trading volume has been growing over the past 7 days. This is a constructive signal that can precede price moves.'
+            : 'Trading volume has been declining over the past 7 days. This may indicate waning interest or reduced market participation.',
+          ...(rawData.market.price_vs_ma7 != null
+            ? [`Price vs 7d MA: ${rawData.market.price_vs_ma7.above_ma7 ? '+' : ''}${rawData.market.price_vs_ma7.pct_vs_ma7}% (${rawData.market.price_vs_ma7.above_ma7 ? 'above' : 'below'} 7-day moving average)`]
+            : []),
         ]
       : []),
 

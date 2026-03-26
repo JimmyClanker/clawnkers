@@ -258,6 +258,21 @@ export async function collectSocial(projectName, exaService) {
       return /whale|institutional|fund|investment|billion|million dollar|vc|venture|acquisition|partnership/.test(text);
     }).length;
 
+    // Round 237 (AutoResearch nightly): competitor_content_ratio — fraction of articles that are
+    // primarily about competitors rather than this project. High ratio = project is mentioned in
+    // competitor context (possibly bearish or irrelevant coverage).
+    const COMPETITOR_FRAMING_PATTERNS = [
+      /\b(better than|superior to|alternative to|instead of|replacing|beats|outperforms)\b/i,
+      /\b(competitor|rival|vs\.|versus)\s+[\w]+/i,
+    ];
+    const competitorContentCount = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`;
+      return COMPETITOR_FRAMING_PATTERNS.some((p) => p.test(text));
+    }).length;
+    const competitorContentRatio = uniqueNews.length > 0
+      ? parseFloat((competitorContentCount / uniqueNews.length).toFixed(3))
+      : null;
+
     // Round 41: detect regulatory mentions (risk signal)
     const regulatoryMentions = uniqueNews.filter((item) => {
       const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
@@ -280,6 +295,19 @@ export async function collectSocial(projectName, exaService) {
     const governanceMentions = uniqueNews.filter((item) => {
       const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
       return /governance|proposal|vote|dao|snapshot|forum|improvement|onchain.*gov|protocol.*change/.test(text);
+    }).length;
+
+    // Round 236 (AutoResearch): competitor comparison mentions — how often does community compare this project?
+    // High comparison mentions = project is considered a relevant player in its category
+    const competitorComparisonMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /\bvs\b|\bversus\b|compared to|alternative to|better than|rival|competitor|challenge|compete/.test(text);
+    }).length;
+
+    // Round 236 (AutoResearch): listing_mentions — new exchange/protocol listing signals
+    const listingMentions = uniqueNews.filter((item) => {
+      const text = `${item.title} ${item.highlights.join(' ')}`.toLowerCase();
+      return /\blisting\b|\blisted\b|coinbase|binance|kraken|bybit|okx|kucoin|added to|now on/.test(text);
     }).length;
 
     // Round 9 (AutoResearch batch): sentiment dominance — are bulls clearly in control?
@@ -338,6 +366,8 @@ export async function collectSocial(projectName, exaService) {
       partnership_mentions: partnershipMentions,
       upgrade_mentions: upgradeMentions,
       governance_mentions: governanceMentions,
+      competitor_comparison_mentions: competitorComparisonMentions,
+      listing_mentions: listingMentions,
       avg_article_quality_score: avgArticleQualityScore,
       // Round 12 (AutoResearch nightly): news recency signals
       very_recent_news_count: veryRecentCount,
@@ -345,6 +375,7 @@ export async function collectSocial(projectName, exaService) {
       // Round 233 (AutoResearch nightly): signal quality metrics
       sentiment_credibility_score: sentimentCredibility,
       bot_ratio: botRatio,
+      competitor_content_ratio: competitorContentRatio,
       // Round 192 (AutoResearch): more informative error — report failure count and first error message
       error: (() => {
         const failed = settled.filter((e) => e.status === 'rejected');

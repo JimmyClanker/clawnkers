@@ -276,6 +276,35 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // 22. Round 32 (AutoResearch): SUPPLY_SHOCK — circulating supply compressed, low FDV overhang
+  const circulatingSupply = safeN(market.circulating_supply);
+  const totalSupply = safeN(market.total_supply);
+  const fdvMcapRatio = safeN(market.fdv_mcap_ratio ?? onchain.fdv_mcap_ratio, NaN);
+  if (circulatingSupply > 0 && totalSupply > 0 && Number.isFinite(fdvMcapRatio)) {
+    const supplyPct = (circulatingSupply / totalSupply) * 100;
+    // Supply shock: low circulating % (<30%) + FDV/MCap < 2 = supply compressed
+    if (supplyPct < 30 && fdvMcapRatio < 2.0) {
+      signals.push({
+        signal: 'supply_shock',
+        strength: supplyPct < 20 ? 'strong' : 'moderate',
+        detail: `Circulating supply ${supplyPct.toFixed(1)}% of total, FDV/MCap ${fdvMcapRatio.toFixed(1)}x — low float, compressed supply.`,
+      });
+    }
+  }
+
+  // 23. Round 33 (AutoResearch): CROSS_CHAIN_TVL_GROWTH — TVL growing on multiple chains simultaneously
+  if (Array.isArray(onchain.chains) && onchain.chains.length >= 3) {
+    const growingChains = onchain.chains.filter(ch => safeN(ch.tvl_change_7d, 0) > 15);
+    if (growingChains.length >= 2) {
+      const totalChainTvl = onchain.chains.reduce((sum, ch) => sum + safeN(ch.tvl), 0);
+      signals.push({
+        signal: 'cross_chain_tvl_growth',
+        strength: growingChains.length >= 3 ? 'strong' : 'moderate',
+        detail: `TVL growing >15% on ${growingChains.length} chains (total ${onchain.chains.length} chains, $${(totalChainTvl / 1_000_000).toFixed(1)}M TVL) — multichain capital inflow.`,
+      });
+    }
+  }
+
   // ── Price-based alpha signals (migrated from price-alerts.js) ──
 
   const c1hPrice = safeN(market.price_change_pct_1h, NaN);
@@ -552,6 +581,131 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     }
   }
 
+  // Round 234 (AutoResearch): FDV/MCap efficiency — low future inflation risk
+  const fdvSig = detectFdvEfficiencySignal(market);
+  if (fdvSig) signals.push(fdvSig);
+
+  // Round 234b (AutoResearch): Multi-chain expansion signal
+  // When a protocol is deployed on 4+ chains and TVL is growing, cross-chain expansion is a bullish catalyst
+  const chainCount234 = Array.isArray(onchain.chains) ? onchain.chains.length : 0;
+  const tvlChange7d234 = safeN(onchain.tvl_change_7d);
+  if (chainCount234 >= 4 && tvlChange7d234 > 10) {
+    signals.push({
+      signal: 'multi_chain_expansion',
+      strength: chainCount234 >= 8 && tvlChange7d234 > 25 ? 'strong' : 'moderate',
+      detail: `Deployed on ${chainCount234} chains with +${tvlChange7d234.toFixed(1)}% TVL growth (7d) — active multi-chain expansion with capital inflows across ecosystems.`,
+    });
+  }
+
+  // Round 235 (AutoResearch): Price above MA7 with increasing volume — classic breakout setup
+  const priceVsMa7 = market.price_vs_ma7;
+  const volTrend7d = market.volume_trend_7d;
+  if (priceVsMa7?.above_ma7 && priceVsMa7.pct_vs_ma7 > 3 && volTrend7d === 'increasing') {
+    signals.push({
+      signal: 'ma7_breakout_with_volume',
+      strength: priceVsMa7.pct_vs_ma7 > 8 ? 'strong' : 'moderate',
+      detail: `Price is ${priceVsMa7.pct_vs_ma7.toFixed(1)}% above 7-day MA with increasing volume trend — price-volume confirmation of bullish momentum.`,
+    });
+  }
+
+  // Round 235b (AutoResearch): Volume increasing but price flat — silent accumulation upgrade
+  if (volTrend7d === 'increasing' && safeN(market.price_change_pct_7d) != null && Math.abs(safeN(market.price_change_pct_7d)) < 5) {
+    signals.push({
+      signal: 'volume_building_flat_price',
+      strength: 'moderate',
+      detail: `Volume trend increasing over 7 days while price change is ${safeN(market.price_change_pct_7d).toFixed(1)}% — accumulation building under the surface.`,
+    });
+  }
+
+  // Round 236b (AutoResearch): CEX listing mention signal — significant catalyst
+  // Even rumors of major exchange listings drive significant price action
+  const listingMentions = safeN(social.listing_mentions ?? 0);
+  if (listingMentions >= 2) {
+    signals.push({
+      signal: 'exchange_listing_catalyst',
+      strength: listingMentions >= 5 ? 'strong' : 'moderate',
+      detail: `${listingMentions} news articles mention potential exchange listings — CEX listings typically drive 20-100%+ price increases upon announcement.`,
+    });
+  }
+
+  // Round 236 (AutoResearch): 52-week high breakout signal
+  // Price approaching or at 52w high = powerful momentum signal used by institutional traders
+  const vs52w = market.price_vs_52w;
+  if (vs52w?.tier === 'near_high' && vs52w.pct_from_52w_high > -5) {
+    signals.push({
+      signal: '52w_high_breakout',
+      strength: vs52w.pct_from_52w_high > -2 ? 'strong' : 'moderate',
+      detail: `Price is ${Math.abs(vs52w.pct_from_52w_high).toFixed(1)}% from its 52-week high ($${vs52w.high_52w}) — near-ATH momentum suggests strong demand and potential breakout.`,
+    });
+  }
+
+  // Round 234 (AutoResearch): Strong narrative alignment signal
+  const narrativeStrength = rawData?.narrative_strength;
+  if (narrativeStrength && narrativeStrength.score >= 60) {
+    signals.push({
+      signal: 'strong_narrative_alignment',
+      strength: narrativeStrength.score >= 80 ? 'strong' : 'moderate',
+      detail: `Narrative strength score ${narrativeStrength.score}/100 — ${narrativeStrength.detail} Strong macro tailwinds can amplify price performance regardless of fundamentals.`,
+    });
+  }
+
+  // Round 235 (AutoResearch): Fee acceleration signal — fundamentals improving faster than TVL growth
+  const feeAccel = onchain.fee_revenue_acceleration;
+  const dailyFeeRate = safeN(onchain.daily_fee_rate_annualized ?? 0);
+  if (feeAccel === 'accelerating' && dailyFeeRate > 2) {
+    signals.push({
+      signal: 'fee_revenue_acceleration',
+      strength: dailyFeeRate > 10 ? 'strong' : 'moderate',
+      detail: `Revenue accelerating with ${dailyFeeRate.toFixed(2)}% annualized daily fee rate — protocol is extracting more value from its capital as adoption grows.`,
+    });
+  }
+
+  // Round 237d (AutoResearch nightly): low_bus_factor_risk_cleared signal
+  // When bus_factor_score is high AND recent release exists, single-dev risk is manageable
+  const busFScore = safeN(github.bus_factor_score ?? 0);
+  const hasRecentRelease = github.has_recent_release === true;
+  if (busFScore >= 75 && hasRecentRelease) {
+    signals.push({
+      signal: 'distributed_dev_plus_active_shipping',
+      strength: busFScore >= 90 ? 'strong' : 'moderate',
+      detail: `Dev contribution Gini score ${busFScore}/100 (high distribution) with recent release — well-distributed team actively shipping reduces key-person risk.`,
+    });
+  }
+
+  // Round 237 (AutoResearch nightly): community_score_leader — top community score vs peers
+  // CoinGecko's community score aggregates Twitter + Telegram + Reddit followers into one metric.
+  // A score >70 means the project has a large, established following relative to crypto-wide median.
+  const communityScore = safeN(social.community_score ?? market.community_score ?? 0);
+  if (communityScore >= 70) {
+    signals.push({
+      signal: 'community_score_leader',
+      strength: communityScore >= 85 ? 'strong' : 'moderate',
+      detail: `Community score ${communityScore}/100 — top-tier social following (Twitter + Telegram + Reddit) indicates broad awareness and established holder base.`,
+    });
+  }
+
+  // Round 237b (AutoResearch nightly): news_acceleration — rising recent news coverage signals fresh catalyst
+  const newsMomentum237 = social.news_momentum;
+  const recentNewsCount = safeN(social.very_recent_news_count ?? 0);
+  const filteredMentionsForNM = safeN(social.filtered_mentions ?? social.mentions ?? 0);
+  if (newsMomentum237 === 'accelerating' && recentNewsCount >= 3 && filteredMentionsForNM >= 5) {
+    signals.push({
+      signal: 'news_acceleration',
+      strength: recentNewsCount >= 6 ? 'strong' : 'moderate',
+      detail: `${recentNewsCount} of ${filteredMentionsForNM} news articles published in last 3 days — accelerating news coverage suggests a recent catalyst driving media attention.`,
+    });
+  }
+
+  // Round 237c (AutoResearch nightly): governance_activity — DAO votes signal active community engagement
+  const governanceMentions = safeN(social.governance_mentions ?? 0);
+  if (governanceMentions >= 3) {
+    signals.push({
+      signal: 'governance_activity',
+      strength: governanceMentions >= 6 ? 'strong' : 'moderate',
+      detail: `${governanceMentions} recent governance/DAO mentions — active on-chain governance participation signals healthy community decision-making.`,
+    });
+  }
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {
@@ -572,6 +726,14 @@ export function getSignalStrengthScore(signals = []) {
   if (!Array.isArray(signals) || signals.length === 0) return 0;
   const WEIGHTS = { strong: 20, moderate: 12, weak: 6 };
   const raw = signals.reduce((sum, s) => sum + (WEIGHTS[s.strength] ?? 8), 0);
+  
+  // CONVICTION_SCORE: 5+ strong signals = composite conviction
+  const strongCount = signals.filter(s => s.strength === 'strong').length;
+  if (strongCount >= 5) {
+    const convictionBonus = 10 * (strongCount - 4); // +10 per ogni strong oltre il 4°
+    return Math.min(100, raw + convictionBonus);
+  }
+  
   return Math.min(100, raw);
 }
 
@@ -590,6 +752,23 @@ export function detectLongTermHolderSignal(market = {}) {
         detail: `+${c1y.toFixed(0)}% over 1 year with old ATH and +${change7d.toFixed(1)}% 7d — possible fresh breakout from long-term base.`,
       };
     }
+  }
+  return null;
+}
+
+// Round 234 (AutoResearch): FDV/MCap efficiency signal
+// When FDV is close to MCap (>80% circulating), token is near full dilution = lower inflation risk
+export function detectFdvEfficiencySignal(market = {}) {
+  const mcap = Number(market.market_cap ?? 0);
+  const fdv = Number(market.fully_diluted_valuation ?? 0);
+  if (mcap <= 0 || fdv <= 0) return null;
+  const ratio = mcap / fdv;
+  if (ratio >= 0.8 && mcap > 5_000_000) {
+    return {
+      signal: 'low_fdv_inflation_risk',
+      strength: ratio >= 0.95 ? 'strong' : 'moderate',
+      detail: `MCap/FDV ratio ${(ratio * 100).toFixed(0)}% — ${(ratio * 100).toFixed(0)}% of supply already circulating, minimal future inflation dilution risk.`,
+    };
   }
   return null;
 }

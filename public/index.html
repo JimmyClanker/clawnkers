@@ -127,7 +127,7 @@
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
       /* Round 93: smooth height transition when scrolled */
-      transition: border-color 0.3s;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
     }
     /* Round 93: header shrinks slightly on scroll (JS adds .scrolled) */
     header.scrolled {
@@ -164,7 +164,7 @@
       color: var(--muted2);
       font-size: 0.9rem;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: color 0.25s ease, opacity 0.25s ease;
     }
     nav a:hover { color: var(--text); opacity: 1; }
     .btn-nav {
@@ -227,7 +227,7 @@
     h1.hero-headline {
       font-size: clamp(2.8rem, 6vw, 5rem);
       font-weight: 800;
-      line-height: 1.08;
+      line-height: 1.12;
       letter-spacing: -0.04em;
       color: var(--text);
       margin-bottom: 20px;
@@ -278,7 +278,7 @@
       border-radius: var(--radius-sm);
       font-weight: 700;
       font-size: 1rem;
-      transition: box-shadow 0.25s, transform 0.2s;
+      transition: background-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
       letter-spacing: -0.01em;
       animation: ctaPulse 3s ease-in-out infinite;
     }
@@ -303,7 +303,7 @@
       border: 1px solid var(--border);
       font-weight: 500;
       font-size: 1rem;
-      transition: border-color 0.2s, color 0.2s, transform 0.2s;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
     }
     .btn-secondary:hover {
       border-color: var(--border-hover);
@@ -334,6 +334,7 @@
       font-size: 1.05rem;
       max-width: 560px;
       line-height: 1.7;
+      letter-spacing: -0.01em;
     }
     .section-head { margin-bottom: 48px; }
 
@@ -371,6 +372,13 @@
       transform: translateY(-3px);
     }
     .product-card:hover::before { opacity: 1; }
+    .product-card:focus-visible {
+      border-color: rgba(212,88,10,0.4);
+      box-shadow: 0 0 0 3px rgba(212,88,10,0.15), var(--shadow-lg);
+      transform: translateY(-3px);
+      outline: none;
+    }
+    .product-card:focus-visible::before { opacity: 1; }
     .product-card.dimmed {
       opacity: 0.45;
       pointer-events: none;
@@ -405,7 +413,7 @@
     .product-tag.dim {
       background: rgba(255,255,255,0.03);
       border-color: var(--border);
-      color: var(--muted);
+      color: var(--muted2);
     }
     .product-tag.dim::before { display: none; }
     .btn-card {
@@ -465,9 +473,9 @@
       color: var(--muted); background: none;
       border: 1px solid var(--border);
       border-radius: 6px; padding: 3px 10px; cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.2s ease;
     }
-    .code-copy-btn:hover { border-color: var(--border-hover); color: var(--text); }
+    .code-copy-btn:hover { border-color: var(--border-hover); color: var(--text); transform: translateY(-1px); }
     .code-copy-btn.copied { color: #86efac; border-color: rgba(34,197,94,0.3); }
     .code-block pre {
       font-family: 'IBM Plex Mono', monospace;
@@ -495,9 +503,9 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       padding: 18px 20px;
-      transition: border-color 0.2s;
+      transition: border-color 0.25s ease, transform 0.25s ease;
     }
-    .api-note:hover { border-color: var(--border-hover); }
+    .api-note:hover { border-color: var(--border-hover); transform: translateY(-2px); }
 
     /* ── Micro-interaction: card shimmer on hover ──────────────────── */
     .product-card::after {
@@ -710,6 +718,8 @@
     }
     .footer-links a:hover { color: var(--text); opacity: 1; }
     .footer-links a:hover::after { transform: scaleX(1); }
+    .footer-links a:focus-visible { color: var(--text); opacity: 1; outline: 2px solid var(--green); outline-offset: 4px; }
+    .footer-links a:focus-visible::after { transform: scaleX(1); }
     .footer-copy {
       color: var(--muted);
       font-size: 0.82rem;

@@ -94,6 +94,18 @@ function extractKeyMetrics(rawData, scores) {
   const dexBuySellRatio = dex.buy_sell_ratio ?? null;
   const tvlStickiness = onchain.tvl_stickiness ?? null;
 
+  // Round 234 (AutoResearch): FDV overhang + volume trend context for key metrics
+  const tokenomics = rawData?.tokenomics ?? {};
+  const fdv = Number(market.fully_diluted_valuation ?? 0);
+  const mcapForFdv = Number(market.market_cap ?? 0);
+  const fdvMcapRatio = mcapForFdv > 0 && fdv > mcapForFdv ? fdv / mcapForFdv : null;
+  const volumeTrend7d = market.volume_trend_7d ?? null;
+  const priceVsMa7 = market.price_vs_ma7 ?? null;
+  const feeRevenueAccel = onchain.fee_revenue_acceleration ?? null;
+  const dailyFeeRateAnnualized = onchain.daily_fee_rate_annualized ?? null;
+  const pctCirculating = tokenomics.pct_circulating ?? null;
+  const liquidityDepthScore = dex.liquidity_depth_score ?? null;
+
   return {
     price: price > 0 ? price : null,
     market_cap: marketCap > 0 ? marketCap : null,
@@ -112,6 +124,24 @@ function extractKeyMetrics(rawData, scores) {
     dex_pressure: dexPressure,
     dex_buy_sell_ratio: dexBuySellRatio,
     tvl_stickiness: tvlStickiness,
+    // Round 234 additions
+    fdv_mcap_ratio: fdvMcapRatio != null ? parseFloat(fdvMcapRatio.toFixed(2)) : null,
+    fdv_fmt: fdv > 0 ? fmtNumber(fdv) : 'n/a',
+    volume_trend_7d: volumeTrend7d,
+    price_vs_ma7: priceVsMa7,
+    fee_revenue_acceleration: feeRevenueAccel,
+    daily_fee_rate_annualized: dailyFeeRateAnnualized,
+    pct_circulating: pctCirculating,
+    pct_circulating_fmt: pctCirculating != null ? `${pctCirculating.toFixed(1)}%` : 'n/a',
+    liquidity_depth_score: liquidityDepthScore,
+    // Round 236 (AutoResearch): 52-week range context for key metrics display
+    price_vs_52w: market.price_vs_52w ?? null,
+    price_vs_52w_fmt: (() => {
+      const v = market.price_vs_52w;
+      if (!v) return 'n/a';
+      const direction = v.pct_from_52w_high >= 0 ? 'at' : `${Math.abs(v.pct_from_52w_high).toFixed(1)}% below`;
+      return `${direction} 52w high ($${v.high_52w})`;
+    })(),
   };
 }
 
@@ -146,7 +176,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
 const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
-    engine_version: 'r61-2026-03-26', // bump on significant engine changes
+    engine_version: 'r62-2026-03-26', // bump: 30-round AutoResearch nightly batch
     verdict: llmAnalysis?.verdict || 'HOLD',
     headline: llmAnalysis?.headline ?? null,
     project_summary: llmAnalysis?.project_summary ?? null,
@@ -227,6 +257,8 @@ const json = {
     `- Overall Score: ${keyMetrics.overall_score_fmt}`,
     ...(rawData?.conviction ? [`- Conviction: ${rawData.conviction.score}/100 (${rawData.conviction.label})`] : []),
     ...(keyMetrics.dex_pressure ? [`- DEX Pressure: ${keyMetrics.dex_pressure} (ratio: ${keyMetrics.dex_buy_sell_ratio ?? 'n/a'})`] : []),
+    ...(rawData?.dex?.sell_wall_risk && rawData.dex.sell_wall_risk !== 'low' ? [`- ⚠️ Sell Wall Risk: ${rawData.dex.sell_wall_risk.toUpperCase()}`] : []),
+    ...(rawData?.market?.holder_engagement_score != null ? [`- Holder Engagement: ${rawData.market.holder_engagement_score}/100`] : []),
     ...(keyMetrics.tvl_stickiness ? [`- TVL Stickiness: ${keyMetrics.tvl_stickiness}`] : []),
     // Round 13 (AutoResearch batch): protocol maturity + DEX liquidity depth
     ...(rawData?.onchain?.protocol_maturity ? [`- Protocol Maturity: ${rawData.onchain.protocol_maturity}`] : []),
@@ -267,6 +299,16 @@ const json = {
     ...(llmAnalysis?.key_findings?.length ? llmAnalysis.key_findings.map((item) => `- ${item}`) : ['- n/a']),
     ...(Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length
       ? ['', `🔍 Alpha signals (${rawData.alpha_signals.length})`, ...rawData.alpha_signals.slice(0,5).map(s => `- [${s.strength || '?'}] ${s.signal}: ${s.detail || ''}`)]
+      : []),
+    // Round 234 (AutoResearch): Narrative strength section in text report
+    ...(rawData?.narrative_strength && rawData.narrative_strength.score > 0
+      ? ['', `🌊 Narrative strength: ${rawData.narrative_strength.strength.toUpperCase()} (${rawData.narrative_strength.score}/100)`,
+         rawData.narrative_strength.detail]
+      : []),
+    // Round 234b (AutoResearch): Supply unlock risk section
+    ...(rawData?.supply_unlock_risk && rawData.supply_unlock_risk.risk_level !== 'unknown'
+      ? ['', `🔓 Supply unlock risk: ${rawData.supply_unlock_risk.risk_level.toUpperCase()}`,
+         ...rawData.supply_unlock_risk.notes]
       : []),
     '',
     '🥊 Competitor comparison',

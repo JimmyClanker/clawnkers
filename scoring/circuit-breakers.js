@@ -103,6 +103,31 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Round 237 (AutoResearch nightly): Zero volume with high market cap — ghost token
+  // A token with >$5M mcap and literally zero 24h volume is likely exchange-delisted or dead
+  if ('total_volume' in market && safeN(market.total_volume) === 0 && mcap > 5_000_000) {
+    breakers.push({
+      cap: 4.0,
+      reason: `Zero 24h trading volume with $${(mcap / 1e6).toFixed(1)}M market cap — ghost token or exchange-delisted`,
+      severity: 'critical',
+    });
+  }
+
+  // Round 237b (AutoResearch nightly): No GitHub + large market cap — major red flag for tech projects
+  // A token with >$50M mcap and no verifiable GitHub = either not open-source (centralized risk) or ghost project
+  const github = rawData?.github ?? {};
+  const hasGithubData = !github.error && (github.commits_90d > 0 || github.stars > 0);
+  const isObviouslyNonTech = ['meme', 'wrapped', 'stablecoin'].some(
+    t => String(rawData?.onchain?.category || '').toLowerCase().includes(t)
+  );
+  if (!hasGithubData && mcap > 50_000_000 && !isObviouslyNonTech) {
+    breakers.push({
+      cap: 6.5,
+      reason: `No GitHub activity detected with $${(mcap / 1e6).toFixed(1)}M market cap — development unverifiable for non-meme, non-stablecoin token`,
+      severity: 'warning',
+    });
+  }
+
   // Data completeness < 40%
   const completeness = scores?.overall?.completeness ?? 100;
   if (completeness < 40) {
@@ -119,6 +144,29 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     breakers.push({
       cap: 5.0,
       reason: `${criticalFlags.length} critical red flags — structural risk`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 236 (AutoResearch): Extreme sell dominance on DEX — 5:1+ sell ratio = active exit
+  // When sellers outnumber buyers 5:1 or more, it signals an organized exit or token unlock dump
+  const buys24h = safeN(dex?.buys_24h ?? 0);
+  const sells24h = safeN(dex?.sells_24h ?? 0);
+  if (sells24h > 0 && buys24h > 0 && sells24h / buys24h >= 5 && (buys24h + sells24h) >= 100) {
+    breakers.push({
+      cap: 4.5,
+      reason: `Extreme sell dominance: ${sells24h}/${buys24h} sell/buy ratio (${(sells24h/buys24h).toFixed(1)}:1) with ${buys24h+sells24h} transactions — likely organized exit`,
+      severity: 'critical',
+    });
+  }
+
+  // Round 236 (AutoResearch): 52-week low + negative score combination
+  // If price is near 52w low AND overall score < 4, cap at 4.5 (no false buy signals from algo)
+  const vs52w = rawData?.market?.price_vs_52w;
+  if (vs52w?.tier === 'near_low' && scores?.overall?.score < 4.0) {
+    breakers.push({
+      cap: 4.5,
+      reason: `Price near 52-week low (${vs52w.pct_from_52w_high?.toFixed(1)}% from high) combined with weak fundamentals — structural bear trap risk`,
       severity: 'warning',
     });
   }
@@ -298,6 +346,31 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     breakers.push({
       cap: 6.5,
       reason: `DeFi protocol with $${(tvlR212 / 1_000_000).toFixed(0)}M TVL generates zero fees — value accrual mechanism may be broken`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 234 (AutoResearch): Persistent sell pressure circuit breaker
+  // When DEX sellers consistently outnumber buyers 2:1+ with sufficient volume, cap score
+  const buys234 = safeN(dex?.buys_24h ?? 0);
+  const sells234 = safeN(dex?.sells_24h ?? 0);
+  const totalTxns234 = buys234 + sells234;
+  if (totalTxns234 >= 100 && sells234 > 0 && buys234 / sells234 < 0.4) {
+    breakers.push({
+      cap: 5.5,
+      reason: `Extreme sell pressure: ${buys234} buys vs ${sells234} sells (ratio ${(buys234/sells234).toFixed(2)}) — active distribution phase, not a buying opportunity`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 235 (AutoResearch): Extreme FDV overhang circuit breaker
+  // Less than 5% of supply circulating with >$10M market cap = near-certain future price suppression
+  const mcapFdvCB = safeN(market.market_cap ?? 0);
+  const fdvCB = safeN(market.fully_diluted_valuation ?? 0);
+  if (mcapFdvCB > 10_000_000 && fdvCB > 0 && mcapFdvCB / fdvCB < 0.05) {
+    breakers.push({
+      cap: 5.0,
+      reason: `Only ${((mcapFdvCB / fdvCB) * 100).toFixed(1)}% of supply circulating (FDV $${(fdvCB/1e6).toFixed(0)}M vs MCap $${(mcapFdvCB/1e6).toFixed(0)}M) — extreme future dilution risk`,
       severity: 'warning',
     });
   }

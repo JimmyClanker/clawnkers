@@ -18,6 +18,8 @@ import { computeScoreVelocity } from '../services/score-velocity.js';
 import { detectTrendReversal } from '../services/trend-reversal.js';
 import { detectNarrativeMomentum } from '../services/narrative-momentum.js';
 import { calculateMomentum } from '../services/momentum.js';
+import { computeNarrativeStrength } from '../services/narrative-strength.js';
+import { analyzeSupplyUnlockRisk } from '../services/supply-unlock-detector.js';
 
 export function safeParseJSON(str) {
   try { return str ? JSON.parse(str) : null; } catch { return null; }
@@ -327,6 +329,10 @@ export async function _runAnalysisLegacy({ projectName, exaService, mode, config
   const narrativeMomentum = detectNarrativeMomentum(rawData);
   rawData.narrative_momentum = narrativeMomentum;
 
+  // Round 234 (AutoResearch): narrative strength score + supply unlock risk
+  rawData.narrative_strength = computeNarrativeStrength(narrativeMomentum, rawData.onchain ?? {}, rawData.market ?? {});
+  rawData.supply_unlock_risk = analyzeSupplyUnlockRisk(rawData.tokenomics ?? {}, rawData.market ?? {});
+
   // Round 27 (AutoResearch nightly): compute momentum service data and inject into rawData
   // so alpha-signals.js can detect price-volume divergence patterns
   const momentumData = calculateMomentum(rawData);
@@ -422,6 +428,10 @@ export async function _runAnalysisLegacy({ projectName, exaService, mode, config
   response.changes = changes;
   // Round 28 (AutoResearch nightly): include momentum data in response
   response.momentum = momentumData;
+
+  // Round 234 (AutoResearch): include narrative strength + supply unlock risk in response
+  response.narrative_strength = rawData.narrative_strength ?? null;
+  response.supply_unlock_risk = rawData.supply_unlock_risk ?? null;
 
   // Add scan versioning
   if (scanVersion !== null) {

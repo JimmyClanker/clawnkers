@@ -136,8 +136,9 @@ async function _fetchJsonImpl(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, re
         recordDomainFailure(url);
         throw lastError;
       }
-      // Exponential backoff + jitter before retry (Round 19)
-      await new Promise((r) => setTimeout(r, jitterMs(RETRY_BASE_DELAY_MS * Math.pow(2, attempt))));
+      // Exponential backoff + jitter before retry (Round 19 + Round 236: cap at 8s to prevent hangs)
+      const backoffMs = Math.min(8000, jitterMs(RETRY_BASE_DELAY_MS * Math.pow(2, attempt)));
+      await new Promise((r) => setTimeout(r, backoffMs));
     } finally {
       clearTimeout(timeout);
     }

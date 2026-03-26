@@ -160,6 +160,15 @@ export async function collectDexScreener(projectName) {
       ? Math.round(totalLiquidity / effectivePairs.length)
       : null;
 
+    // Round 236 (AutoResearch): median liquidity per pair — robust quality indicator
+    // Median is more resistant to outliers than avg (one massive pair doesn't inflate the metric)
+    const medianLiquidityPerPair = (() => {
+      if (effectivePairs.length === 0) return null;
+      const sorted = effectivePairs.map((p) => Number(p?.liquidity?.usd || 0)).sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+    })();
+
     // Round 39: count pairs with meaningful liquidity (>$50K) — among filtered pairs
     const decentPairsCount = effectivePairs.filter((p) => Number(p?.liquidity?.usd ?? 0) >= 50_000).length;
 
@@ -256,6 +265,7 @@ export async function collectDexScreener(projectName) {
       pressure_signal: pressureSignal,
       pump_dump_signal: pumpDumpSignal,
       avg_liquidity_per_pair: avgLiquidityPerPair,
+      median_liquidity_per_pair: medianLiquidityPerPair,
       decent_pairs_count: decentPairsCount,
       dex_diversity_score: dexDiversityScore,
       volume_to_liquidity_ratio: volumeToLiquidityRatio,
@@ -263,6 +273,59 @@ export async function collectDexScreener(projectName) {
       liquidity_health_score: liquidityHealthScore,
       chain_liquidity_breakdown: chainLiquidityBreakdown,
       volume_momentum: volumeMomentum,
+      // Round 234 (AutoResearch): liquidity_depth_score — combined quality metric (0-100)
+      // Rewards: high liquidity, multiple decent pairs, volume/liquidity health, chain diversity
+      liquidity_depth_score: (() => {
+        const liq = Number(validPairs.reduce((s, p) => s + Number(p?.liquidity?.usd || 0), 0));
+        const pairCount = validPairs.length;
+        const chainSet = new Set(validPairs.map((p) => p.chainId).filter(Boolean));
+        const chainDiv = chainSet.size;
+        // Base from liquidity tiers
+        let score = 0;
+        if (liq >= 10_000_000) score += 40;
+        else if (liq >= 1_000_000) score += 30;
+        else if (liq >= 100_000) score += 20;
+        else if (liq >= 10_000) score += 10;
+        // Pair diversification
+        if (pairCount >= 10) score += 25;
+        else if (pairCount >= 5) score += 18;
+        else if (pairCount >= 2) score += 10;
+        else if (pairCount === 1) score += 5;
+        // Chain diversification
+        if (chainDiv >= 4) score += 20;
+        else if (chainDiv >= 2) score += 12;
+        else if (chainDiv === 1) score += 5;
+        // Volume health bonus
+        const v24h = Number(validPairs.reduce((s, p) => s + Number(p?.volume?.h24 || 0), 0));
+        if (v24h > 0 && liq > 0 && (v24h / liq) >= 0.1) score += 15;
+        return Math.min(100, score);
+      })(),
+      // Round 237 (AutoResearch nightly): sell_wall_risk — composite signal that a sell wall is forming
+      // Criteria: sell pressure + top pair concentrated + volume accelerating → possible coordinated exit
+      sell_wall_risk: (() => {
+        if (!hasTxnData || !buySellRatio || buySellRatio === null) return null;
+        let risk = 0;
+        if (buySellRatio < 0.7) risk += 2;          // Strong sell dominance
+        else if (buySellRatio < 0.87) risk += 1;    // Moderate sell dominance
+        if (topPairLiqPct !== null && topPairLiqPct > 80) risk += 1; // Single pool = fragile
+        if (volumeMomentum === 'accelerating' && buySellRatio < 0.87) risk += 1; // Volume spike + sell = distribution
+        if (risk >= 3) return 'high';
+        if (risk >= 2) return 'elevated';
+        if (risk === 1) return 'low';
+        return null;
+      })(),
+      // Round 235 (AutoResearch): most_active_chain — chain with highest 24h volume
+      most_active_chain: (() => {
+        if (!validPairs.length) return null;
+        const byChain = {};
+        for (const p of validPairs) {
+          const chain = p.chainId;
+          if (!chain) continue;
+          byChain[chain] = (byChain[chain] || 0) + Number(p?.volume?.h24 || 0);
+        }
+        const entries = Object.entries(byChain).sort((a, b) => b[1] - a[1]);
+        return entries.length > 0 ? entries[0][0] : null;
+      })(),
       error: null,
     };
   } catch (error) {

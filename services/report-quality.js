@@ -213,6 +213,44 @@ export function scoreReportQuality(rawData, scores, analysis) {
     score = Math.max(0, score - 15);
   }
 
+  // Round 236 (AutoResearch): verdict-score consistency check
+  // LLM verdict should be consistent with algorithmic score; large divergence = suspect analysis
+  const verdictScore = safeN(scores?.overall?.score, 5);
+  const llmVerdict = analysis?.verdict;
+  if (llmVerdict && verdictScore > 0) {
+    const VERDICT_EXPECTED_RANGES = {
+      'STRONG BUY': [7.5, 10],
+      'BUY': [6.0, 8.5],
+      'HOLD': [4.5, 7.0],
+      'AVOID': [3.0, 5.5],
+      'STRONG AVOID': [1, 4.5],
+    };
+    const expectedRange = VERDICT_EXPECTED_RANGES[llmVerdict];
+    if (expectedRange) {
+      const [low, high] = expectedRange;
+      if (verdictScore < low - 1.5 || verdictScore > high + 1.5) {
+        issues.push(`Verdict-score mismatch: LLM gave "${llmVerdict}" but algorithmic score is ${verdictScore.toFixed(1)}/10 (expected range ${low}-${high}) — possible LLM overconfidence.`);
+        score = Math.max(0, score - 8);
+      }
+    }
+  }
+
+  // Round 237 (AutoResearch nightly): Sell wall risk quality penalty
+  // When DEX data shows high sell wall risk, flag it as a quality concern in the report
+  const dexSellWallRisk = rawData?.dex?.sell_wall_risk;
+  if (dexSellWallRisk === 'high') {
+    issues.push('High sell wall risk detected on DEX (elevated selling pressure + volume acceleration + concentrated pool) — report should prominently address this risk.');
+  }
+
+  // Round 237b (AutoResearch nightly): Falling social velocity quality bonus/penalty
+  // If social is declining and bearish, add a quality note
+  const socialNewsMomentum = rawData?.social?.news_momentum;
+  const socialSentimentCred = safeN(rawData?.social?.sentiment_credibility_score ?? 50);
+  if (socialNewsMomentum === 'declining' && socialSentimentCred < 30) {
+    issues.push('Social signal credibility is very low (<30/100) with declining news momentum — sentiment analysis has limited reliability.');
+    score = Math.max(0, score - 5);
+  }
+
   return {
     quality_score: Math.max(0, Math.min(100, score)),
     grade,

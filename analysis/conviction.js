@@ -162,7 +162,35 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
     return 0;
   })();
 
-  const total = Math.min(100, f1.score + f2.score + f3.score + f4.score + f5.score + ptvlBonus);
+  // Round 236 (AutoResearch): 52-week range conviction factor
+  // Near 52w high = price action confirms fundamentals (+3); near 52w low = divergence penalty (-2)
+  const range52wBonus = (() => {
+    const vs52w = rawData?.market?.price_vs_52w;
+    if (!vs52w) return 0;
+    if (vs52w.tier === 'near_high') return 3;   // price confirms bullish data
+    if (vs52w.tier === 'near_low') return -2;   // price contradicts potentially bullish data
+    return 0;
+  })();
+
+  // Round 237 (AutoResearch nightly): holder engagement bonus — active community = higher conviction in social signals
+  const holderEngBonus = (() => {
+    const engScore = safeN(rawData?.market?.holder_engagement_score ?? null, null);
+    if (engScore === null) return 0;
+    if (engScore >= 70) return 3;   // Very active holder community
+    if (engScore >= 40) return 1;   // Moderate engagement
+    if (engScore < 15) return -1;   // Low engagement reduces conviction
+    return 0;
+  })();
+
+  // Round 237b (AutoResearch nightly): sell wall risk reduces conviction
+  const sellWallConvPenalty = (() => {
+    const swRisk = rawData?.dex?.sell_wall_risk;
+    if (swRisk === 'high') return -3;
+    if (swRisk === 'elevated') return -1;
+    return 0;
+  })();
+
+  const total = Math.min(100, Math.max(0, f1.score + f2.score + f3.score + f4.score + f5.score + ptvlBonus + range52wBonus + holderEngBonus + sellWallConvPenalty));
   const label = convictionLabel(total);
 
   const reasoning = [

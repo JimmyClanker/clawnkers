@@ -1,11 +1,5 @@
 import { fetchJson } from './fetch.js';
-
-// Round 182 (AutoResearch): sanitize numeric fields — replace NaN/Infinity with null
-function safeNum(value) {
-  if (value === null || value === undefined) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
+import { safeNumber } from '../utils/math.js';
 
 const COINGECKO_SEARCH_URL = 'https://api.coingecko.com/api/v3/search';
 const COINGECKO_COIN_URL = 'https://api.coingecko.com/api/v3/coins';
@@ -108,17 +102,17 @@ export async function collectMarket(projectName) {
 
     // Derived enrichment metrics
     const athDistancePct = (price != null && ath != null && ath > 0)
-      ? safeNum(((price - ath) / ath) * 100)
+      ? safeNumber(((price - ath) / ath) * 100)
       : null;
     const atl = marketData?.atl?.usd ?? null;
     const atlDistancePct = (price != null && atl != null && atl > 0 && price > atl)
-      ? safeNum(((price - atl) / atl) * 100)
+      ? safeNumber(((price - atl) / atl) * 100)
       : null;
     const circulatingToMaxRatio = (circulatingSupply != null && (maxSupply || totalSupply) > 0)
-      ? safeNum(circulatingSupply / (maxSupply || totalSupply))
+      ? safeNumber(circulatingSupply / (maxSupply || totalSupply))
       : null;
     const volumeToMcapRatio = (totalVolume != null && marketCap != null && marketCap > 0)
-      ? safeNum(totalVolume / marketCap)
+      ? safeNumber(totalVolume / marketCap)
       : null;
     // Round 9: price range position (0 = at ATL, 1 = at ATH)
     const priceRangePosition = (price != null && ath != null && atl != null && ath > atl)
@@ -213,6 +207,23 @@ export async function collectMarket(projectName) {
       price_change_pct_60d: marketData?.price_change_percentage_60d_in_currency?.usd ?? null,
       price_change_pct_200d: marketData?.price_change_percentage_200d_in_currency?.usd ?? null,
       price_change_pct_1y: marketData?.price_change_percentage_1y_in_currency?.usd ?? null,
+      // Round 236 (AutoResearch): 52-week high/low from 90-day + 1y price change
+      // Derived: 52w_high = price / (1 + price_change_pct_1y/100), 52w_low from ATL heuristic
+      // Enables "price vs 52-week range" which is a key institutional signal
+      price_vs_52w: (() => {
+        const p = price;
+        const p1y = marketData?.price_change_percentage_1y_in_currency?.usd;
+        if (p == null || p1y == null) return null;
+        const high52w = p / (1 + Number(p1y) / 100);
+        if (!Number.isFinite(high52w) || high52w <= 0) return null;
+        const pct_from_high = ((p - high52w) / high52w) * 100;
+        const tier = pct_from_high > -10 ? 'near_high' : pct_from_high > -30 ? 'mid_range' : pct_from_high > -60 ? 'below_mid' : 'near_low';
+        return {
+          high_52w: parseFloat(high52w.toFixed(6)),
+          pct_from_52w_high: parseFloat(pct_from_high.toFixed(2)),
+          tier,
+        };
+      })(),
       // Round 197 (AutoResearch): 90-day price change from 90-day chart history (first vs last price)
       // More accurate than a weighted average heuristic — uses actual chart data when available
       price_change_pct_90d: (() => {
@@ -310,6 +321,24 @@ export async function collectMarket(projectName) {
         const total = twitterScore + telegramScore + redditScore;
         return total > 0 ? Math.round(total) : null;
       })(),
+      // Round 237 (AutoResearch nightly): holder_engagement_score (0-100)
+      // Measures how actively holders are engaging vs holding. High velocity + large community = active.
+      // Combines: volume/mcap velocity, community size, and trending status.
+      holder_engagement_score: (() => {
+        const volMcapRatio = (totalVolume != null && marketCap != null && marketCap > 0)
+          ? totalVolume / marketCap : null;
+        if (volMcapRatio == null) return null;
+        // Volume velocity component (0-50): log scale
+        const velScore = Math.min(50, Math.log10(volMcapRatio * 100 + 1) * 25);
+        // Community component (0-30): log scale of followers
+        const twitterF = Number(communityData?.twitter_followers ?? 0);
+        const telegramU = Number(communityData?.telegram_channel_user_count ?? 0);
+        const communityTotal = twitterF + telegramU;
+        const commScore = communityTotal > 0 ? Math.min(30, (Math.log10(communityTotal + 1) / 7) * 30) : 0;
+        // Trending bonus (0-20)
+        const trendingBonus = isTrending ? 20 : 0;
+        return Math.round(velScore + commScore + trendingBonus);
+      })(),
       // Round 2
       is_trending: isTrending,
       categories,
@@ -393,6 +422,32 @@ export async function collectMarket(projectName) {
         const monthly30dAnnualized = Number(p30d) * 12;
         const divergence = daily24hAnnualized - monthly30dAnnualized;
         return Number.isFinite(divergence) ? parseFloat(divergence.toFixed(1)) : null;
+      })(),
+      // Round 234 (AutoResearch): volume_trend_7d — is volume increasing or decreasing over the last 7 days?
+      // Computed from chart data daily volumes (first 3 days avg vs last 3 days avg)
+      volume_trend_7d: (() => {
+        const vols = (chartData?.total_volumes || []).slice(-7).map(([, v]) => Number(v)).filter(Number.isFinite);
+        if (vols.length < 6) return null;
+        const earlyAvg = (vols[0] + vols[1] + vols[2]) / 3;
+        const recentAvg = (vols[vols.length - 3] + vols[vols.length - 2] + vols[vols.length - 1]) / 3;
+        if (earlyAvg === 0) return null;
+        const changePct = ((recentAvg - earlyAvg) / earlyAvg) * 100;
+        if (!Number.isFinite(changePct)) return null;
+        return changePct > 20 ? 'increasing' : changePct < -20 ? 'decreasing' : 'stable';
+      })(),
+      // Round 235 (AutoResearch): price_vs_ma7 — is current price above or below the 7-day moving average?
+      // Simple momentum indicator: above = bullish bias, below = bearish bias
+      price_vs_ma7: (() => {
+        const prices = (chartData?.prices || []).slice(-7).map(([, p]) => Number(p)).filter(Number.isFinite);
+        if (prices.length < 5) return null;
+        const ma7 = prices.reduce((s, v) => s + v, 0) / prices.length;
+        const lastPrice = prices[prices.length - 1];
+        if (ma7 === 0) return null;
+        const pctAbove = ((lastPrice - ma7) / ma7) * 100;
+        return {
+          above_ma7: lastPrice > ma7,
+          pct_vs_ma7: parseFloat(pctAbove.toFixed(2)),
+        };
       })(),
       error: null,
     };

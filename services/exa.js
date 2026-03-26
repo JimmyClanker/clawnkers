@@ -104,6 +104,15 @@ async function withTimeout(timeoutMs, callback) {
   }
 }
 
+/**
+ * Create an Exa AI service client with built-in caching and timeout handling.
+ * @param {object} options - configuration
+ * @param {string} options.apiKey - Exa API key
+ * @param {LruTtlCache} [options.cache] - optional cache instance
+ * @param {function} [options.fetchImpl=fetch] - fetch implementation
+ * @param {number} [options.timeoutMs=15000] - request timeout in milliseconds
+ * @returns {object} service object with exaSearch, exaFetch, getCacheStats
+ */
 export function createExaService({ apiKey, cache, fetchImpl = fetch, timeoutMs = 15000 } = {}) {
   if (!apiKey) {
     throw new Error('Missing Exa API key');

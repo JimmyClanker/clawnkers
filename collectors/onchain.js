@@ -429,6 +429,54 @@ export async function collectOnchain(projectName) {
         const maxChainTvl = Math.max(...vals);
         return parseFloat(((maxChainTvl / currentTvl) * 100).toFixed(1));
       })(),
+      // Round 234 (AutoResearch): fee_revenue_acceleration — is revenue growing faster than TVL?
+      // fee_7d / tvl improvement: if revenue up >20% while TVL flat or down, protocol is monetizing better
+      fee_revenue_acceleration: (() => {
+        if (revenueEfficiency == null || fees7d == null || currentTvl == null || currentTvl <= 0) return null;
+        // Proxy: compare revenue efficiency (fees per $1M TVL) vs revenue trend
+        const revTrend = (() => {
+          if (revenue7d == null || revenue7dPrev == null) return null;
+          if (revenue7dPrev === 0) return revenue7d > 0 ? 1 : 0;
+          return (revenue7d - revenue7dPrev) / Math.abs(revenue7dPrev);
+        })();
+        const tvlTrend = (() => {
+          if (tvl7d == null) return 0;
+          return tvl7d / 100; // normalize pct to ratio
+        })();
+        if (revTrend == null) return null;
+        // Revenue growing faster than TVL = increasing monetization efficiency
+        if (revTrend > 0.15 && tvlTrend <= 0.1) return 'accelerating';
+        if (revTrend > 0.05) return 'growing';
+        if (revTrend < -0.15) return 'declining';
+        return 'stable';
+      })(),
+      // Round 235 (AutoResearch): daily_fee_rate — annualized fee rate as % of TVL
+      // A higher rate = protocol extracts more value from locked capital
+      daily_fee_rate_annualized: (() => {
+        if (fees7d == null || currentTvl == null || currentTvl <= 0) return null;
+        const dailyFees = fees7d / 7;
+        const annualized = (dailyFees * 365) / currentTvl * 100;
+        return Number.isFinite(annualized) ? parseFloat(annualized.toFixed(4)) : null;
+      })(),
+
+      // Round 237 (AutoResearch nightly): revenue_per_active_user — product-market fit metric
+      // High revenue per user = each user generates significant protocol revenue → strong monetization
+      // Low revenue per user with high TVL = capital heavy but user-light (possibly institutional)
+      revenue_per_active_user: (() => {
+        if (revenue7d == null || activeUsers24h == null || activeUsers24h <= 0) return null;
+        // Normalize weekly revenue to daily, divide by daily active users
+        const dailyRevenue = revenue7d / 7;
+        const revenuePerUser = dailyRevenue / activeUsers24h;
+        return Number.isFinite(revenuePerUser) ? parseFloat(revenuePerUser.toFixed(4)) : null;
+      })(),
+
+      // Round 237b (AutoResearch nightly): active_addresses_7d (derived from 7x daily active users)
+      // Used by scoring for TVL efficiency per active user calculation
+      active_addresses_7d: (() => {
+        // Estimate: weekly active ≈ daily * 7 * uniqueness_factor (0.6 is typical for DeFi)
+        if (activeUsers24h == null) return null;
+        return Math.round(activeUsers24h * 7 * 0.6);
+      })(),
       error: null,
     };
   } catch (error) {

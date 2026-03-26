@@ -385,6 +385,80 @@ export async function collectGithub(projectName) {
         const days = Math.floor((Date.now() - new Date(lastCommitDate).getTime()) / 86400000);
         return days >= 0 ? days : null;
       })(),
+      // Round 234 (AutoResearch): contributor_growth_rate — is the team growing?
+      // Measures: new contributors in last 30d vs prior 30d (within 90d window)
+      contributor_growth_rate: (() => {
+        if (!Array.isArray(contributorStats) || contributorStats.length === 0) return null;
+        // Count contributors who had any commits in recent 30d vs prev 30d
+        const now = Math.floor(Date.now() / 1000);
+        const recent30 = new Set();
+        const prev30 = new Set();
+        for (const contrib of contributorStats) {
+          if (!Array.isArray(contrib?.weeks)) continue;
+          for (const week of contrib.weeks) {
+            const wts = week?.w || 0;
+            const commits = (week?.c || 0) + (week?.a || 0) + (week?.d || 0);
+            if (commits === 0) continue;
+            const daysAgo = (now - wts) / 86400;
+            if (daysAgo <= 30) recent30.add(contrib.author?.login);
+            else if (daysAgo <= 60) prev30.add(contrib.author?.login);
+          }
+        }
+        if (prev30.size === 0) return recent30.size > 0 ? 'growing' : null;
+        const ratio = recent30.size / prev30.size;
+        if (ratio >= 1.3) return 'growing';
+        if (ratio <= 0.7) return 'shrinking';
+        return 'stable';
+      })(),
+      // Round 236 (AutoResearch): commits_per_contributor — avg dev output metric
+      // Low ratio (<2) with many contributors suggests ghost contributors or minimal effort
+      commits_per_contributor: (() => {
+        const contribCount = Array.isArray(contributorStats) ? contributorStats.length : 0;
+        if (contribCount === 0 || commits90d == null || commits90d === 0) return null;
+        return parseFloat((commits90d / contribCount).toFixed(1));
+      })(),
+
+      // Round 237 (AutoResearch nightly): bus_factor_score (0-100) — more quantitative than label
+      // Measures distribution of contribution weight: 100 = perfectly distributed, 0 = single person
+      bus_factor_score: (() => {
+        if (!Array.isArray(contributorStats) || contributorStats.length === 0) return null;
+        const totalCommits = contributorStats.reduce((s, c) => s + (c?.total || 0), 0);
+        if (totalCommits === 0) return null;
+        // Gini coefficient inversion: lower Gini = more equal distribution = higher score
+        const contributions = contributorStats.map(c => c?.total || 0).sort((a, b) => a - b);
+        const n = contributions.length;
+        let sumAbsDiff = 0;
+        let sumContrib = 0;
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) {
+            sumAbsDiff += Math.abs(contributions[i] - contributions[j]);
+          }
+          sumContrib += contributions[i];
+        }
+        const gini = sumContrib > 0 ? sumAbsDiff / (2 * n * sumContrib) : 0;
+        return Math.round((1 - gini) * 100);
+      })(),
+
+      // Round 235 (AutoResearch): commit_consistency_score — regularity of commits over 90d (0-100)
+      // A protocol with consistent weekly commits is more reliable than one with burst activity
+      commit_consistency_score: (() => {
+        if (!Array.isArray(commitsData) || commitsData.length === 0) return null;
+        // Group commits by week (approximate)
+        const weekBuckets = {};
+        for (const commit of commitsData) {
+          const dateStr = commit?.commit?.author?.date;
+          if (!dateStr) continue;
+          const d = new Date(dateStr);
+          const weekKey = `${d.getFullYear()}-W${Math.floor(d.getDate() / 7)}`;
+          weekBuckets[weekKey] = (weekBuckets[weekKey] || 0) + 1;
+        }
+        const weeks = Object.values(weekBuckets);
+        if (weeks.length < 3) return null;
+        // Score: % of weeks with any activity (regularity)
+        const totalWeeks = 13; // 90d / 7
+        const activeWeeks = weeks.length;
+        return Math.round(Math.min(100, (activeWeeks / totalWeeks) * 100));
+      })(),
       error: null,
     };
   } catch (error) {

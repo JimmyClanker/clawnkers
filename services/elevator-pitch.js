@@ -122,5 +122,11 @@ export function generateElevatorPitch(projectName, rawData, scores, analysis) {
   if (sentence5) sentences.push(sentence5);
   const pitch = sentences.join(' ');
 
-  return { pitch, one_line_risk: oneLineRisk };
+  // Round 236 (AutoResearch): 52-week context tag for pitch display
+  const vs52w = market.price_vs_52w;
+  let rangeTag = null;
+  if (vs52w?.tier === 'near_high') rangeTag = '📈 Near 52-week high';
+  else if (vs52w?.tier === 'near_low') rangeTag = '⚠️ Near 52-week low';
+
+  return { pitch, one_line_risk: oneLineRisk, range_tag: rangeTag };
 }

@@ -112,6 +112,55 @@ function detectDivergences(scores) {
 }
 
 /**
+ * Round 236 (AutoResearch): Detect 52-week range divergence patterns.
+ * Price action vs fundamental scores often diverge — useful for finding opportunities.
+ */
+function detect52wDivergence(scores, rawData) {
+  const divergences = [];
+  const vs52w = rawData?.market?.price_vs_52w;
+  if (!vs52w) return divergences;
+
+  const overallScore = safeScore(scores?.overall) ?? (
+    // Fallback: compute simple avg
+    DIMENSION_KEYS.map(k => safeScore(scores[k])).filter(v => v != null).reduce((a, b, _, arr) => a + b / arr.length, 0)
+  );
+  const onchainScore = safeScore(scores?.onchain_health);
+  const devScore = safeScore(scores?.development);
+
+  // High fundamentals + near 52w low = "value trap or hidden gem?"
+  if (vs52w.tier === 'near_low' && overallScore >= 6.5) {
+    divergences.push({
+      type: 'fundamental_price_divergence_bullish',
+      severity: 'info',
+      dimensions: ['market_strength', 'onchain_health'],
+      detail: `Price near 52-week low (${vs52w.pct_from_52w_high.toFixed(1)}% from high) despite solid fundamentals (${overallScore.toFixed(1)}/10 overall) — potential deep value opportunity or fundamentals lagging price decline.`,
+    });
+  }
+
+  // Weak fundamentals + near 52w high = "pump without substance"
+  if (vs52w.tier === 'near_high' && overallScore <= 4.5) {
+    divergences.push({
+      type: 'fundamental_price_divergence_bearish',
+      severity: 'warning',
+      dimensions: ['market_strength', 'onchain_health'],
+      detail: `Price near 52-week high despite weak fundamentals (${overallScore.toFixed(1)}/10) — price momentum may be unsustainable without fundamental support.`,
+    });
+  }
+
+  // Strong dev but near 52w low = potential upcoming catalyst
+  if (vs52w.tier === 'near_low' && devScore != null && devScore >= 7) {
+    divergences.push({
+      type: 'dev_strength_price_weakness',
+      severity: 'info',
+      dimensions: ['development', 'market_strength'],
+      detail: `Active development (${devScore}/10) with price near 52-week low — shipping team may drive recovery once market recognizes progress.`,
+    });
+  }
+
+  return divergences;
+}
+
+/**
  * Detect convergence patterns — all dimensions telling the same story.
  */
 function detectConvergences(scores) {
@@ -224,8 +273,44 @@ function detectAnomalies(scores) {
  * @param {object} rawData - raw collector data (for additional context)
  * @returns {object} cross-dimensional analysis
  */
+/**
+ * Round 237 (AutoResearch nightly): Detect buy pressure vs social sentiment divergence.
+ * When DEX shows strong buy pressure but social is bearish — smart money accumulation signal.
+ * When DEX shows sell pressure but social is bullish — distribution camouflaged by narrative.
+ */
+function detectBuyPressureSocialDivergence(scores, rawData) {
+  const divergences = [];
+  const dex = rawData?.dex ?? {};
+  const social = rawData?.social ?? {};
+
+  const buySellRatio = Number(dex.buy_sell_ratio ?? 1);
+  const socialSentScore = Number(social.sentiment_score ?? 0);
+
+  // Smart money accumulation: buying on DEX while sentiment is negative
+  if (buySellRatio >= 1.3 && socialSentScore < -0.2) {
+    divergences.push({
+      type: 'smart_money_accumulation',
+      severity: 'info',
+      dimensions: ['market_strength', 'social_momentum'],
+      detail: `DEX buy/sell ratio ${buySellRatio.toFixed(2)} (buy pressure) while social sentiment is ${socialSentScore.toFixed(2)} (bearish) — possible smart money accumulation against negative narrative.`,
+    });
+  }
+
+  // Distribution disguised by bullish narrative: selling while narrative is bullish
+  if (buySellRatio <= 0.75 && socialSentScore > 0.3) {
+    divergences.push({
+      type: 'distribution_under_bullish_cover',
+      severity: 'warning',
+      dimensions: ['market_strength', 'social_momentum'],
+      detail: `DEX buy/sell ratio ${buySellRatio.toFixed(2)} (sell pressure) while social sentiment is ${socialSentScore.toFixed(2)} (bullish) — possible distribution while narrative keeps retail bullish.`,
+    });
+  }
+
+  return divergences;
+}
+
 export function analyzeCrossDimensional(scores, rawData = {}) {
-  const divergences = detectDivergences(scores);
+  const divergences = [...detectDivergences(scores), ...detect52wDivergence(scores, rawData), ...detectBuyPressureSocialDivergence(scores, rawData)];
   const convergences = detectConvergences(scores);
   const anomalies = detectAnomalies(scores);
 

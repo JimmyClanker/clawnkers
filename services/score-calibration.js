@@ -73,6 +73,16 @@ export function calibrateScores(db, rawScores) {
       : z >= -1.0 ? 'average'
       : z >= -2.0 ? 'below_average'
       : 'poor';
+    // Round 236 (AutoResearch): add 95% confidence interval for the raw score
+    // CI = raw ± 1.96 * stddev / sqrt(n) — tighter CI = more reliable calibration
+    if (c.stddev != null && c.n != null && c.n > 0) {
+      const margin = 1.96 * c.stddev / Math.sqrt(c.n);
+      c.confidence_interval_95 = {
+        low: parseFloat((c.raw - margin).toFixed(3)),
+        high: parseFloat((c.raw + margin).toFixed(3)),
+        margin: parseFloat(margin.toFixed(3)),
+      };
+    }
   }
 
   // Round 17 (AutoResearch nightly): Add calibration summary — overall z-score and outlier detection

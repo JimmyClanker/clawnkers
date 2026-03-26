@@ -39,6 +39,18 @@ const ALL_NARRATIVE_CLUSTERS = {
   'prediction_markets': ['prediction market', 'polymarket', 'futarchy', 'information market'],
   'zk_infra': ['zero knowledge', 'zk proof', 'zkvm', 'zkp', 'groth16', 'plonk', 'zk coprocessor'],
   'btc_fi': ['bitcoin fi', 'btcfi', 'wrapped btc', 'bitcoin yield', 'babylon', 'bitcoin staking'],
+  // Round 236 (AutoResearch): new 2025 narrative clusters
+  'tokenization_rwa': ['tokenized real estate', 'real estate token', 'private credit', 'tokenized bond', 'asset backed token', 'tokenized fund'],
+  'hyperscaler_crypto': ['microsoft crypto', 'amazon blockchain', 'google web3', 'hyperscaler', 'cloud blockchain', 'enterprise blockchain'],
+  'social_layer': ['decentralized social', 'farcaster', 'lens protocol', 'social graph', 'decentralized identity', 'soulbound', 'worldcoin'],
+  'stablecoin_wars': ['new stablecoin', 'usdc competitor', 'native stablecoin', 'cbdc', 'digital dollar', 'paypal stablecoin'],
+  'solana_ecosystem': ['solana ecosystem', 'solana defi', 'solana nft', 'sol season', 'pump fun', 'jupiter aggregator'],
+  // Round 237 (AutoResearch nightly): 2026-specific emerging narratives
+  'agent_commerce': ['agent commerce', 'x402', 'a2a', 'agent-to-agent', 'mcp payment', 'agentic economy', 'ai commerce protocol'],
+  'bitcoin_mainstream': ['bitcoin strategic reserve', 'national bitcoin reserve', 'sovereign btc', 'senator bitcoin', 'state bitcoin bill'],
+  'base_ecosystem': ['base ecosystem', 'coinbase layer2', 'base defi', 'base chain', 'base season'],
+  'hyper_liquid': ['hyperliquid', 'hlp vault', 'hype token', 'perps dex', 'on-chain perps', 'decentralized derivatives'],
+  'rwa_tokenization': ['tokenized treasury', 'blackrock onchain', 'franklin templeton', 'tokenized mmf', 'on-chain money market'],
 };
 
 export function detectNarrativeMomentum(rawData = {}) {

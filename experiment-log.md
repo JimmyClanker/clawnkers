@@ -1530,3 +1530,206 @@
 - **Files:** oracle/signal-detector.js
 - **Test:** npm test → 177/177 pass
 - **Result:** keeper. Volume context improves signal quality filtering.
+
+## Experiment 31 — Alpha Signals: CONVICTION_SCORE composite
+- **Hypothesis:** 5+ strong signals indicate high conviction; composite bonus rewards multiple confluent strong signals.
+- **Change:** getSignalStrengthScore adds +10 bonus per strong signal beyond 4th when strongCount ≥ 5.
+- **Files:** services/alpha-signals.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. Multi-signal conviction rewarded in strength score.
+
+## Experiment 32 — Alpha Signals: SUPPLY_SHOCK
+- **Hypothesis:** Low circulating supply (<30% total) + low FDV/MCap (<2x) signals compressed float with low overhang.
+- **Change:** Added supply_shock signal checking circulating_supply % and FDV/MCap ratio.
+- **Files:** services/alpha-signals.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. Identifies supply compression conditions early.
+
+## Experiment 33 — Alpha Signals: CROSS_CHAIN_TVL_GROWTH
+- **Hypothesis:** Simultaneous TVL growth across multiple chains signals broad capital migration, not single-chain flukes.
+- **Change:** Added cross_chain_tvl_growth signal for 2+ chains growing >15% TVL in 7d.
+- **Files:** services/alpha-signals.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. Detects multichain momentum early.
+
+## Experiment 34 — Trade Setup: volatility-adjusted entry zone
+- **Hypothesis:** Entry zone should adapt to recent volatility — wider for volatile tokens, tighter for stable.
+- **Change:** Entry spread = 3% (low vol <5%), 5% (normal), 8% (high vol >20%) based on |price_change_7d|.
+- **Files:** services/trade-setup.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. Entry zones adapt to market conditions.
+
+## Experiment 35 — Trade Setup: dynamic SL based on volatility
+- **Hypothesis:** Fixed -15% SL is too tight for volatile tokens, too wide for stable. Adapt to 7d price change.
+- **Change:** SL = -10% (low vol <10%), -15% (normal), -25% (high vol >30%); ATL override if closer.
+- **Files:** services/trade-setup.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. Stop losses adapt to token volatility profile.
+
+## Experiment 36 — Trade Setup: Fibonacci TP targets
+- **Hypothesis:** Fibonacci retracement levels (38.2%, 61.8%, 100% ATH) provide better technical TP targets than fixed % gains.
+- **Change:** TP1/TP2/TP3 use Fibonacci ATL→ATH levels when available, fallback to % gains otherwise.
+- **Files:** services/trade-setup.js
+- **Test:** npm test → 177/177 pass
+- **Result:** keeper. TP targets align with technical support/resistance levels.
+
+## Experiment 37 — Deduplicate safeNum/safeNumber into utils/math.js
+- **Hypothesis:** `safeNum()` in collectors/market.js and `safeNumber()` in synthesis/scoring.js are identical utility functions; consolidating them reduces code duplication and establishes a shared numeric utilities module.
+- **Change:** Created `utils/math.js` with a single `safeNumber(value, fallback=0)` function; updated imports in `collectors/market.js` and `synthesis/scoring.js`; renamed all `safeNum(...)` calls in market.js to `safeNumber(...)`.
+- **Files:** utils/math.js (new), collectors/market.js, synthesis/scoring.js
+- **Test:** `npm test` → 177/177 pass
+- **Result:** kept. Shared utility module established; deduplication successful.
+
+
+## Experiment 38 — JSDoc on all public exports in utils/
+- **Hypothesis:** Security and math utility exports lack documentation; JSDoc improves code navigability and IDE autocomplete support.
+- **Change:** Added JSDoc to `secureCompare()` in `utils/security.js` (format.js and math.js already had JSDoc).
+- **Files:** utils/security.js
+- **Test:** `npm test` → 177/177 pass
+- **Result:** kept. All utils/ public functions now documented.
+
+
+## Experiment 39 — JSDoc on createExaService in services/exa.js
+- **Hypothesis:** Public API exports without JSDoc reduce code navigability and IDE autocomplete support.
+- **Change:** Added JSDoc to `createExaService()` documenting params and return type.
+- **Files:** services/exa.js
+- **Test:** `npm test` → 177/177 pass
+- **Result:** kept. Public service factory now documented.
+
+
+## 2026-03-26 — AutoResearch Nightly Batch (Round 237 series, 30 improvements)
+
+### Overview
+30-round autonomous improvement batch targeting collector accuracy, scoring refinements, red flag detection, frontend UX, cross-dimensional analysis, and new data signals.
+
+### Improvements Implemented
+
+1. **Social: `competitor_content_ratio`** — New field tracking what fraction of articles frame the project in competitor context. High ratio (>60%) signals secondary coverage, not primary narrative. Used in scoring and red flags.
+
+2. **Red flags: `falling_social_velocity`** — Fires when news_momentum is 'declining' AND sentiment_score < -0.2. Combination of declining coverage + bearish tone = fading narrative. Also added `secondary_coverage_only` info flag.
+
+3. **Alpha signals: `community_score_leader`, `news_acceleration`, `governance_activity`** — Three new signals: top CoinGecko community score (>70), accelerating news coverage (>3 articles in 3 days), and active DAO governance (≥3 mentions).
+
+4. **Circuit breakers: `zero_volume_high_mcap`, `no_github_large_cap`** — Zero 24h volume with high market cap triggers CRITICAL cap (4.0). No GitHub on >$50M cap token (non-meme) triggers WARNING cap (6.5).
+
+5. **DexScreener: `sell_wall_risk`** — Composite signal detecting sell walls: high sell dominance + concentrated pool + accelerating volume = 'high' / 'elevated' / null. Used in scoring, LLM prompt, circuit breakers, and UI.
+
+6. **Scoring social: `competitor_content_ratio` penalty** — When 50%+ of social coverage is competitor-framing, raw score penalized by up to -0.4.
+
+7. **Market: `holder_engagement_score`** — New 0-100 composite combining volume/mcap velocity (50pts), community following (30pts), and trending bonus (20pts). Added to templates, UI metrics table, conviction scoring.
+
+8. **LLM prompt: sell wall risk context block** — When DEX sell_wall_risk is 'elevated' or 'high', a dedicated ## SELL WALL RISK block appears in Opus prompt with actionable context for bear case.
+
+9. **Report quality: sell wall + social credibility** — Adds issues for high sell wall risk and low social credibility + declining momentum, with score deduction.
+
+10. **Templates: sell wall + holder engagement in text report** — Text report now shows ⚠️ Sell Wall Risk: HIGH/ELEVATED and Holder Engagement: X/100 in key metrics section.
+
+11. **Reddit: upvote-weighted sentiment + `reddit_activity_score`** — Reddit sentiment now blends raw counts (60%) with log-scale upvote weights (40%). New `reddit_activity_score` (0-100) combines post count, upvote weight, recency, and subreddit diversity. Used in social scoring and confidence.
+
+12. **Scoring distribution: `sell_wall_risk` penalty** — Applied directly in calculateScores() via distribution.score -= 0.6/0.3 for high/elevated sell wall risk.
+
+13. **GitHub: `bus_factor_score`** — Gini-coefficient based (0-100) continuous score for contribution distribution. More nuanced than the categorical label. Used in dev dimension scoring.
+
+14. **Dev scoring: `bus_factor_score` supplement** — Uses continuous Gini score to fine-tune dev dimension: <30 = penalty, >70 = bonus (only when label not already applied).
+
+15. **Narrative momentum: 2026 AI narratives** — Added 5 new narrative clusters: `agent_commerce` (x402/A2A/MCP), `bitcoin_mainstream` (strategic reserve), `base_ecosystem`, `hyper_liquid` (Hyperliquid perps), `rwa_tokenization` (tokenized real estate/bonds).
+
+16. **Social confidence: `reddit_activity_score` boost** — When reddit_activity_score ≥ 30, socialConf += 10, improving confidence on well-discussed tokens.
+
+17. **LLM fact registry: 5 new facts** — Added holder_engagement_score, reddit_activity_score, competitor_content_ratio, sell_wall_risk, bus_factor_score to fact registry for LLM grounding.
+
+18. **LLM data summary: sell wall risk in DEX section** — When sell_wall_risk is elevated/high, surfaces it prominently in the DEX section with ratio and volume momentum context.
+
+19. **LLM data summary: engagement metrics block** — New ENGAGEMENT METRICS section shows holder_engagement_score and reddit_activity_score with human-readable labels when available.
+
+20. **Alpha signals: `distributed_dev_plus_active_shipping`** — Fires when bus_factor_score ≥ 75 AND has_recent_release = true. Signals well-distributed team actively shipping = reduced key-person risk.
+
+21. **Onchain: `revenue_per_active_user` + `active_addresses_7d`** — New product-market fit metric: daily revenue / daily active users. Also adds `active_addresses_7d` derived from daily active users × 7 × 0.6 uniqueness factor.
+
+22. **Onchain scoring: `revenue_per_active_user` signal** — ≥$1/user/day = +0.4, ≥$0.10 = +0.2, ≥$0.01 = +0.05, <$0.01 = -0.1.
+
+23. **Conviction: `holder_engagement_score` + sell wall bonuses** — High holder engagement (+3/+1 conviction), sell wall risk (-3/-1). Also updated reasoning string with new factors.
+
+24. **Cross-dimensional: `buy_pressure_quality` analysis** — New function `detectBuyPressureSocialDivergence()` that fires `smart_money_accumulation` (buy pressure + bearish social) and `distribution_under_bullish_cover` (sell pressure + bullish social) divergence signals.
+
+25. **Temporal analysis: 3 new tracked metrics** — holder_engagement_score, dex_liquidity, and reddit_activity_score now tracked in temporal delta comparison across scans.
+
+26. **Engine version bump** — Updated to r62-2026-03-26 in templates.js to signal significant engine update.
+
+27. **Frontend: sell wall risk badge** — Red/orange badge appears in price header area when sell_wall_risk is 'high' or 'elevated', shown before other badges.
+
+28. **Frontend: 5 new market table rows** — holder_engagement_score, reddit_activity_score, bus_factor_score, sell_wall_risk, revenue_per_active_user all now appear in the market metrics table.
+
+29. **Frontend: new red flag labels** — Added humanized labels for falling_social_velocity, secondary_coverage_only, no_github_large_cap, zero_volume_high_mcap, sell_pressure_dominance, ghost_contributors, old_ath_stagnation.
+
+30. **Frontend: new alpha signal labels** — Added readable labels for news_acceleration, governance_activity, distributed_dev_plus_active_shipping, smart_money_accumulation, distribution_under_bullish_cover, community_score_leader.
+
+### Files Modified
+- `collectors/social.js` — competitor_content_ratio, competitor framing detection
+- `collectors/reddit.js` — upvote-weighted sentiment, reddit_activity_score
+- `collectors/dexscreener.js` — sell_wall_risk composite
+- `collectors/github.js` — bus_factor_score (Gini-based)
+- `collectors/market.js` — holder_engagement_score
+- `collectors/onchain.js` — revenue_per_active_user, active_addresses_7d
+- `services/red-flags.js` — falling_social_velocity, secondary_coverage_only, new circuit breaker signals
+- `services/alpha-signals.js` — community_score_leader, news_acceleration, governance_activity, distributed_dev_plus_active_shipping, newsMomentum variable fix
+- `services/report-quality.js` — sell wall + social credibility quality checks
+- `services/narrative-momentum.js` — 5 new 2026 narrative clusters
+- `synthesis/scoring.js` — competitor_content_ratio penalty, sell_wall_risk distribution, reddit_activity_score supplement, bus_factor_score, revenue_per_active_user, reddit_activity_score social confidence
+- `synthesis/llm.js` — sell wall context in Opus prompt, 5 new facts, sell wall in DEX section, engagement metrics block
+- `synthesis/templates.js` — sell wall + holder engagement in text report, engine version r62
+- `scoring/circuit-breakers.js` — zero_volume_high_mcap, no_github_large_cap
+- `analysis/cross-dimensional.js` — detectBuyPressureSocialDivergence()
+- `analysis/temporal.js` — 3 new tracked metrics
+- `analysis/conviction.js` — holder_engagement_score + sell wall conviction factors
+- `public/js/alphascan.js` — sell wall badge, 5 new metric rows, new flag/signal labels
+
+### Round 262 — Smooth hover transitions su bottoni CTA
+- **Change:** Uniformate le durate delle transizioni CSS su `.btn-primary` e `.btn-secondary` a 0.25s con `ease` timing. Aggiunta `background-color` nella transition list per rendere qualsiasi futuro stato hover/active più fluido.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 263 — Focus state su product cards per accessibilità keyboard
+- **Change:** Aggiunto `:focus-visible` state a `.product-card` con border e box-shadow dedicati (più visibili di :hover) per migliorare la navigazione da tastiera. L'outline nativo è disabilitato per evitare doppio bordo.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 264 — Miglioramento contrasto badge "coming soon"
+- **Change:** Badge `.product-tag.dim` ora usa `var(--muted2)` invece di `var(--muted)` per migliorare il contrasto su dark background (#9a9a9a vs #7e7e7e).
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 265 — Line-height ottimizzato per hero headline
+- **Change:** `h1.hero-headline` ora usa `line-height: 1.12` (era 1.08) per migliorare la leggibilità, specialmente su schermi piccoli dove il font è più grande rispetto al viewport.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 266 — Letter-spacing su section-sub per uniformità
+- **Change:** Aggiunto `letter-spacing: -0.01em` a `.section-sub` per allinearlo alla tipografia del resto della pagina (title ha -0.04em, questo è più leggero per body text).
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 267 — Hover effect nav links più smooth
+- **Change:** `nav a` ora transiziona anche `opacity` (oltre a `color`) con timing uniformato a 0.25s ease.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 268 — Transition smooth su header background al scroll
+- **Change:** `header` ora transiziona anche `background-color` (oltre a `border-color`) quando riceve la classe `.scrolled` via JS.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 269 — Smooth transform su API code block copy button
+- **Change:** `.code-copy-btn` ora transiziona `background-color`, e aggiunto `transform: translateY(-1px)` al `:hover` per feedback visivo più chiaro.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 270 — Hover shimmer effect più fluido su .api-note
+- **Change:** `.api-note` ora transiziona anche `transform` e solleva leggermente su `:hover` con `translateY(-2px)` per feedback tattile.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 271 — Focus state su bottoni footer social
+- **Change:** Link `.footer-links a` ora hanno `:focus-visible` state con outline verde e underline attivo, per navigazione keyboard.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass

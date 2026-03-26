@@ -359,6 +359,24 @@
         ['Sentiment quality','sentiment_credibility_score',raw?.social?.sentiment_credibility_score,null],
         ['Issue health','issue_health_score',raw?.github?.issue_health_score,null],
         ['Momentum divergence','momentum_divergence',raw?.market?.momentum_divergence,null],
+        // Round 234 (AutoResearch): new market quality metrics
+        ['Volume trend 7d','volume_trend_7d',raw?.market?.volume_trend_7d,null],
+        ['Daily fee rate (ann.)','daily_fee_rate_annualized',raw?.onchain?.daily_fee_rate_annualized != null ? `${raw.onchain.daily_fee_rate_annualized.toFixed(3)}%` : null,null],
+        ['Commit consistency','commit_consistency_score',raw?.github?.commit_consistency_score,null],
+        ['Liq depth score','liquidity_depth_score',raw?.dex?.liquidity_depth_score,null],
+        ['Fee revenue accel.','fee_revenue_acceleration',raw?.onchain?.fee_revenue_acceleration,null],
+        ['Contrib. growth','contributor_growth_rate',raw?.github?.contributor_growth_rate,null],
+        // Round 236 (AutoResearch): 52-week range context
+        ['52w range tier','price_vs_52w_tier', raw?.market?.price_vs_52w?.tier ?? null, null],
+        ['52w high dist.','pct_from_52w_high', raw?.market?.price_vs_52w?.pct_from_52w_high != null ? `${raw.market.price_vs_52w.pct_from_52w_high.toFixed(1)}%` : null, null],
+        ['Commits/contributor','commits_per_contributor',raw?.github?.commits_per_contributor,null],
+        ['Median DEX liq/pair','median_liquidity_per_pair',raw?.dex?.median_liquidity_per_pair,null],
+        // Round 237 (AutoResearch nightly): new engagement and quality metrics
+        ['Holder engagement','holder_engagement_score',raw?.market?.holder_engagement_score != null ? `${raw.market.holder_engagement_score}/100` : null,null],
+        ['Reddit activity','reddit_activity_score',raw?.reddit?.reddit_activity_score != null ? `${raw.reddit.reddit_activity_score}/100` : null,null],
+        ['Bus factor score','bus_factor_score',raw?.github?.bus_factor_score != null ? `${raw.github.bus_factor_score}/100` : null,null],
+        ['Sell wall risk','sell_wall_risk',raw?.dex?.sell_wall_risk,null],
+        ['Rev/active user','revenue_per_active_user',raw?.onchain?.revenue_per_active_user != null ? `$${raw.onchain.revenue_per_active_user.toFixed(4)}/user/day` : null,null],
       ];
       return rows.filter(([,,value])=> value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a').map(([label,key,value,type])=>{
         const cls=type==='change'?` class="${changeClass(value)}"`:''
@@ -413,6 +431,14 @@
         'high_team_allocation': 'Excessive team token allocation',
         'severe_price_decline': 'Severe recent price decline',
         'single_chain_tvl_concentration': 'TVL concentrated on single chain',
+        // Round 237 (AutoResearch nightly): new flag labels
+        'falling_social_velocity': 'Falling social momentum + bearish',
+        'secondary_coverage_only': 'Project mainly in competitor context',
+        'no_github_large_cap': 'No GitHub data (large market cap)',
+        'zero_volume_high_mcap': 'Zero volume with high market cap',
+        'sell_pressure_dominance': 'DEX sell pressure dominance',
+        'ghost_contributors': 'Ghost contributors (low commits/contributor)',
+        'old_ath_stagnation': 'Structural stagnation (old ATH + declining)',
         'single_pool_liquidity_concentration': 'Liquidity concentrated in single pool',
         'stablecoin_depeg': 'Stablecoin depeg risk',
         'uneven_dimension_scores': 'Uneven score profile',
@@ -454,6 +480,13 @@
         'strong_treasury': 'Strong protocol treasury',
         'strong_long_term_trend': 'Sustained long-term uptrend',
         'accelerating_news_coverage': 'Accelerating news coverage',
+        // Round 237 (AutoResearch nightly): new signal labels
+        'news_acceleration': 'News acceleration detected',
+        'governance_activity': 'Active governance / DAO',
+        'distributed_dev_plus_active_shipping': 'Distributed team, active shipping',
+        'smart_money_accumulation': 'Smart money accumulation pattern',
+        'distribution_under_bullish_cover': 'Distribution under bullish cover ⚠️',
+        'community_score_leader': 'Top community score',
       };
       return labels[snakeCase] || snakeCase.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
@@ -724,6 +757,51 @@
               }[st.trend_quality]||null;
               if(!cfg)return'';
               return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}</div>`;
+            })()}
+            ${(()=>{
+              // Round 234 (AutoResearch): volume trend badge
+              const vt=payload?.raw_data?.market?.volume_trend_7d;
+              if(!vt||vt==='stable')return'';
+              const cfg={
+                increasing:{bg:'rgba(34,197,94,0.08)',border:'rgba(34,197,94,0.2)',color:'#86efac',icon:'📊',label:'vol ↑'},
+                decreasing:{bg:'rgba(239,68,68,0.08)',border:'rgba(239,68,68,0.2)',color:'#fca5a5',icon:'📊',label:'vol ↓'},
+              }[vt]||null;
+              if(!cfg)return'';
+              return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}</div>`;
+            })()}
+            ${(()=>{
+              // Round 234b (AutoResearch): MA7 position badge
+              const pvm=payload?.raw_data?.market?.price_vs_ma7;
+              if(!pvm||pvm.pct_vs_ma7==null||Math.abs(pvm.pct_vs_ma7)<2)return'';
+              const above=pvm.above_ma7;
+              const pct=Math.abs(pvm.pct_vs_ma7).toFixed(1);
+              const cfg=above
+                ?{bg:'rgba(34,197,94,0.08)',border:'rgba(34,197,94,0.2)',color:'#86efac',icon:'↑',label:`${pct}% above MA7`}
+                :{bg:'rgba(239,68,68,0.08)',border:'rgba(239,68,68,0.2)',color:'#fca5a5',icon:'↓',label:`${pct}% below MA7`};
+              return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}</div>`;
+            })()}
+            ${(()=>{
+              // Round 237 (AutoResearch nightly): sell wall risk badge
+              const swRisk=payload?.raw_data?.dex?.sell_wall_risk;
+              const swBadge = swRisk && swRisk!=='low' ? (()=>{
+                const cfg=swRisk==='high'
+                  ?{bg:'rgba(239,68,68,0.1)',border:'rgba(239,68,68,0.25)',color:'#fca5a5',icon:'🚨',label:'High sell wall risk'}
+                  :{bg:'rgba(249,115,22,0.08)',border:'rgba(249,115,22,0.2)',color:'#fdba74',icon:'⚠️',label:'Elevated sell wall risk'};
+                return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}</div>`;
+              })() : '';
+              if(swBadge) return swBadge;
+              // Round 236 (AutoResearch): 52-week range badge
+              const v52=payload?.raw_data?.market?.price_vs_52w;
+              if(!v52||!v52.tier||v52.tier==='mid_range')return'';
+              const cfgMap={
+                near_high:{bg:'rgba(34,197,94,0.1)',border:'rgba(34,197,94,0.25)',color:'#86efac',icon:'🏔',label:'near 52w high'},
+                below_mid:{bg:'rgba(251,191,36,0.08)',border:'rgba(251,191,36,0.2)',color:'#fbbf24',icon:'📉',label:'below mid-range'},
+                near_low:{bg:'rgba(239,68,68,0.1)',border:'rgba(239,68,68,0.25)',color:'#fca5a5',icon:'⚠',label:'near 52w low'},
+              };
+              const cfg=cfgMap[v52.tier];
+              if(!cfg)return'';
+              const distStr=v52.pct_from_52w_high!=null?` (${v52.pct_from_52w_high.toFixed(1)}%)`:'';
+              return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}${distStr}</div>`;
             })()}
           </div>
         </div>

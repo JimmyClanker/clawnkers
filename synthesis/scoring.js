@@ -1,13 +1,10 @@
 import { applyCircuitBreakers } from '../scoring/circuit-breakers.js';
 import { detectRedFlags } from '../services/red-flags.js';
 import { getCategoryWeights } from '../scoring/category-weights.js';
+import { safeNumber } from '../utils/math.js';
 
 function clampScore(value) {
   return Math.min(10, Math.max(1, Number(value.toFixed(1))));
-}
-
-function safeNumber(value, fallback = 0) {
-  return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
 // ─── Round 18: confidence helper ─────────────────────────────────────────────
@@ -60,6 +57,10 @@ export function calculateConfidence(rawData = {}) {
     if (social.sentiment_score != null || social.sentiment_counts != null) socialConf += 30;
     if (Array.isArray(social.key_narratives) && social.key_narratives.length > 0) socialConf += 20;
     if (social.bot_filtered_count != null) socialConf += 10; // has quality filtering
+    // Round 237 (AutoResearch nightly): reddit_activity_score boosts social confidence
+    // When reddit data is high quality (upvote-weighted, recent), it adds to signal confidence
+    const redditActivity = rawData?.reddit?.reddit_activity_score;
+    if (redditActivity != null && redditActivity >= 30) socialConf += 10;
     socialConf = Math.min(100, Math.max(10, socialConf));
   }
 
@@ -264,6 +265,15 @@ function scoreMarketStrength(market = {}) {
   else if (momentumTier === 'strong_downtrend') raw -= 0.4;
   else if (momentumTier === 'downtrend') raw -= 0.2;
 
+  // Round 236 (AutoResearch): price_momentum_score (0-100) — fine-grained composite momentum
+  // This is a sigmoid-normalized composite that's more nuanced than tier labels
+  const priceMomentumScore = safeNumber(market.price_momentum_score ?? null);
+  if (priceMomentumScore !== null) {
+    // Map 0-100 score to ±0.3 adjustment (centered at 50)
+    const momentumAdj = ((priceMomentumScore - 50) / 100) * 0.6;
+    raw += momentumAdj;
+  }
+
   // Round 150 (AutoResearch): Sparkline trend quality bonus — smooth uptrend = sustained momentum
   const sparklineTrend = computeSparklineTrend(market.sparkline_7d);
   if (sparklineTrend.trend_quality === 'smooth_up') raw += 0.35;
@@ -315,6 +325,22 @@ function scoreMarketStrength(market = {}) {
   if (exchangeCount >= 20) raw += 0.4;
   else if (exchangeCount >= 10) raw += 0.2;
   else if (exchangeCount >= 5) raw += 0.1;
+
+  // Round 236 (AutoResearch): 52-week range position bonus
+  // Near 52w high = price discovery, institutional attention; near 52w low = structural weakness
+  const vs52w = market.price_vs_52w;
+  if (vs52w?.tier === 'near_high') raw += 0.3;    // within 10% of 52w high = momentum leader
+  else if (vs52w?.tier === 'near_low') raw -= 0.3; // within 40% of 52w low = structural weakness
+
+  // Round 234 (AutoResearch): Volume trend bonus — increasing volume over 7d is bullish confirmation
+  const volumeTrend7d = market.volume_trend_7d;
+  if (volumeTrend7d === 'increasing') raw += 0.25;
+  else if (volumeTrend7d === 'decreasing') raw -= 0.2;
+
+  // Round 234b (AutoResearch): Price vs MA7 bonus — being above the 7-day MA with margin confirms trend
+  const priceVsMa7 = market.price_vs_ma7;
+  if (priceVsMa7?.above_ma7 && priceVsMa7.pct_vs_ma7 > 5) raw += 0.3;
+  else if (priceVsMa7?.above_ma7 === false && priceVsMa7?.pct_vs_ma7 < -5) raw -= 0.3;
 
   // Round 124 (AutoResearch): Empty data guard — no price, no volume, no market cap → neutral 5.0
   // Prevents spurious scoring when all market signals are absent
@@ -459,6 +485,40 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
   if (revenueTrend === 'improving') raw += 0.3;
   else if (revenueTrend === 'declining') raw -= 0.3;
 
+  // Round 234 (AutoResearch): fee_revenue_acceleration — monetizing TVL more efficiently over time
+  const feeRevAcc = onchain.fee_revenue_acceleration;
+  if (feeRevAcc === 'accelerating') raw += 0.45;  // Growing revenue faster than TVL = expanding margins
+  else if (feeRevAcc === 'growing') raw += 0.2;
+  else if (feeRevAcc === 'declining') raw -= 0.25;
+
+  // Round 235 (AutoResearch): daily_fee_rate_annualized bonus — high annualized fee rate signals productive protocol
+  const dailyFeeRate = safeNumber(onchain.daily_fee_rate_annualized ?? 0);
+  if (dailyFeeRate > 5) raw += 0.4;       // >5% annualized = highly productive (top tier DeFi)
+  else if (dailyFeeRate > 1) raw += 0.2;  // 1-5% = healthy fee generation
+  else if (dailyFeeRate > 0.1) raw += 0.05; // 0.1-1% = moderate fee generation
+
+  // Round 236 (AutoResearch): TVL efficiency per active user — protocols with high TVL but few users
+  // may have mercenary capital. High TVL per-user with high fees = product-market fit.
+  const tvlForEff = safeNumber(onchain.tvl ?? 0);
+  const activeUsersForEff = safeNumber(onchain.active_addresses_7d ?? onchain.active_users_24h ?? 0);
+  if (tvlForEff > 0 && activeUsersForEff > 1000) {
+    const tvlPerUser = tvlForEff / activeUsersForEff;
+    // High TVL/user ($100K+) = power users, institutional capital = sticky
+    if (tvlPerUser > 100_000) raw += 0.3;
+    else if (tvlPerUser > 10_000) raw += 0.15;
+    else if (tvlPerUser < 100) raw -= 0.1; // very low TVL/user = shallow capital per user
+  }
+
+  // Round 237 (AutoResearch nightly): revenue_per_active_user signal
+  // High revenue per user (>$1/user/day) = product-market fit; low = activity without monetization
+  const revenuePerUser = safeNumber(onchain.revenue_per_active_user ?? null);
+  if (revenuePerUser > 0) {
+    if (revenuePerUser >= 1.0) raw += 0.4;          // $1+/user/day = strong product-market fit
+    else if (revenuePerUser >= 0.1) raw += 0.2;     // $0.10-$1 = moderate
+    else if (revenuePerUser >= 0.01) raw += 0.05;   // $0.01-$0.10 = emerging
+    else raw -= 0.1;                                  // <$0.01 = very low monetization
+  }
+
   // Round 57: Active addresses as a usage signal
   const activeAddresses7d = safeNumber(onchain.active_addresses_7d ?? onchain.unique_users_7d ?? 0);
   if (activeAddresses7d > 50_000) raw += 0.6;
@@ -583,12 +643,28 @@ function scoreSocialMomentum(social = {}) {
   if (partnershipMentions >= 3) raw += 0.25;
   else if (partnershipMentions >= 1) raw += 0.1;
 
+  // Round 236 (AutoResearch): listing mentions boost — exchange listings are major catalysts
+  const listingMentions = safeNumber(social.listing_mentions ?? 0);
+  if (listingMentions >= 5) raw += 0.4;
+  else if (listingMentions >= 2) raw += 0.2;
+  else if (listingMentions >= 1) raw += 0.1;
+
   // Round 232 (AutoResearch nightly): community_score bonus from market collector
   // Higher community score (CoinGecko-derived: twitter + telegram + reddit) = established community
   const communityScore = safeNumber(social.community_score ?? 0);
   if (communityScore >= 70) raw += 0.4;
   else if (communityScore >= 40) raw += 0.2;
   else if (communityScore >= 20) raw += 0.1;
+
+  // Round 237 (AutoResearch nightly): competitor_content_ratio penalty
+  // When most social coverage is framing this project in competitor context (not primary coverage),
+  // the signal quality is reduced — scale down the raw score slightly
+  const competitorContentRatio = safeNumber(social.competitor_content_ratio ?? null);
+  if (competitorContentRatio !== null && competitorContentRatio > 0.5) {
+    // Scale penalty: 50% = 0, 100% = -0.4
+    const penalty = (competitorContentRatio - 0.5) * 0.8;
+    raw -= Math.min(penalty, 0.4);
+  }
 
   // Round 48 (AutoResearch): social_health_index — 0-100 normalized composite
   // Measures community health: volume, sentiment quality, narrative depth, engagement quality
@@ -709,6 +785,28 @@ function scoreDevelopment(github = {}) {
   const busFactor = github.contributor_bus_factor;
   if (busFactor === 'critical') raw -= 0.5; // single dev dominance
   else if (busFactor === 'high') raw -= 0.25;
+
+  // Round 237 (AutoResearch nightly): bus_factor_score (0-100) provides more granular adjustment
+  // Supplements the label-based penalty with a continuous score
+  const busFactorScore = safeNumber(github.bus_factor_score ?? null);
+  if (busFactorScore !== null) {
+    // Below 40 = heavily concentrated; above 70 = well distributed
+    if (busFactorScore < 30 && busFactor == null) raw -= 0.4; // only apply if label not already used
+    else if (busFactorScore > 70 && !busFactor) raw += 0.2;   // distributed team bonus
+  }
+
+  // Round 234 (AutoResearch): contributor growth rate bonus
+  const contribGrowthRate = github.contributor_growth_rate;
+  if (contribGrowthRate === 'growing') raw += 0.3;  // growing team = expanding capacity
+  else if (contribGrowthRate === 'shrinking') raw -= 0.3;
+
+  // Round 235 (AutoResearch): commit consistency score bonus
+  const commitConsistency = safeNumber(github.commit_consistency_score ?? null);
+  if (commitConsistency !== null) {
+    if (commitConsistency >= 80) raw += 0.3;       // Very consistent — healthy sustained activity
+    else if (commitConsistency >= 60) raw += 0.15;
+    else if (commitConsistency < 30) raw -= 0.25;  // Erratic/burst pattern — reliability risk
+  }
 
   // Round 36 (AutoResearch): dev_quality_index — normalized 0-100 composite quality signal
   // Combines all available dev signals into a single normalized score for external consumers
@@ -903,7 +1001,7 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
   }
 
   // 2. Liquidity depth: use DEX data if available, otherwise volume/mcap proxy
-  const dexLiquidity = safeNumber(dexData.liquidity ?? dexData.total_liquidity);
+  const dexLiquidity = safeNumber(dexData.liquidity ?? dexData.total_liquidity ?? dexData.dex_liquidity_usd);
   const mcap   = safeNumber(market.market_cap);
   const volume = safeNumber(market.total_volume);
   if (dexLiquidity > 0) {
@@ -913,6 +1011,14 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
     const volRatio = volume / mcap;
     if (volRatio > 0.1) raw += 0.5;
     else if (volRatio < 0.01) raw -= 0.8; // Very illiquid
+  }
+
+  // Round 234 (AutoResearch): liquidity_depth_score supplement — composite DEX quality signal
+  const liqDepthScore = safeNumber(dexData.liquidity_depth_score ?? null);
+  if (liqDepthScore > 0) {
+    // Map 0-100 score to ±0.5 adjustment (centered at 50)
+    const liqAdj = ((liqDepthScore - 50) / 100) * 1.0;
+    raw += liqAdj;
   }
 
   // 3. Concentration risk: whale concentration = higher risk (lower score)
@@ -1098,6 +1204,26 @@ export function calculateScores(data) {
   const development       = scoreDevelopment(safeCollector(data?.github));
   const tokenomics_health = scoreTokenomicsRisk(safeCollector(data?.tokenomics));
   const distribution      = scoreDistribution(safeCollector(data?.tokenomics), safeCollector(data?.market));
+
+  // Round 237 (AutoResearch nightly): DEX sell wall risk penalty for distribution score
+  // Active distribution on DEX combined with high unlock risk = compounded negative pressure on holders
+  const dexSellWallRisk = data?.dex?.sell_wall_risk;
+  if (dexSellWallRisk === 'high') {
+    distribution.score = clampScore(distribution.score - 0.6);
+    distribution.reasoning += ' | DEX sell_wall_risk HIGH: organized exit pattern detected (-0.6).';
+  } else if (dexSellWallRisk === 'elevated') {
+    distribution.score = clampScore(distribution.score - 0.3);
+    distribution.reasoning += ' | DEX sell_wall_risk ELEVATED: moderate distribution pressure (-0.3).';
+  }
+
+  // Round 237b (AutoResearch nightly): reddit_activity_score supplement to social momentum
+  // A high reddit_activity_score (upvote-weighted, recency-adjusted) = stronger community signal
+  const redditActivityScore = safeNumber(data?.reddit?.reddit_activity_score ?? null);
+  if (redditActivityScore !== null && redditActivityScore > 0) {
+    // Map 0-100 activity score to ±0.2 adjustment (centered at 40)
+    const redditAdj = ((redditActivityScore - 40) / 100) * 0.4;
+    social_momentum.score = clampScore(social_momentum.score + redditAdj);
+  }
 
   // Round 9: Reddit supplement to social momentum
   social_momentum.score = applyRedditSupplement(social_momentum.score, data?.reddit);

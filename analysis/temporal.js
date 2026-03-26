@@ -68,6 +68,9 @@ export function analyzeTemporalDelta(db, projectName, currentRawData, currentSco
   // Build metric deltas
   const deltas = [];
 
+  const prevDex = prevReport?.raw_data?.dex ?? {};
+  const currDex = currentRawData?.dex ?? {};
+
   const metricPairs = [
     { metric: 'price', prev: safeN(prevMarket.current_price ?? prevMarket.price), curr: safeN(currMarket.current_price ?? currMarket.price), unit: '$' },
     { metric: 'market_cap', prev: safeN(prevMarket.market_cap), curr: safeN(currMarket.market_cap), unit: '$' },
@@ -75,6 +78,10 @@ export function analyzeTemporalDelta(db, projectName, currentRawData, currentSco
     { metric: 'volume_24h', prev: safeN(prevMarket.total_volume), curr: safeN(currMarket.total_volume), unit: '$' },
     { metric: 'fees_7d', prev: safeN(prevOnchain.fees_7d), curr: safeN(currOnchain.fees_7d), unit: '$' },
     { metric: 'social_mentions', prev: safeN(prevSocial.filtered_mentions ?? prevSocial.mentions), curr: safeN(currSocial.filtered_mentions ?? currSocial.mentions), unit: '' },
+    // Round 237 (AutoResearch nightly): new engagement metrics in temporal tracking
+    { metric: 'holder_engagement_score', prev: safeN(prevMarket.holder_engagement_score), curr: safeN(currMarket.holder_engagement_score), unit: '' },
+    { metric: 'dex_liquidity', prev: safeN(prevDex.dex_liquidity_usd), curr: safeN(currDex.dex_liquidity_usd), unit: '$' },
+    { metric: 'reddit_activity_score', prev: safeN(prevReport?.raw_data?.reddit?.reddit_activity_score), curr: safeN(currentRawData?.reddit?.reddit_activity_score), unit: '' },
   ];
 
   for (const { metric, prev, curr, unit } of metricPairs) {

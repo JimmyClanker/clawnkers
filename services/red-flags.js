@@ -382,6 +382,30 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 237 (AutoResearch nightly): Falling social velocity — news declining AND bearish sentiment
+  // Combination of low recent news + bearish tone = community losing interest while bears dominate
+  const newsMomentum = social.news_momentum;
+  const socialSentScore = safeN(social.sentiment_score ?? 0);
+  const filteredMentions = safeN(social.filtered_mentions ?? social.mentions ?? 0);
+  if (newsMomentum === 'declining' && socialSentScore < -0.2 && filteredMentions > 0) {
+    flags.push({
+      flag: 'falling_social_velocity',
+      severity: 'warning',
+      detail: `Social coverage is declining (${filteredMentions} mentions, momentum: ${newsMomentum}) with bearish sentiment (score ${socialSentScore.toFixed(2)}) — fading narrative + negative community tone.`,
+    });
+  }
+
+  // Round 237b (AutoResearch nightly): competitor_content_ratio — high ratio means project only
+  // appears as a competitor context item, not as the primary subject of coverage
+  const competitorContentRatio = safeN(social.competitor_content_ratio ?? null, null);
+  if (competitorContentRatio !== null && competitorContentRatio > 0.6 && filteredMentions >= 5) {
+    flags.push({
+      flag: 'secondary_coverage_only',
+      severity: 'info',
+      detail: `${(competitorContentRatio * 100).toFixed(0)}% of social coverage frames this project in competitor context — it may be defined by rivals rather than its own narrative.`,
+    });
+  }
+
   // 28. Round 1 (AutoResearch batch): No social mentions at all — ghost project
   const mentions = safeN(social.mentions ?? social.filtered_mentions ?? 0);
   if (mentions === 0 && !social.error) {
@@ -559,6 +583,50 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 236 (AutoResearch): commits_per_contributor too low = ghost contributors
+  // Many contributors with very few commits = inflated team size claims
+  const commitsPerContrib = safeN(github.commits_per_contributor ?? null, null);
+  if (commitsPerContrib !== null && commitsPerContrib < 1.5 && safeN(github.contributors ?? 0) > 20) {
+    flags.push({
+      flag: 'ghost_contributors',
+      severity: 'info',
+      detail: `Only ${commitsPerContrib.toFixed(1)} commits per contributor over 90d despite ${github.contributors} contributors — many may be one-time committers, overstating team size.`,
+    });
+  }
+
+  // Round 234 (AutoResearch): Extreme FDV overhang check
+  const fdvFlag = checkFdvOverhang(market);
+  if (fdvFlag) flags.push(fdvFlag);
+
+  // Round 236 (AutoResearch): 52w low + FDV trap combo
+  const lowRangeFlag = checkLowRangeFdvTrap(market);
+  if (lowRangeFlag) flags.push(lowRangeFlag);
+
+  // Round 234b (AutoResearch): Stale data warning — if market data is missing key fields after retries
+  // Signals data collection failure rather than bad fundamentals
+  if (!market.error && market.market_cap == null && market.price == null && market.current_price == null) {
+    flags.push({
+      flag: 'stale_market_data',
+      severity: 'info',
+      detail: 'Market data fields are empty despite no explicit error — CoinGecko may have rate-limited this project or the token is not indexed yet.',
+    });
+  }
+
+  // Round 235 (AutoResearch): Low buy/sell ratio on DEX — sellers dominating
+  const buys24h = safeN(dex?.buys_24h ?? 0);
+  const sells24h = safeN(dex?.sells_24h ?? 0);
+  const totalTxns = buys24h + sells24h;
+  if (totalTxns >= 50 && buys24h > 0) {
+    const buySellRatio = buys24h / sells24h;
+    if (buySellRatio < 0.5) {
+      flags.push({
+        flag: 'sell_pressure_dominance',
+        severity: 'warning',
+        detail: `DEX buy/sell ratio is ${buySellRatio.toFixed(2)} (${buys24h} buys vs ${sells24h} sells in 24h) — sellers outnumber buyers 2:1+, indicating distribution phase.`,
+      });
+    }
+  }
+
   // Deduplicate flags by flag key (keep highest severity)
   const severityOrder = { critical: 3, warning: 2, info: 1 };
   const flagMap = new Map();
@@ -569,4 +637,39 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     }
   }
   return Array.from(flagMap.values());
+}
+
+// Round 234 (AutoResearch): Extreme FDV overhang — very little of supply in circulation
+// When MCap/FDV < 0.1 (only 10% circulating), future unlocks will massively dilute existing holders
+export function checkFdvOverhang(market = {}) {
+  const mcap = Number(market.market_cap ?? 0);
+  const fdv = Number(market.fully_diluted_valuation ?? 0);
+  if (mcap <= 0 || fdv <= 0 || fdv <= mcap) return null;
+  const ratio = mcap / fdv;
+  if (ratio < 0.1 && mcap > 1_000_000) {
+    return {
+      flag: 'extreme_fdv_overhang',
+      severity: ratio < 0.05 ? 'critical' : 'warning',
+      detail: `Only ${(ratio * 100).toFixed(1)}% of total supply is circulating (MCap $${(mcap/1e6).toFixed(1)}M vs FDV $${(fdv/1e6).toFixed(1)}M) — massive future unlock pressure on current holders.`,
+    };
+  }
+  return null;
+}
+
+// Round 236 (AutoResearch): Near 52-week low with high FDV overhang — double red flag
+// Price at lows while most supply is unlocked = severe structural weakness
+export function checkLowRangeFdvTrap(market = {}) {
+  const vs52w = market.price_vs_52w;
+  const mcap = Number(market.market_cap ?? 0);
+  const fdv = Number(market.fully_diluted_valuation ?? 0);
+  if (!vs52w || mcap <= 0 || fdv <= 0) return null;
+  const fdvRatio = fdv / mcap;
+  if (vs52w.tier === 'near_low' && fdvRatio > 3 && mcap > 500_000) {
+    return {
+      flag: 'low_range_fdv_trap',
+      severity: 'critical',
+      detail: `Price near 52-week low (${vs52w.pct_from_52w_high.toFixed(1)}% from 52w high) with FDV/MCap ratio ${fdvRatio.toFixed(1)}x — structural distribution trap: price at lows while major supply unlocks loom.`,
+    };
+  }
+  return null;
 }

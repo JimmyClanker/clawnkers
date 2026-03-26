@@ -103,6 +103,24 @@ export function createRestRouter({ config, exaService, signalsService }) {
       signals_stored: signalsService.countSignals(),
       total_scans: totalScans,
 
+      // ── Round 236 (AutoResearch): Feature registry — documents key capabilities for API consumers ──
+      features: {
+        scoring_dimensions: 7,
+        collectors: 10,
+        circuit_breakers: true,
+        price_vs_52w_range: true,       // 52-week high/low context
+        realized_vol_90d: true,         // 90-day realized volatility
+        ptvl_ratio: true,               // Price-to-TVL ratio
+        narrative_detection: true,      // 20+ macro narrative clusters
+        sector_benchmarking: true,      // DeFiLlama sector comparisons
+        cross_dimensional_analysis: true,
+        conviction_scoring: true,
+        trade_setup_generation: true,
+        kelly_criterion_sizing: true,
+        anti_hallucination_validation: true,
+        llm_models: ['claude-opus-4-6', 'grok-4-fast'],
+      },
+
       // ── Alpha Scanner ────────────────────────────────────────────
       alpha: {
         description: 'Deep alpha analysis for any crypto project',
@@ -337,6 +355,58 @@ export function createRestRouter({ config, exaService, signalsService }) {
       top_symbols_7d: stats.topSymbols7d,
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // ── Round 234 (AutoResearch): Signal Summary Endpoint ─────────────────────
+  // Lightweight endpoint returning just verdict + top signals + red flags for a cached scan
+  // Perfect for agents and bots that need quick structured data without the full report
+  router.get('/api/signal-summary', (req, res) => {
+    const project = (req.query.project || '').trim().toLowerCase().slice(0, 100);
+    if (!project) return res.status(400).json({ error: 'Missing ?project= parameter' });
+
+    try {
+      const db = signalsService.db;
+      // Look for recent scan in alpha_reports cache
+      const row = db.prepare(`
+        SELECT payload_json, created_at FROM alpha_reports
+        WHERE cache_key LIKE ?
+        ORDER BY created_at DESC LIMIT 1
+      `).get(`%${project}%`);
+
+      if (!row) {
+        return res.status(404).json({ error: 'No cached scan found. Run a full scan first via /api/alpha/full.' });
+      }
+
+      let payload;
+      try { payload = JSON.parse(row.payload_json); } catch { return res.status(500).json({ error: 'Corrupt cache entry' }); }
+
+      const summary = {
+        project_name: payload.project_name,
+        verdict: payload.verdict,
+        score: payload.scores?.overall?.score ?? null,
+        scanned_at: row.created_at,
+        data_age_minutes: Math.round((Date.now() - new Date(row.created_at).getTime()) / 60000),
+        alpha_signals: (payload.alpha_signals || []).slice(0, 5).map(s => ({ signal: s.signal, strength: s.strength, detail: s.detail })),
+        red_flags: (payload.red_flags || []).filter(f => f.severity === 'critical' || f.severity === 'warning').slice(0, 5),
+        narrative_strength: payload.narrative_strength ?? null,
+        supply_unlock_risk: payload.supply_unlock_risk ? { risk_level: payload.supply_unlock_risk.risk_level, unlock_overhang_pct: payload.supply_unlock_risk.unlock_overhang_pct } : null,
+        key_metrics: {
+          price: payload.raw_data?.market?.current_price ?? null,
+          market_cap: payload.raw_data?.market?.market_cap ?? null,
+          tvl: payload.raw_data?.onchain?.tvl ?? null,
+          change_24h: payload.raw_data?.market?.price_change_pct_24h ?? null,
+          change_7d: payload.raw_data?.market?.price_change_pct_7d ?? null,
+          volume_trend_7d: payload.raw_data?.market?.volume_trend_7d ?? null,
+        },
+        circuit_breakers_active: payload.scores?.overall?.circuit_breakers?.capped ?? false,
+        data_completeness: payload.scores?.overall?.completeness ?? null,
+      };
+
+      res.json(summary);
+    } catch (err) {
+      console.error('[signal-summary]', err.message);
+      res.status(500).json({ error: 'Failed to retrieve signal summary' });
+    }
   });
 
   // ── Token Search Proxy (CoinGecko + DexScreener fallback) ──
