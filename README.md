@@ -2,7 +2,7 @@
 
 Neural web search API for crypto, blockchain, and AI research. Pay per query with USDC.
 
-**Live**: [x402-research.onrender.com](https://x402-research.onrender.com)
+**Live**: [clawnkers.com](https://clawnkers.com)
 
 ## Features
 
@@ -22,7 +22,7 @@ Add to your MCP client config:
   "mcpServers": {
     "clawnkers-research": {
       "type": "streamableHttp",
-      "url": "https://x402-research.onrender.com/mcp"
+      "url": "https://clawnkers.com/mcp"
     }
   }
 }
@@ -35,11 +35,11 @@ Tools: `crypto_research`, `url_extract`
 ```bash
 # Search
 curl -H "payment-signature: YOUR_TOKEN" \
-  "https://x402-research.onrender.com/research?q=bitcoin+etf+2026"
+  "https://clawnkers.com/research?q=bitcoin+etf+2026"
 
 # Extract URL
 curl -H "payment-signature: YOUR_TOKEN" \
-  "https://x402-research.onrender.com/fetch?url=https://example.com"
+  "https://clawnkers.com/fetch?url=https://example.com"
 ```
 
 ### Python SDK
@@ -58,7 +58,7 @@ token = payments.x402.get_x402_access_token(PLAN_ID, AGENT_ID)
 
 import requests
 r = requests.get(
-    "https://x402-research.onrender.com/research",
+    "https://clawnkers.com/research",
     params={"q": "defi yields 2026"},
     headers={"payment-signature": token.access_token}
 )
@@ -85,7 +85,7 @@ print(r.json())
 
 ## Stack
 
-- **Runtime**: Node.js + Express on [Render](https://render.com)
+- **Runtime**: Node.js + Express on local Mac mini + Cloudflare Tunnel
 - **Search**: [Exa AI](https://exa.ai) neural search
 - **Payments**: [Nevermined](https://nevermined.io) USDC credits
 - **Protocol**: [MCP](https://modelcontextprotocol.io) Streamable HTTP
