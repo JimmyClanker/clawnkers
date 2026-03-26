@@ -443,9 +443,13 @@
       const summary = String(analysis?.project_summary || payload?.project_summary || '').trim();
       const category = String(analysis?.project_category || payload?.project_category || raw?.onchain?.category || '').trim();
       // Round 72: also surface ticker + chain + website if available
-      const ticker = raw?.market?.symbol ? `<span style="font-family:'IBM Plex Mono',monospace;color:var(--muted);font-size:0.82rem;padding:2px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;">${escapeHtml(raw.market.symbol.toUpperCase())}</span>` : '';
+      const sym = raw?.market?.symbol;
+      const ticker = sym ? `<span style="font-family:'IBM Plex Mono',monospace;color:var(--buy);font-size:0.78rem;padding:2px 9px;background:rgba(212,88,10,0.1);border:1px solid rgba(212,88,10,0.22);border-radius:6px;font-weight:600;">${escapeHtml(sym.toUpperCase())}</span>` : '';
       const website = raw?.market?.links?.homepage?.[0] || raw?.tokenomics?.links?.homepage || '';
-      const websiteLink = website ? `<a href="${escapeHtml(website)}" target="_blank" rel="noopener" style="font-size:0.78rem;color:var(--muted2);display:inline-flex;align-items:center;gap:4px;">↗ Website</a>` : '';
+      const websiteLink = website ? `<a href="${escapeHtml(website)}" target="_blank" rel="noopener" style="font-size:0.78rem;color:var(--muted2);display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:6px;transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='rgba(255,255,255,0.2)'" onmouseout="this.style.color='';this.style.borderColor=''">↗ Site</a>` : '';
+      // Round 102: market cap chip
+      const mcap = raw?.market?.market_cap;
+      const mcapChip = mcap && Number(mcap) > 0 ? `<span style="font-size:0.74rem;color:var(--muted2);padding:2px 8px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;font-family:'IBM Plex Mono',monospace;">${formatCompactNumber(mcap)}</span>` : '';
 
       if (!summary && !category) return '';
 
@@ -454,10 +458,11 @@
           <div class="project-intro-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span>📋 What is ${escapeHtml(projectName)}?</span>
             ${ticker}
+            ${mcapChip}
             ${websiteLink}
           </div>
           ${summary ? `<div class="project-intro-text" style="margin-top:10px;">${formatAnalysisText(summary)}</div>` : ''}
-          ${category ? `<div class="project-intro-meta" style="margin-top:8px;">Category: <span class="project-category-badge">${escapeHtml(category)}</span></div>` : ''}
+          ${category ? `<div class="project-intro-meta" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="color:var(--muted);font-size:0.78rem;">Category</span> <span class="project-category-badge">${escapeHtml(category)}</span></div>` : ''}
         </div>
       </div>`;
     }
@@ -637,8 +642,19 @@
             <div class="verdict-meta">Research verdict</div>
             <div class="verdict ${verdictClass(verdict)}">${escapeHtml(verdict)}</div>
             <div class="overall-score ${verdictClass(verdict)}">${avgScore!==null?`${avgScore.toFixed(1)}/10`:'n/a'}</div>
-            ${(()=>{const v=payload?.volatility;if(!v||v.regime==='calm')return'';const c={elevated:'#fbbf24',high:'#f97316',extreme:'#ef4444'}[v.regime]||'#fbbf24';const pct=v.volatility_pct_24h!=null?` (${v.volatility_pct_24h.toFixed(1)}% 24h)`:'';return`<div style="margin-top:6px;padding:4px 12px;background:${c};color:#000;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;display:inline-block;">⚡ ${v.regime}${pct}</div>`})()}
-            ${(()=>{const sa=scores?.overall?.score_anomaly;if(!sa||sa==='normal')return'';return`<div style="margin-top:4px;padding:3px 10px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:999px;font-size:10px;font-weight:600;display:inline-block;">⚠ ${sa==='high_variance'?'uneven scores':'mixed signals'}</div>`})()}
+            ${(()=>{
+              // Round 106: volatility badge — softer colors, better contrast
+              const v=payload?.volatility;
+              if(!v||v.regime==='calm')return'';
+              const cfg={
+                elevated:{bg:'rgba(251,191,36,0.15)',border:'rgba(251,191,36,0.3)',color:'#fbbf24',icon:'⚠'},
+                high:{bg:'rgba(249,115,22,0.15)',border:'rgba(249,115,22,0.3)',color:'#fb923c',icon:'⚡'},
+                extreme:{bg:'rgba(239,68,68,0.15)',border:'rgba(239,68,68,0.3)',color:'#f87171',icon:'🔴'},
+              }[v.regime]||{bg:'rgba(251,191,36,0.1)',border:'rgba(251,191,36,0.2)',color:'#fbbf24',icon:'⚡'};
+              const pct=v.volatility_pct_24h!=null?` ${v.volatility_pct_24h.toFixed(1)}%`:'';
+              return`<div style="margin-top:6px;padding:4px 12px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;display:inline-block;">${cfg.icon} ${v.regime}${pct}</div>`;
+            })()}
+            ${(()=>{const sa=scores?.overall?.score_anomaly;if(!sa||sa==='normal')return'';return`<div style="margin-top:4px;padding:3px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#fbbf24;border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;"><span>⚠</span><span>${sa==='high_variance'?'uneven scores':'mixed signals'}</span></div>`})()}
           </div>
         </div>
         ${renderProjectIntro(payload, analysis, raw)}
@@ -788,10 +804,11 @@
           ts.risk_reward_ratio!=null ? tradeTile('R/R', `${escapeHtml(String(ts.risk_reward_ratio))}x`, qualColor, '') : '',
           rr?.position_size_suggestion ? tradeTile('Position Size', escapeHtml(rr.position_size_suggestion), '#fbbf24', 'rgba(251,191,36,0.04)') : '',
         ].filter(Boolean).join('');
+        // Round 107: use .trade-tiles CSS class
         panel4 = `<section class="panel" style="margin-top:18px;">
           <div class="section-label">📐 Trade Setup</div>
           ${chartSvg}
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;">${setupTiles}</div>
+          <div class="trade-tiles">${setupTiles}</div>
           <div style="margin-top:8px;font-size:0.78rem;color:var(--muted);">Not financial advice. Use as a research tool only.</div>
         </section>`;
       }
@@ -877,12 +894,18 @@
     function showError(msg, hint) {
       resultsSection.classList.add('visible');
       errorBox.classList.remove('hidden');
-      const hintHtml = hint ? `<div style="margin-top:8px;font-size:0.82rem;color:var(--muted);">${escapeHtml(hint)}</div>` : '';
-      const quickHtml = `<div style="margin-top:12px;font-size:0.82rem;">
-        <a href="#" id="errorQuickLink" style="color:var(--buy);text-decoration:underline;">Try free quick scan instead →</a>
+      // Round 104: improved error layout with hint + action links
+      const hintHtml = hint ? `<div class="error-hint">${escapeHtml(hint)}</div>` : '';
+      errorBox.innerHTML = `<div class="error">
+        <strong>Scan failed: ${escapeHtml(msg)}</strong>
+        ${hintHtml}
+        <div class="error-actions">
+          <a href="#" id="errorQuickLink">Try free quick scan →</a>
+          <a href="#" id="errorRetryLink">Retry</a>
+        </div>
       </div>`;
-      errorBox.innerHTML = `<div class="error"><strong>⚠ Scan failed:</strong> ${escapeHtml(msg)}${hintHtml}${quickHtml}</div>`;
       document.getElementById('errorQuickLink')?.addEventListener('click', e => { e.preventDefault(); runScan('quick'); });
+      document.getElementById('errorRetryLink')?.addEventListener('click', e => { e.preventDefault(); runScan('full'); });
       resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     function clearError() {
@@ -1118,7 +1141,25 @@
       });
     }
 
+    // Round 109: clear button wiring
+    const clearBtn = document.getElementById('input-clear-btn');
+    function updateClearBtn() {
+      if (!clearBtn) return;
+      const hasVal = input.value.length > 0;
+      clearBtn.classList.toggle('visible', hasVal);
+      input.classList.toggle('has-value', hasVal);
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        updateClearBtn();
+        closeDexDropdown();
+        input.focus();
+      });
+    }
+
     input.addEventListener('input', () => {
+      updateClearBtn();
       const val = input.value.trim();
       clearTimeout(dexDebounceTimer);
       if (!val || val.length < 2) { closeDexDropdown(); return; }

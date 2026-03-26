@@ -385,21 +385,27 @@
       line-height: 1.65;
       flex: 1;
     }
+    /* Round 108: product tag / badge redesign */
     .product-tag {
-      display: inline-block;
-      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
       border-radius: 999px;
       background: var(--green-dim);
-      border: 1px solid rgba(212,88,10,0.2);
+      border: 1px solid rgba(212,88,10,0.22);
       color: var(--green);
-      font-size: 0.78rem;
-      font-weight: 500;
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
+    .product-tag::before { content: '●'; font-size: 0.5rem; opacity: 0.8; animation: pulse 2s ease-in-out infinite; }
     .product-tag.dim {
-      background: rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.03);
       border-color: var(--border);
       color: var(--muted);
     }
+    .product-tag.dim::before { display: none; }
     .btn-card {
       display: inline-flex;
       align-items: center;
@@ -682,8 +688,18 @@
       color: var(--muted);
       font-size: 0.88rem;
       transition: color 0.2s;
+      position: relative;
+    }
+    /* Round 103: footer link underline animation */
+    .footer-links a::after {
+      content: '';
+      position: absolute; bottom: -2px; left: 0; right: 0;
+      height: 1px; background: var(--green);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.25s ease;
     }
     .footer-links a:hover { color: var(--text); opacity: 1; }
+    .footer-links a:hover::after { transform: scaleX(1); }
     .footer-copy {
       color: var(--muted);
       font-size: 0.82rem;
@@ -735,6 +751,7 @@
       gap: 20px;
       margin-top: 40px;
     }
+    /* Round 101: diff-card hover glow + icon wrapper */
     .diff-card {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -743,10 +760,39 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+      position: relative;
+      overflow: hidden;
     }
-    .diff-card .diff-icon { font-size: 1.6rem; }
-    .diff-card strong { font-size: 1rem; color: var(--text); }
-    .diff-card p { color: var(--muted2); font-size: 0.88rem; line-height: 1.6; margin: 0; }
+    .diff-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(212,88,10,0.04), transparent 55%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .diff-card:hover {
+      border-color: rgba(212,88,10,0.22);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      transform: translateY(-3px);
+    }
+    .diff-card:hover::before { opacity: 1; }
+    .diff-icon-wrap {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(212,88,10,0.1);
+      border: 1px solid rgba(212,88,10,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      transition: box-shadow 0.25s;
+    }
+    .diff-card:hover .diff-icon-wrap {
+      box-shadow: 0 0 16px rgba(212,88,10,0.25);
+    }
+    .diff-card .diff-icon { font-size: 1.6rem; } /* fallback for bare emoji */
+    .diff-card strong { font-size: 1rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+    .diff-card p { color: var(--muted2); font-size: 0.88rem; line-height: 1.65; margin: 0; }
     @media (max-width: 860px) {
       .diff-grid { grid-template-columns: 1fr; }
     }
@@ -785,7 +831,7 @@
       margin-bottom: 28px;
       line-height: 1.6;
     }
-    /* Round 90: trynow steps — improved overflow handling */
+    /* Round 90/105: trynow steps — improved overflow and spacing */
     .trynow-steps {
       display: flex;
       justify-content: center;
@@ -801,8 +847,15 @@
       align-items: center;
       gap: 5px;
       white-space: nowrap;
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 999px;
     }
-    .trynow-steps .arrow { color: var(--border-hover); }
+    .trynow-steps .arrow {
+      color: var(--border-hover);
+      padding: 0; background: none; border: none;
+    }
 
     /* ── Responsive ────────────────────────────── */
     /* Round 77: tablet — 2-col products grid */
@@ -1022,17 +1075,17 @@
       </div>
       <div class="diff-grid">
         <div class="diff-card fade-in">
-          <div class="diff-icon">⚡</div>
+          <div class="diff-icon-wrap">⚡</div>
           <strong>No subscriptions</strong>
           <p>Pay $1 per scan, no monthly fees, no account required. Quick scan is always free.</p>
         </div>
         <div class="diff-card fade-in fade-in-delay-1">
-          <div class="diff-icon">🔍</div>
+          <div class="diff-icon-wrap">🔍</div>
           <strong>5 live sources</strong>
           <p>CoinGecko, DeFiLlama, GitHub, X sentiment, on-chain metrics — pulled fresh for every scan, not stale cache.</p>
         </div>
         <div class="diff-card fade-in fade-in-delay-2">
-          <div class="diff-icon">🤖</div>
+          <div class="diff-icon-wrap">🤖</div>
           <strong>AI-synthesized verdict</strong>
           <p>Claude Opus 4.6 synthesizes all the data into a human-readable BUY/HOLD/AVOID with bull/bear cases, moats, risks, and catalysts. Grok Fast provides real-time X/Twitter sentiment analysis.</p>
         </div>

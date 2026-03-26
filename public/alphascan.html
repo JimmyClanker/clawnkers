@@ -314,8 +314,18 @@
     .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
     .footer-links a {
       color: var(--muted); font-size: 0.88rem; transition: color 0.2s;
+      position: relative;
+    }
+    /* Round 103: underline slide-in animation on footer links */
+    .footer-links a::after {
+      content: '';
+      position: absolute; bottom: -2px; left: 0; right: 0;
+      height: 1px; background: var(--green);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.25s ease;
     }
     .footer-links a:hover { color: var(--text); opacity: 1; }
+    .footer-links a:hover::after { transform: scaleX(1); }
     .footer-copy { color: var(--muted); font-size: 0.82rem; }
 
     code {
@@ -391,6 +401,18 @@
       background: rgba(255,255,255,0.05);
     }
     #project-input::placeholder { color: #5e5e5e; font-size: 0.95rem; }
+    /* Round 109: input clear button + char counter */
+    .input-clear-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 1.1rem; line-height: 1; padding: 4px; border-radius: 4px;
+      display: none; /* JS shows/hides */
+      transition: color 0.15s;
+    }
+    .input-clear-btn:hover { color: var(--text); }
+    .input-clear-btn.visible { display: flex; align-items: center; justify-content: center; }
+    /* Shift input padding to make room for clear btn */
+    #project-input.has-value { padding-right: 40px; }
 
     .hero-note {
       color: var(--muted); font-size: 0.82rem;
@@ -797,12 +819,29 @@
     .btn-primary:active { transform: translateY(0) scale(0.98); }
     .btn-secondary:active { transform: translateY(0) scale(0.98); }
 
+    /* Round 104: improved error panel */
     .error {
       color: var(--avoid);
       border: 1px solid rgba(255,139,148,0.25);
-      padding: 12px 14px; border-radius: var(--radius-sm);
+      padding: 16px 18px; border-radius: var(--radius-sm);
       background: rgba(255,139,148,0.05);
+      display: flex; flex-direction: column; gap: 6px;
     }
+    .error strong { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
+    .error strong::before { content: '⚠'; font-style: normal; }
+    .error .error-hint {
+      color: var(--muted2); font-size: 0.85rem; line-height: 1.6;
+    }
+    .error .error-actions {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px;
+    }
+    .error .error-actions a {
+      font-size: 0.82rem; color: var(--avoid);
+      border: 1px solid rgba(255,139,148,0.3);
+      padding: 4px 12px; border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .error .error-actions a:hover { background: rgba(255,139,148,0.08); }
 
     svg { width: 100%; height: auto; display: block; overflow: visible; }
 
@@ -1179,10 +1218,18 @@
     .prob-high { background: rgba(239,68,68,0.15); color: #f87171; }
     .sub-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
     .sub-label { font-size: 0.82rem; font-weight: 700; color: #c5c5c5; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-    .trade-chart { width: 100%; margin-bottom: 16px; }
-    .trade-chart svg { width: 100%; height: auto; }
+    .trade-chart { width: 100%; margin-bottom: 16px; overflow-x: auto; }
+    .trade-chart svg { width: 100%; min-width: 320px; height: auto; }
     .conditions { margin-top: 12px; font-size: 0.82rem; color: #94a3b8; }
     .thesis { font-size: 0.9rem; line-height: 1.7; color: var(--text); margin: 8px 0; }
+    /* Round 107: trade tiles responsive */
+    .trade-tiles {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+    }
+    .trade-tiles > div { flex: 1 1 120px; min-width: 90px; }
+    @media (max-width: 560px) {
+      .trade-tiles > div { flex: 1 1 calc(50% - 8px); max-width: calc(50% - 4px); }
+    }
     /* Radar + Market Board responsive grid */
     @media (max-width: 768px) {
       .bull-bear-grid { grid-template-columns: 1fr; }
@@ -1289,6 +1336,7 @@
                 aria-describedby="input-hint"
                 aria-haspopup="listbox" aria-controls="dex-dropdown" aria-expanded="false"
                 aria-activedescendant="" />
+              <button type="button" id="input-clear-btn" class="input-clear-btn" aria-label="Clear input" tabindex="-1">×</button>
             <div id="input-hint" class="sr-only">Enter a cryptocurrency project name, ticker, or contract address to scan</div>
               <div id="dex-dropdown" class="dex-dropdown" role="listbox" aria-label="Token suggestions"></div>
             </div>
