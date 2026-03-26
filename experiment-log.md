@@ -1406,3 +1406,61 @@
 - **Change:** Aggiunti formatted_metrics (price_fmt, market_cap_fmt, ecc) e thesis_summary (one_liner, bull/bear case) nell'exportPayload.
 - **Files:** routes/alpha-history.js
 - **Tests:** 177/177 pass
+
+### Round 250 — Commit R242-250
+- **Commit:** 5b1efac. Pushed to main. Tests: 177/177.
+
+### Round 251 — routes/mcp.js: alpha_research — usa formatAgentJSON per structuredContent
+- **Change:** Import formatAgentJSON, usato in alpha_research tool MCP per structuredContent invece di formatted.json + report_html.
+- **Files:** routes/mcp.js
+- **Tests:** 177/177 pass
+
+### Round 252 — routes/mcp.js: alpha_research — aggiungi preamble nel text
+- **Change:** Aggiunto preamble compatto in alpha_research text output: verdict, score, alpha index, conviction.
+- **Files:** routes/mcp.js
+- **Tests:** 177/177 pass
+
+### Round 253 — routes/mcp.js: x_sentiment — aggiungi trending_topics + engagement stats
+- **Change:** Aggiunti trending_topics, engagement_level, fear_greed_signal in x_sentiment tool MCP. Cambiato filter da Boolean a null check.
+- **Files:** routes/mcp.js
+- **Tests:** 177/177 pass
+
+### Round 254 — routes/mcp.js: trading_signals — aggiungi summary stats header
+- **Change:** Aggiunto header con bullish/bearish count, total signals, hours in trading_signals MCP tool.
+- **Files:** routes/mcp.js
+- **Tests:** 177/177 pass
+
+### Round 255 — templates.js: renderScoreLine — mostra confidence label
+- **Change:** renderScoreLine ora include confidence_label o confidence% tra parentesi quadre nel text report.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 256 — templates.js: HTML scores — colori basati sul valore
+- **Change:** Aggiunto helper scoreColor(). Applicato colori dinamici (verde/giallo/rosso) alle scores nell'HTML, con confidence_label inline.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 257 — templates.js: formatReport JSON — aggiungi formatted_scores array
+- **Change:** Aggiunto formatted_scores array nel json object di formatReport, con dimension, score, score_fmt, confidence, confidence_label per ogni dimensione.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 258 — routes/alpha-history.js: /alpha/export — score_summary
+- **Change:** Aggiunto score_summary array nell'exportPayload con dimension, score, score_fmt per le 6 dimensioni principali.
+- **Files:** routes/alpha-history.js
+- **Tests:** 177/177 pass
+
+### Round 259 — templates.js: fmtNumber — export fmtNumber e fmtPct come named exports
+- **Change:** Aggiunti named exports per fmtNumber e fmtPct alla fine di templates.js. Util functions disponibili per import esterni.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 260 — templates.js: formatMarkdown — aggiungi elevator_pitch e composite_alpha_index
+- **Change:** Aggiunti elevator_pitch (se presente) e conviction nel markdown output header.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass
+
+### Round 261 — Bump engine_version + Final commit
+- **Change:** Bump engine_version da r44-2026-03-25 a r61-2026-03-26.
+- **Files:** synthesis/templates.js
+- **Tests:** 177/177 pass

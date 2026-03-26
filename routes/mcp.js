@@ -7,7 +7,7 @@ import { secureCompare } from '../utils/security.js';
 import { collectAll } from '../collectors/index.js';
 import { calculateScores } from '../synthesis/scoring.js';
 import { generateReport } from '../synthesis/llm.js';
-import { formatReport } from '../synthesis/templates.js';
+import { formatReport, formatAgentJSON } from '../synthesis/templates.js';
 import { getSignals } from '../oracle/index.js';
 
 const MCP_SESSION_TTL_MS = 30 * 60 * 1000; // 30 min idle timeout
@@ -134,6 +134,10 @@ export function createMcpRouter({ config, exaService, signalsService }) {
             };
           }
 
+          const bullish = result.signals.filter(s => ['LONG','BUY'].includes(s.direction?.toUpperCase())).length;
+          const bearish = result.signals.filter(s => ['SHORT','SELL'].includes(s.direction?.toUpperCase())).length;
+          const header = `Found ${result.signals.length} signal(s) | ${bullish} bullish / ${bearish} bearish | last ${result.query.hours}h${coin ? ` | filter: ${coin}` : ''}\n\n`;
+
           const text = result.signals
             .map(
               (signal, index) =>
@@ -143,7 +147,7 @@ export function createMcpRouter({ config, exaService, signalsService }) {
             .join('\n\n');
 
           return {
-            content: [{ type: 'text', text: `Found ${result.signals.length} signal(s):\n\n${text}` }],
+            content: [{ type: 'text', text: header + text }],
           };
         } catch (error) {
           return {
@@ -164,9 +168,16 @@ export function createMcpRouter({ config, exaService, signalsService }) {
           const scores = calculateScores(rawData);
           const analysis = await generateReport(project, rawData, scores);
           const formatted = formatReport(project, rawData, scores, analysis);
+          const agentJson = formatAgentJSON(project, rawData, scores, analysis);
+          const preamble = [
+            `## Alpha Research: ${project}`,
+            `**Verdict:** ${analysis?.verdict || 'HOLD'} | **Score:** ${scores?.overall?.score != null ? Number(scores.overall.score).toFixed(1) : 'n/a'}/10 | **Alpha Index:** ${agentJson.composite_alpha_index ?? 'n/a'}/100`,
+            agentJson.conviction ? `**Conviction:** ${agentJson.conviction.score}/100 (${agentJson.conviction.label})` : null,
+            '',
+          ].filter(l => l != null).join('\n');
           return {
-            content: [{ type: 'text', text: formatted.text }],
-            structuredContent: { ...formatted.json, report_html: formatted.html },
+            content: [{ type: 'text', text: preamble + '\n' + formatted.text }],
+            structuredContent: agentJson,
           };
         } catch (error) {
           return {
@@ -193,10 +204,13 @@ export function createMcpRouter({ config, exaService, signalsService }) {
           `**Sentiment:** ${data.sentiment ?? 'n/a'} (score: ${data.sentiment_score ?? 'n/a'})`,
           `**Mention volume:** ${data.mention_volume ?? 'n/a'}`,
           `**KOL sentiment:** ${data.kol_sentiment ?? 'n/a'}`,
-          data.key_narratives?.length ? `**Key narratives:** ${data.key_narratives.join(', ')}` : '',
-          data.notable_accounts?.length ? `**Notable accounts:** ${data.notable_accounts.map((a) => `@${a}`).join(', ')}` : '',
-          data.summary ? `\n**Summary:** ${data.summary}` : '',
-        ].filter(Boolean).join('\n');
+          data.key_narratives?.length ? `**Key narratives:** ${data.key_narratives.join(', ')}` : null,
+          data.notable_accounts?.length ? `**Notable accounts:** ${data.notable_accounts.map((a) => `@${a}`).join(', ')}` : null,
+          data.trending_topics?.length ? `**Trending topics:** ${data.trending_topics.join(', ')}` : null,
+          data.engagement_level ? `**Engagement:** ${data.engagement_level}` : null,
+          data.fear_greed_signal ? `**Fear/Greed signal:** ${data.fear_greed_signal}` : null,
+          data.summary ? `\n**Summary:** ${data.summary}` : null,
+        ].filter(l => l != null && l !== '').join('\n');
         return { content: [{ type: 'text', text: lines }] };
       }
     );

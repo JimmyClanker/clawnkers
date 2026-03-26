@@ -13,7 +13,11 @@ function renderList(items = []) {
 }
 
 function renderScoreLine(label, payload) {
-  return `${label}: ${payload?.score ?? 'n/a'}/10 — ${payload?.reasoning || 'n/a'}`;
+  const score = payload?.score ?? 'n/a';
+  const reasoning = payload?.reasoning || 'n/a';
+  const conf = payload?.confidence_label ?? (payload?.confidence != null ? `${payload.confidence}%` : null);
+  const confStr = conf != null ? ` [${conf}]` : '';
+  return `${label}: ${score}/10${confStr} — ${reasoning}`;
 }
 
 function fmtNumber(value, decimals = 2) {
@@ -62,6 +66,14 @@ function volatileRegimeBadge(volatility) {
   const color = colors[volatility.regime] || '#fbbf24';
   const pct = volatility.volatility_pct_24h != null ? ` (${volatility.volatility_pct_24h.toFixed(1)}% 24h)` : '';
   return `<span style="display:inline-block;padding:4px 12px;border-radius:999px;background:${color};color:#000;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-left:8px;">⚡ ${volatility.regime}${pct}</span>`;
+}
+
+function scoreColor(s) {
+  const v = Number(s?.score ?? 0);
+  if (v >= 7.5) return '#22c55e';
+  if (v >= 6) return '#a8e6cf';
+  if (v >= 4) return '#fbbf24';
+  return '#f87171';
 }
 
 function extractKeyMetrics(rawData, scores) {
@@ -134,7 +146,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
 const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
-    engine_version: 'r44-2026-03-25', // bump on significant engine changes
+    engine_version: 'r61-2026-03-26', // bump on significant engine changes
     verdict: llmAnalysis?.verdict || 'HOLD',
     headline: llmAnalysis?.headline ?? null,
     project_summary: llmAnalysis?.project_summary ?? null,
@@ -184,6 +196,13 @@ const json = {
     })(),
     key_metrics: keyMetrics,
     scores,
+    formatted_scores: ['market_strength','onchain_health','social_momentum','development','tokenomics_health','distribution','risk','overall'].map(dim => ({
+      dimension: dim,
+      score: scores?.[dim]?.score ?? null,
+      score_fmt: scores?.[dim]?.score != null ? `${Number(scores[dim].score).toFixed(1)}/10` : 'n/a',
+      confidence: scores?.[dim]?.confidence ?? null,
+      confidence_label: scores?.[dim]?.confidence_label ?? null,
+    })),
     llm_analysis: llmAnalysis,
     raw_data: rawData,
   };
@@ -330,14 +349,14 @@ const json = {
       <section style="margin-bottom:20px;">
         <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 10px;color:#b5c7d3;">📊 Scores</h2>
         <ul style="margin:0;padding-left:18px;line-height:1.8;">
-          <li>${escapeHtml(renderScoreLine('Market strength', scores?.market_strength))}</li>
-          <li>${escapeHtml(renderScoreLine('Onchain health', scores?.onchain_health))}</li>
-          <li>${escapeHtml(renderScoreLine('Social momentum', scores?.social_momentum))}</li>
-          <li>${escapeHtml(renderScoreLine('Development', scores?.development))}</li>
-          <li>${escapeHtml(renderScoreLine('Tokenomics health', scores?.tokenomics_health))}</li>
-          <li>${escapeHtml(renderScoreLine('Distribution', scores?.distribution))}</li>
-          <li>${escapeHtml(renderScoreLine('Risk', scores?.risk))}</li>
-          <li>${escapeHtml(renderScoreLine('Overall', scores?.overall))}</li>
+          <li><span style="color:${scoreColor(scores?.market_strength)};font-weight:700;">${escapeHtml(String(scores?.market_strength?.score ?? 'n/a'))}/10</span> Market strength${scores?.market_strength?.confidence_label ? ` [${escapeHtml(scores.market_strength.confidence_label)}]` : ''} — ${escapeHtml(scores?.market_strength?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.onchain_health)};font-weight:700;">${escapeHtml(String(scores?.onchain_health?.score ?? 'n/a'))}/10</span> Onchain health${scores?.onchain_health?.confidence_label ? ` [${escapeHtml(scores.onchain_health.confidence_label)}]` : ''} — ${escapeHtml(scores?.onchain_health?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.social_momentum)};font-weight:700;">${escapeHtml(String(scores?.social_momentum?.score ?? 'n/a'))}/10</span> Social momentum${scores?.social_momentum?.confidence_label ? ` [${escapeHtml(scores.social_momentum.confidence_label)}]` : ''} — ${escapeHtml(scores?.social_momentum?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.development)};font-weight:700;">${escapeHtml(String(scores?.development?.score ?? 'n/a'))}/10</span> Development${scores?.development?.confidence_label ? ` [${escapeHtml(scores.development.confidence_label)}]` : ''} — ${escapeHtml(scores?.development?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.tokenomics_health)};font-weight:700;">${escapeHtml(String(scores?.tokenomics_health?.score ?? 'n/a'))}/10</span> Tokenomics health${scores?.tokenomics_health?.confidence_label ? ` [${escapeHtml(scores.tokenomics_health.confidence_label)}]` : ''} — ${escapeHtml(scores?.tokenomics_health?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.distribution)};font-weight:700;">${escapeHtml(String(scores?.distribution?.score ?? 'n/a'))}/10</span> Distribution${scores?.distribution?.confidence_label ? ` [${escapeHtml(scores.distribution.confidence_label)}]` : ''} — ${escapeHtml(scores?.distribution?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.risk)};font-weight:700;">${escapeHtml(String(scores?.risk?.score ?? 'n/a'))}/10</span> Risk${scores?.risk?.confidence_label ? ` [${escapeHtml(scores.risk.confidence_label)}]` : ''} — ${escapeHtml(scores?.risk?.reasoning || 'n/a')}</li>
+          <li><span style="color:${scoreColor(scores?.overall)};font-weight:700;">${escapeHtml(String(scores?.overall?.score ?? 'n/a'))}/10</span> Overall${scores?.overall?.confidence_label ? ` [${escapeHtml(scores.overall.confidence_label)}]` : ''} — ${escapeHtml(scores?.overall?.reasoning || 'n/a')}</li>
         </ul>
       </section>
 
@@ -438,6 +457,7 @@ export function formatMarkdown(projectName, rawData, scores, llmAnalysis) {
     `**Verdict:** ${llmAnalysis?.verdict || 'HOLD'}`,
     `**Overall Score:** ${keyMetrics.overall_score_fmt}`,
     `**Generated:** ${new Date().toISOString()}`,
+    ...(rawData?.elevator_pitch ? [`**Elevator Pitch:** ${rawData.elevator_pitch}`] : []),
     ...(conviction ? [`**Conviction:** ${conviction.score}/100 (${conviction.label})`] : []),
     '',
     '## 💎 Key Metrics',
@@ -667,3 +687,5 @@ export function formatReportMulti(format, projectName, rawData, scores, llmAnaly
     }
   }
 }
+
+export { fmtNumber, fmtPct };

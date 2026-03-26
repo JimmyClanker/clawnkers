@@ -108,6 +108,11 @@ export function createHistoryRouter({ signalsService, cache, getOrCreateReport, 
         bear_case: report.thesis.bear_case ?? null,
         conviction_score: report.thesis.conviction_score ?? null,
       } : null,
+      score_summary: ['market_strength','onchain_health','social_momentum','development','tokenomics_health','overall'].map(dim => {
+        const val = report?.scores?.[dim];
+        const score = typeof val === 'object' ? (val?.score ?? null) : (val ?? null);
+        return { dimension: dim, score, score_fmt: score != null ? `${Number(score).toFixed(1)}/10` : 'n/a' };
+      }),
       red_flags: (report?.red_flags ?? []).map((f) => ({ flag: f.flag, severity: f.severity, detail: f.detail })),
       alpha_signals: (report?.alpha_signals ?? []).map((s) => ({ signal: s.signal, strength: s.strength, detail: s.detail })),
       trade_setup: report?.trade_setup ? {
