@@ -30,6 +30,7 @@ export function loadConfig(env = process.env) {
     nvmAgentId: env.NVM_AGENT_ID,
     nvmEnv: env.NVM_ENV || 'production',
     mcpAuthKey: env.MCP_AUTH_KEY,
+    moltifyWebhookSecret: env.MOLTIFY_WEBHOOK_SECRET || null,
     payTo: PAY_TO,
     dbPath: env.DB_PATH || join(__dirname, 'data', 'signals.db'),
     exaCacheTtlMs: EXA_CACHE_TTL_MS,

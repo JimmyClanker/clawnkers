@@ -1,4 +1,6 @@
 import express from 'express';
+import { appendFileSync, mkdirSync } from 'fs';
+import { dirname, join } from 'path';
 import { APP_NAME } from '../config.js';
 
 const ENTITY_PATTERNS = [
@@ -44,6 +46,36 @@ function calculateConfidence(results) {
   if (withHighlights > 3) return 'high';
   if (withHighlights >= 1) return 'medium';
   return 'low';
+}
+
+function normalizeMoltifyTask(body = {}) {
+  return {
+    received_at: new Date().toISOString(),
+    source: 'moltify',
+    status: 'received',
+    task_id: String(body.task_id || '').trim(),
+    title: String(body.title || '').trim(),
+    description: String(body.description || '').trim(),
+    deliverable_type: body.deliverable_type ? String(body.deliverable_type).trim() : null,
+    project: body.project ? String(body.project).trim() : null,
+    price_usd: Number(body.price_usd),
+    priority: body.priority ? String(body.priority).trim() : 'normal',
+    buyer: body.buyer && typeof body.buyer === 'object' ? {
+      id: body.buyer.id ? String(body.buyer.id) : null,
+      name: body.buyer.name ? String(body.buyer.name) : null,
+    } : null,
+    callback_url: body.callback_url ? String(body.callback_url).trim() : null,
+    raw: body,
+  };
+}
+
+function validateMoltifyPayload(body = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body must be a JSON object';
+  if (!String(body.task_id || '').trim()) return 'task_id is required';
+  if (!String(body.title || '').trim()) return 'title is required';
+  if (!String(body.description || '').trim()) return 'description is required';
+  if (!Number.isFinite(Number(body.price_usd))) return 'price_usd must be a number';
+  return null;
 }
 
 export function createRestRouter({ config, exaService, signalsService }) {
@@ -146,6 +178,34 @@ export function createRestRouter({ config, exaService, signalsService }) {
       cache: exaService.getCacheStats(),
       environment: config.nvmEnv,
     });
+  });
+
+  router.post('/webhook/moltify', (req, res) => {
+    if (!config.moltifyWebhookSecret) {
+      return res.status(503).json({ ok: false, error: 'webhook_not_configured' });
+    }
+
+    const auth = String(req.headers.authorization || '');
+    const expected = `Bearer ${config.moltifyWebhookSecret}`;
+    if (auth !== expected) {
+      return res.status(401).json({ ok: false, error: 'unauthorized' });
+    }
+
+    const validationError = validateMoltifyPayload(req.body);
+    if (validationError) {
+      return res.status(400).json({ ok: false, error: 'invalid_payload', detail: validationError });
+    }
+
+    try {
+      const normalized = normalizeMoltifyTask(req.body);
+      const logPath = join(process.cwd(), 'ops', 'moltify-task-log.jsonl');
+      mkdirSync(dirname(logPath), { recursive: true });
+      appendFileSync(logPath, JSON.stringify(normalized) + '\n');
+      return res.json({ ok: true, source: 'moltify', task_id: normalized.task_id, status: normalized.status });
+    } catch (error) {
+      console.error('[moltify-webhook]', error.message);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
+    }
   });
 
   router.get('/research', async (req, res) => {
