@@ -1828,3 +1828,207 @@
 - **Change:** `.fade-in` ora usa `cubic-bezier(0.16, 1, 0.3, 1)` (easing più naturale) e durata `0.7s` (era 0.6s ease) per animazioni d'ingresso più eleganti.
 - **Files:** public/index.html
 - **Tests:** 177/177 pass
+
+---
+## Batch UX & Layout — Round 291–320 (AutoResearch 00:30, 2026-03-27)
+Focus: responsive layout, spacing, typography, loading states, animations, accessibility.
+
+### Round 291 — Score label overflow su <400px
+- **Change:** `.score-label` overflow:hidden, `.score-label span` display:none su schermi < 400px per evitare overflow del subtitle dei punteggi.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 292 — Scanner form section padding fluido
+- **Change:** `.scanner-form-section` usa `clamp(28px, 5vw, 48px)` invece di padding fisso 48px. Più compatto su mobile.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 293 — Stats grid auto-fit fluido
+- **Change:** `.stats-grid` passa da `repeat(3, 1fr)` fisso a `repeat(auto-fit, minmax(min(200px,100%), 1fr))`. Tablet responsive senza media query.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 294 — Bull/bear grid auto-fit
+- **Change:** `.bull-bear-grid` passa a `repeat(auto-fit, minmax(min(280px,100%), 1fr))`. Elimina hard breakpoint a 768px.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 295 — How-grid auto-fit
+- **Change:** `.how-grid` passa a `repeat(auto-fit, minmax(min(220px,100%), 1fr))`. 3→2→1 col fluido senza media query esplicite.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 296 — Fluid section padding
+- **Change:** `section { padding: clamp(48px, 8vw, 80px) 0; }` — si restringe proporzionalmente su tutti i breakpoint.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 297 — Card padding fluid
+- **Change:** `.card { padding: clamp(12px, 2vw, 16px); }` — più compatto su mobile.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 298 — Score row label width fluid
+- **Change:** `.score-row` grid columns da `110px 1fr 60px` fisso a `minmax(100px,130px) 1fr minmax(50px,65px)` per adattarsi meglio a diverse larghezze.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 299 — Panel padding fluid
+- **Change:** `.panel { padding: clamp(16px, 2.5vw, 28px); }` — più breathing room su desktop, compatto su mobile.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 300 — Results container gap con CSS grid
+- **Change:** `.results-container #report` ora usa `display: grid; gap: 18px` per verticalizzare i panel con gap uniforme.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 301 — Analysis text readability
+- **Change:** `.analysis` font-size `clamp(0.88rem, 1.6vw, 0.97rem)`, line-height 1.9, `max-width: 72ch` per lunghezza riga ottimale.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 302 — Score label font weight e sizing
+- **Change:** `.score-label strong` font-size 0.9rem e font-weight 600; `.score-label span` font-weight 500 per migliore gerarchia visiva.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 303 — Thesis text contrast migliorato
+- **Change:** `.thesis` colore da `var(--text)` a `#d6d6d6` (più leggibile su sfondo scuro), line-height 1.75.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 304 — Table header e dati più leggibili
+- **Change:** `.table th` colore `#8e8e8e` (più visibile), font-weight 600, font-size 0.82rem. `.table td` colore `#d4d4d4` e font-size 0.9rem.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 305 — Sub-labels con divisore bottom
+- **Change:** `.sub-label` ha `padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05)` per separare le sezioni bull/bear.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 306 — Results section scroll-margin-top
+- **Change:** `#results-section { scroll-margin-top: 72px }` per evitare che lo sticky header copra il contenuto quando si scrolla ai risultati.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 307 — Skeleton panel padding fluid
+- **Change:** `.skeleton-panel { padding: clamp(16px, 2.5vw, 28px) }` allineato con `.panel` per coerenza visiva tra stato loading e stato risultati.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 308 — Skeleton lines proporzioni realistiche
+- **Change:** Dimensioni skeleton aggiornate: title 40px (era 44px), badge 34px/26% (era 36px/28%), skeleton-bar 11px (era 10px). Aggiunta variante `.w-90`.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 309 — Loading wrap più largo
+- **Change:** `.loading-wrap { width: min(640px, 100%) }` (era 560px). Gap tra elementi 10px (era 8px). Loading dots gap 6px.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 310 — Status box min-height per anti-CLS
+- **Change:** `.status:not(:empty) { min-height: 80px }` previene layout shift quando la loading bar appare.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 311 — Results reveal easing spring
+- **Change:** `resultsReveal` usa `cubic-bezier(0.16, 1, 0.3, 1)` (spring easing), durata 0.6s (era 0.55s). Y offset 22px (era 18px) per reveal più drammatico.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 312 — Panel stagger easing aggiornato
+- **Change:** `panelSlideIn` per `#report .panel` usa `cubic-bezier(0.16, 1, 0.3, 1)`. Delays leggermente ridotti (0.03s–0.33s).
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 313 — PanelSlideIn Y offset
+- **Change:** `panelSlideIn` from: `translateY(16px) scale(0.993)` (era 14px/0.995) per slide-in più percettibile.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 314 — Score bar fill spring easing
+- **Change:** `.bar > span` animation usa `cubic-bezier(0.16, 1, 0.3, 1)` e durata 0.9s (era 1s ease). Barre che si riempiono con feeling più naturale.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 315 — Card hover transition consistente
+- **Change:** `.card` e `.score-row` hanno `transition` esplicita per hover. `.card:hover` aggiunge `transform: translateY(-1px)`. Hover states più coerenti.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 316 — Payment overlay overscroll-behavior
+- **Change:** `.payment-overlay { overscroll-behavior: contain }` previene scroll bleed sotto il modal di pagamento.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 317 — Pay button WCAG AA contrast
+- **Change:** `.pay-btn` colore `#f5a56b` (più chiaro/contrastato su sfondo scuro), `min-height: 52px` per touch target, `font-weight: 600`.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 318 — Dex dropdown item touch target + focus
+- **Change:** `.dex-item { min-height: 48px }` per touch comfort. Aggiunto `:focus-visible` con outline arancione per accessibilità keyboard.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 319 — Products grid auto-fit (index.html)
+- **Change:** `.products-grid` da `repeat(3, 1fr)` a `repeat(auto-fit, minmax(min(280px,100%), 1fr))` per layout fluido senza media query.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 320 — Testimonial footer con accent line (index.html)
+- **Change:** `.testimonial-card footer` ora ha `display:flex; gap:6px` con `::before` che inserisce una linea arancione di 16px prima del testo. Attribuisce più peso visivo alle citazioni.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 321 — Rescan button touch target e hover lift
+- **Change:** `.rescan-btn { min-height: 40px; display:inline-flex; align-items:center; gap:6px }` + hover `transform: translateY(-1px)`.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 322 — Hero note layout flex
+- **Change:** `.hero-note` diventa flex con `justify-content:center; gap:6px; flex-wrap:wrap` per allineare icone e testo su più righe.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 323 — How-step focus-visible keyboard nav
+- **Change:** `.how-step:focus-visible` con box-shadow arancione, outline:none e transform per accessibilità keyboard.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 324 — Verdict badge pop animation
+- **Change:** `.verdict` ha `animation: verdictPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both` — scala da 0.8 a 1 con delay per reveal drammatico dopo il report.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 325 — Project intro card visual hierarchy
+- **Change:** `.project-intro-card` gradient migliorato (160deg, più scuro), border `rgba(212,88,10,0.2)`, `box-shadow: 0 4px 16px rgba(0,0,0,0.2)`, padding 18px/20px.
+- **Files:** public/alphascan.html
+- **Tests:** 177/177 pass
+
+### Round 326 — Signal card hover (signals.html)
+- **Change:** `.signal-card` aggiunto hover con `border-color: rgba(212,88,10,0.25); transform: translateY(-2px)` per coerenza con il design system.
+- **Files:** public/signals.html
+- **Tests:** 177/177 pass
+
+### Round 327 — Stats hover lift (signals.html)
+- **Change:** `.stat:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.25) }` per più feedback visivo.
+- **Files:** public/signals.html
+- **Tests:** 177/177 pass
+
+### Round 328 — Filters touch-friendly + focus ring (signals.html)
+- **Change:** Select/input filtri: `min-height: 40px`, `box-shadow: 0 0 0 3px rgba(212,88,10,0.12)` su focus, `border-color` su hover.
+- **Files:** public/signals.html
+- **Tests:** 177/177 pass
+
+### Round 329 — Diff grid auto-fit (index.html)
+- **Change:** `.diff-grid` da `repeat(3, 1fr)` a `repeat(auto-fit, minmax(min(240px,100%), 1fr))` per layout fluido.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
+
+### Round 330 — will-change esteso a testimonial cards (index.html)
+- **Change:** Aggiunto `.testimonial-card` a `will-change: transform` per hint GPU su hover animations.
+- **Files:** public/index.html
+- **Tests:** 177/177 pass
