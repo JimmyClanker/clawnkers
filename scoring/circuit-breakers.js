@@ -5,6 +5,11 @@
  * Filosofia: certi rischi sono binari. Non li "pesi" — li applichi
  * come vincoli hard.
  */
+function safeN(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   const breakers = [];
   const market = rawData?.market ?? {};
@@ -140,6 +145,33 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
       breakers.push({
         cap: 5.0,
         reason: `Stablecoin de-peg risk: ${symbol} at $${currentPrice.toFixed(4)} (${depegPct.toFixed(1)}% off $1 peg)`,
+        severity: 'warning',
+      });
+    }
+  }
+
+  // Round 127 (AutoResearch): DeFi ghost protocol — significant TVL but zero social presence
+  // This is unusual and may indicate: abandoned project, bot TVL, or data collection failure
+  const socialMentions = safeN(rawData?.social?.mentions ?? rawData?.social?.filtered_mentions ?? 0);
+  const tvlForGhost = safeN(onchain.tvl ?? 0);
+  if (tvlForGhost > 100_000_000 && socialMentions === 0 && !rawData?.social?.error) {
+    breakers.push({
+      cap: 6.5,
+      reason: `DeFi protocol with $${(tvlForGhost / 1e9).toFixed(2)}B TVL but zero social mentions — potential ghost protocol or data anomaly`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 127 (AutoResearch): Negative token velocity — market cap >> 100x volume
+  // Token velocity < 0.01% = nearly untradeable despite market cap
+  const mcapForVelocity = safeN(market.market_cap ?? 0);
+  const volForVelocity = safeN(market.total_volume ?? 0);
+  if (mcapForVelocity > 10_000_000 && volForVelocity > 0) {
+    const velocityPct = (volForVelocity / mcapForVelocity) * 100;
+    if (velocityPct < 0.01) {
+      breakers.push({
+        cap: 6.0,
+        reason: `Extremely low token velocity (${velocityPct.toFixed(4)}% daily turnover) — token is functionally illiquid despite market cap`,
         severity: 'warning',
       });
     }

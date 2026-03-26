@@ -315,6 +315,29 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     }
   }
 
+  // Round 128 (AutoResearch): Suspicious volume spike — 24h vol > 5x typical (7d avg)
+  // Sudden volume spikes without corresponding price context = possible wash trading or exit pump
+  const vol24h = safeN(market.total_volume ?? 0);
+  const vol7dAvg = safeN(market.volume_7d_avg ?? 0);
+  if (vol7dAvg > 0 && vol24h > 0 && vol24h > vol7dAvg * 5) {
+    flags.push({
+      flag: 'suspicious_volume_spike',
+      severity: 'warning',
+      detail: `24h volume ($${(vol24h / 1e6).toFixed(2)}M) is ${(vol24h / vol7dAvg).toFixed(1)}x above 7-day average ($${(vol7dAvg / 1e6).toFixed(2)}M) — possible wash trading, exit pump, or manipulation.`,
+    });
+  }
+
+  // Round 128 (AutoResearch): Team/treasury wallet unusual activity
+  // Sudden large team wallet movements = insider selling risk
+  const teamWalletActivity = safeN(market.team_wallet_activity_usd ?? 0);
+  if (teamWalletActivity > 1_000_000) {
+    flags.push({
+      flag: 'team_wallet_spike',
+      severity: teamWalletActivity > 10_000_000 ? 'critical' : 'warning',
+      detail: `Unusual team/treasury wallet activity: $${(teamWalletActivity / 1e6).toFixed(2)}M moved recently — insider selling risk or treasury management action.`,
+    });
+  }
+
   // 28. Round 1 (AutoResearch batch): No social mentions at all — ghost project
   const mentions = safeN(social.mentions ?? social.filtered_mentions ?? 0);
   if (mentions === 0 && !social.error) {

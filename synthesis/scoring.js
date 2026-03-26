@@ -52,14 +52,40 @@ export function calculateConfidence(rawData = {}) {
   else if (github.stars != null) devConf = 50;
   else devConf = 0;
 
-  // Tokenomics
+  // Tokenomics — graduated: +20 per field
   let tokenomicsConf;
   if (tokenomics.error) tokenomicsConf = 20;
-  else if (tokenomics.pct_circulating != null && tokenomics.inflation_rate != null && tokenomics.token_distribution != null) tokenomicsConf = 100;
-  else if (tokenomics.pct_circulating != null) tokenomicsConf = 50;
-  else tokenomicsConf = 20;
+  else {
+    tokenomicsConf = 20; // base
+    if (tokenomics.pct_circulating != null) tokenomicsConf += 30;
+    if (tokenomics.inflation_rate != null) tokenomicsConf += 25;
+    if (tokenomics.token_distribution != null) tokenomicsConf += 25;
+    tokenomicsConf = Math.min(100, tokenomicsConf);
+  }
 
-  const overall_confidence = Math.round((marketConf + onchainConf + socialConf + devConf + tokenomicsConf) / 5);
+  // Round 123 (AutoResearch): Holder data confidence
+  const holders = rawData.holders ?? rawData.holderData ?? {};
+  let holderConf;
+  if (holders.error) holderConf = 0;
+  else if (holders.top10_concentration != null && holders.holder_count != null) holderConf = 100;
+  else if (holders.top10_concentration != null || holders.concentration_pct != null) holderConf = 60;
+  else if (Object.keys(holders).length > 0) holderConf = 30;
+  else holderConf = 0;
+
+  // Round 123 (AutoResearch): DEX data confidence
+  const dex = rawData.dex ?? rawData.dexData ?? {};
+  let dexConf;
+  if (dex.error) dexConf = 0;
+  else if ((dex.dex_liquidity_usd != null || dex.liquidity != null) && dex.buy_sell_ratio != null) dexConf = 100;
+  else if (dex.dex_liquidity_usd != null || dex.liquidity != null) dexConf = 60;
+  else if (Object.keys(dex).length > 0) dexConf = 30;
+  else dexConf = 0;
+
+  // overall_confidence: weighted average of 7 dimensions
+  const overall_confidence = Math.round(
+    (marketConf * 0.20 + onchainConf * 0.20 + socialConf * 0.15 + devConf * 0.15 +
+     tokenomicsConf * 0.15 + holderConf * 0.10 + dexConf * 0.05)
+  );
 
   return {
     market: marketConf,
@@ -67,6 +93,8 @@ export function calculateConfidence(rawData = {}) {
     social: socialConf,
     development: devConf,
     tokenomics: tokenomicsConf,
+    holders: holderConf,
+    dex: dexConf,
     overall_confidence,
   };
 }
@@ -177,6 +205,22 @@ function scoreMarketStrength(market = {}) {
   else if (exchangeCount >= 10) raw += 0.2;
   else if (exchangeCount >= 5) raw += 0.1;
 
+  // Round 124 (AutoResearch): Empty data guard — no price, no volume, no market cap → neutral 5.0
+  // Prevents spurious scoring when all market signals are absent
+  const hasAnyMarketData = (market.current_price != null && safeNumber(market.current_price) > 0) ||
+    (market.market_cap != null && safeNumber(market.market_cap) > 0) ||
+    (market.total_volume != null && safeNumber(market.total_volume) > 0);
+  if (!hasAnyMarketData) {
+    return {
+      score: 5.0,
+      market_efficiency_score: 0,
+      is_new_project: false,
+      is_stablecoin: false,
+      age_months: null,
+      reasoning: 'No market data available — defaulting to neutral 5.0 (no price, volume, or market cap).',
+    };
+  }
+
   // Round 50 (AutoResearch): Stablecoin guard — raw score override for stable assets
   // Stablecoins should never score high on price momentum (they're supposed to be flat)
   const stablecoin = isStablecoin(market);
@@ -213,8 +257,10 @@ function scoreMarketStrength(market = {}) {
 }
 
 function scoreOnchainHealth(onchain = {}) {
-  const trend7d = safeNumber(onchain.tvl_change_7d);
-  const trend30d = safeNumber(onchain.tvl_change_30d);
+  // Round 125 (AutoResearch): cap TVL changes to ±200% to prevent extreme outliers
+  // (e.g. new protocols with 10000% TVL gain, or protocol exploit with -99% in 7d)
+  const trend7d = Math.max(-200, Math.min(200, safeNumber(onchain.tvl_change_7d)));
+  const trend30d = Math.max(-200, Math.min(200, safeNumber(onchain.tvl_change_30d)));
   // Use fees_7d; fall back to fees_30d / 4 if only monthly data available
   const fees = onchain.fees_7d != null
     ? safeNumber(onchain.fees_7d)
@@ -224,6 +270,7 @@ function scoreOnchainHealth(onchain = {}) {
     : safeNumber(onchain.revenue_30d) / 4;
 
   let raw = 4;
+  // Scale trend contribution: ±200% maps to ±2 points (25 divisor kept but capped input)
   raw += Math.max(Math.min((trend7d + trend30d) / 25, 3), -2);
   raw += fees > 0 ? Math.min(Math.log10(fees + 1), 2) : 0;
   raw += revenue > 0 ? Math.min(Math.log10(revenue + 1), 1.5) : 0;
@@ -389,6 +436,21 @@ function scoreSocialMomentum(social = {}) {
 }
 
 function scoreDevelopment(github = {}) {
+  // Round 126 (AutoResearch): when no github data at all (error or empty), return 3.0 (unknown/slightly negative)
+  // rather than 4.0 - which unfairly rewards missing data with a near-neutral score.
+  // 3.0 signals "we don't know, but absence of evidence on dev activity is mildly concerning"
+  const hasGithubData = !github.error && (
+    github.contributors != null || github.commits_90d != null ||
+    github.stars != null || github.forks != null
+  );
+  if (!hasGithubData) {
+    return {
+      score: 3.0,
+      dev_quality_index: 0,
+      reasoning: 'No GitHub data available — development activity unverifiable. Score defaulted to 3.0 (unknown/mildly negative).',
+    };
+  }
+
   const contributors = safeNumber(github.contributors);
   const commits90d = safeNumber(github.commits_90d);
   const stars = safeNumber(github.stars);
@@ -469,6 +531,21 @@ function scoreDevelopment(github = {}) {
 }
 
 function scoreTokenomicsRisk(tokenomics = {}) {
+  // Round 129 (AutoResearch): No tokenomics data guard → neutral 5.0 (unknown)
+  // Note: tokenomics may have an error field AND still carry partial data (fallback values).
+  // We check for actual numerical fields, not the error flag, to avoid discarding valid fallbacks.
+  const hasTokenomicsData = tokenomics && (
+    tokenomics.pct_circulating != null ||
+    tokenomics.inflation_rate != null ||
+    tokenomics.token_distribution != null
+  );
+  if (!hasTokenomicsData) {
+    return {
+      score: 5.0,
+      tokenomics_risk_score: 50,
+      reasoning: 'No tokenomics data available — defaulting to neutral 5.0.',
+    };
+  }
   // Cap at 100 — CoinGecko sometimes reports circulating > total due to rounding
   const pctCirculating = Math.min(safeNumber(tokenomics.pct_circulating), 100);
   const inflation = safeNumber(tokenomics.inflation_rate);

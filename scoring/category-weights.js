@@ -71,7 +71,6 @@ export const CATEGORY_MAP = {
   'cat-themed': 'meme_token',
   'artificial-intelligence': 'ai_infrastructure',
   ai: 'ai_infrastructure',
-  depin: 'ai_infrastructure',
   gaming: 'nft_gaming',
   nft: 'nft_gaming',
   metaverse: 'nft_gaming',
@@ -85,6 +84,19 @@ export const CATEGORY_MAP = {
   depin: 'depin',
   'decentralized-physical-infrastructure': 'depin',
   'iot-network': 'depin',
+  // Round 122 (AutoResearch): Additional common CoinGecko/DeFiLlama slugs
+  stablecoin: 'default',
+  'stablecoins': 'default',
+  oracle: 'ai_infrastructure',    // oracles are infra; dev/onchain signals matter most
+  'oracle-network': 'ai_infrastructure',
+  infrastructure: 'layer_1',      // generic infra → treat like L1 (dev-heavy)
+  'cross-chain': 'layer_2',       // bridges/cross-chain are layer_2-like
+  privacy: 'layer_1',             // privacy protocols: dev + onchain matter
+  'privacy-coins': 'layer_1',
+  'insurance': 'defi_lending',    // DeFi insurance is onchain-risk heavy
+  'prediction-market': 'defi_dex', // prediction markets: onchain volume/usage
+  'fan-token': 'meme_token',      // fan tokens behave like memes: social-driven
+  'sports': 'meme_token',
 };
 
 // ─── Boot-time validation ────────────────────────────────────────────────────
