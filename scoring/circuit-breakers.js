@@ -162,6 +162,25 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Round 132 (AutoResearch): Persistent revenue decline for DeFi protocols
+  // If revenue_7d and revenue_30d show consistent negative trend, the protocol is losing value capture
+  const rev7d = safeN(onchain.revenue_7d ?? 0);
+  const rev30d = safeN(onchain.revenue_30d ?? 0);
+  const rev7dPrev = safeN(onchain.revenue_7d_prev ?? 0);
+  const fees7dR132 = safeN(onchain.fees_7d ?? 0); // renamed to avoid duplicate with later declaration
+  if (fees7dR132 > 100_000 && rev7d > 0 && rev7dPrev > 0) {
+    const revenueDeclinePct = ((rev7d - rev7dPrev) / rev7dPrev) * 100;
+    // If 7d revenue is down > 50% vs prior 7d and monthly revenue also in decline
+    const monthlyDecline = rev30d > 0 && (rev7d * 4.33) < rev30d * 0.5;
+    if (revenueDeclinePct < -50 && monthlyDecline) {
+      breakers.push({
+        cap: 6.5,
+        reason: `Persistent revenue collapse: ${revenueDeclinePct.toFixed(0)}% 7d revenue decline — protocol losing value accrual`,
+        severity: 'warning',
+      });
+    }
+  }
+
   // Round 127 (AutoResearch): Negative token velocity — market cap >> 100x volume
   // Token velocity < 0.01% = nearly untradeable despite market cap
   const mcapForVelocity = safeN(market.market_cap ?? 0);

@@ -189,8 +189,27 @@ export function getCategoryWeights(rawData = {}) {
     const resolved = resolveCategoryFromArray(coingeckoCategories);
     if (resolved) {
       const confidence = 0.9;
+      // Round 136 (AutoResearch): meme_token large-cap blending
+      // High-mcap meme tokens ($1B+) behave more like L1s in market dynamics.
+      // Blend meme weights toward L1 proportionally: $1B = 10% L1, $10B+ = 30% L1.
+      let effectiveWeights = interpolateWeights(CATEGORY_WEIGHTS[resolved], confidence);
+      if (resolved === 'meme_token') {
+        const mcap = safeNum(market?.market_cap ?? 0);
+        if (mcap >= 1_000_000_000) {
+          const blendFactor = Math.min((Math.log10(mcap / 1e9) / Math.log10(10)) * 0.3, 0.3); // 0 at $1B, 0.3 at $10B+
+          if (blendFactor > 0) {
+            const l1W = CATEGORY_WEIGHTS.layer_1;
+            for (const dim of DIMS) {
+              effectiveWeights[dim] = effectiveWeights[dim] * (1 - blendFactor) + l1W[dim] * blendFactor;
+            }
+            // Renormalize to ensure sum = 1.0
+            const total = DIMS.reduce((a, d) => a + effectiveWeights[d], 0);
+            for (const dim of DIMS) effectiveWeights[dim] = effectiveWeights[dim] / total;
+          }
+        }
+      }
       return {
-        weights: interpolateWeights(CATEGORY_WEIGHTS[resolved], confidence),
+        weights: effectiveWeights,
         category: resolved,
         source: 'coingecko_categories',
         confidence,

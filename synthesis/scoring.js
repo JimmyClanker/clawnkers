@@ -23,34 +23,58 @@ export function calculateConfidence(rawData = {}) {
   const github     = rawData.github     ?? {};
   const tokenomics = rawData.tokenomics ?? {};
 
-  // Market
+  // Market — Round 137: graduated scoring (5 fields, 20pts each)
   let marketConf;
-  if (market.error) marketConf = 30;
-  else if (market.current_price != null && market.total_volume != null && market.market_cap != null) marketConf = 100;
-  else if (market.current_price != null) marketConf = 60;
-  else marketConf = 30;
+  if (market.error) marketConf = 20;
+  else {
+    marketConf = 0;
+    if (market.current_price != null && Number(market.current_price) > 0) marketConf += 25;
+    if (market.total_volume != null && Number(market.total_volume) > 0) marketConf += 20;
+    if (market.market_cap != null && Number(market.market_cap) > 0) marketConf += 25;
+    if (market.price_change_pct_24h != null) marketConf += 15;
+    if (market.market_cap_rank != null) marketConf += 15;
+    if (marketConf === 0) marketConf = 10; // minimal: price data available but zero
+  }
 
-  // Onchain
+  // Onchain — Round 138: graduated (4 key fields)
   let onchainConf;
   if (onchain.error) onchainConf = 0;
-  else if (onchain.tvl != null && onchain.fees_7d != null && onchain.revenue_7d != null) onchainConf = 100;
-  else if (onchain.tvl != null || onchain.tvl_change_7d != null) onchainConf = 60;
-  else onchainConf = 0;
+  else {
+    onchainConf = 0;
+    if (onchain.tvl != null) onchainConf += 30;
+    if (onchain.fees_7d != null || onchain.fees_30d != null) onchainConf += 25;
+    if (onchain.revenue_7d != null || onchain.revenue_30d != null) onchainConf += 25;
+    if (onchain.tvl_change_7d != null) onchainConf += 20;
+    onchainConf = Math.min(100, onchainConf);
+  }
 
-  // Social
+  // Social — Round 138: graduated (volume + sentiment + narratives)
   const mentions = safeNumber(social.filtered_mentions ?? social.mentions);
   let socialConf;
-  if (social.error) socialConf = 20;
-  else if (mentions > 10) socialConf = 100;
-  else if (mentions >= 1) socialConf = 50;
-  else socialConf = 20;
+  if (social.error) socialConf = 15;
+  else {
+    socialConf = 0;
+    if (mentions > 50) socialConf += 40;
+    else if (mentions > 10) socialConf += 30;
+    else if (mentions >= 1) socialConf += 15;
+    if (social.sentiment_score != null || social.sentiment_counts != null) socialConf += 30;
+    if (Array.isArray(social.key_narratives) && social.key_narratives.length > 0) socialConf += 20;
+    if (social.bot_filtered_count != null) socialConf += 10; // has quality filtering
+    socialConf = Math.min(100, Math.max(10, socialConf));
+  }
 
-  // Dev
+  // Dev — Round 139: graduated (4 key fields)
   let devConf;
   if (github.error) devConf = 0;
-  else if (github.commits_90d != null && github.contributors != null && github.stars != null) devConf = 100;
-  else if (github.stars != null) devConf = 50;
-  else devConf = 0;
+  else {
+    devConf = 0;
+    if (github.commits_90d != null) devConf += 30;
+    if (github.contributors != null) devConf += 25;
+    if (github.stars != null) devConf += 20;
+    if (github.last_commit != null) devConf += 15;
+    if (github.forks != null) devConf += 10;
+    devConf = Math.min(100, devConf);
+  }
 
   // Tokenomics — graduated: +20 per field
   let tokenomicsConf;
@@ -257,6 +281,24 @@ function scoreMarketStrength(market = {}) {
 }
 
 function scoreOnchainHealth(onchain = {}) {
+  // Round 135 (AutoResearch): No onchain data guard
+  // Many tokens have no onchain data (not DeFi protocols, no TVL).
+  // Instead of 4.0 base which implies "below average", return neutral 5.0 (N/A, not applicable).
+  const hasOnchainData = onchain && !onchain.error && (
+    onchain.tvl != null ||
+    onchain.fees_7d != null ||
+    onchain.fees_30d != null ||
+    onchain.tvl_change_7d != null
+  );
+  if (!hasOnchainData) {
+    return {
+      score: 5.0,
+      onchain_maturity_score: 0,
+      protocol_age_tier: 'unknown',
+      reasoning: 'No onchain data available — defaulting to neutral 5.0 (not applicable for non-DeFi tokens).',
+    };
+  }
+
   // Round 125 (AutoResearch): cap TVL changes to ±200% to prevent extreme outliers
   // (e.g. new protocols with 10000% TVL gain, or protocol exploit with -99% in 7d)
   const trend7d = Math.max(-200, Math.min(200, safeNumber(onchain.tvl_change_7d)));
@@ -593,6 +635,19 @@ function scoreTokenomicsRisk(tokenomics = {}) {
 }
 
 function scoreDistribution(tokenomics = {}, market = {}) {
+  // Round 131 (AutoResearch): No data guard → neutral 5.0
+  const hasDistributionData = tokenomics && (
+    tokenomics.pct_circulating != null ||
+    tokenomics.token_distribution != null ||
+    (market.fully_diluted_valuation != null && market.market_cap != null)
+  );
+  if (!hasDistributionData) {
+    return {
+      score: 5.0,
+      reasoning: 'No distribution data available — defaulting to neutral 5.0.',
+    };
+  }
+
   const dist = tokenomics.token_distribution;
   const pctCirculating = Math.min(safeNumber(tokenomics.pct_circulating), 100);
   const unlockOverhang = tokenomics.unlock_overhang_pct != null ? safeNumber(tokenomics.unlock_overhang_pct) : null;
@@ -645,6 +700,22 @@ function scoreDistribution(tokenomics = {}, market = {}) {
  * Components: volatility, liquidity depth, concentration risk, age risk.
  */
 function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, holderData = {}) {
+  // Round 134 (AutoResearch): Empty risk data guard
+  // When all risk-relevant fields are absent, return neutral 5.0 instead of optimistic 6.0
+  const hasRiskData = (
+    (market.price_change_pct_24h != null || market.price_change_pct_7d != null) ||
+    (dexData.dex_liquidity_usd != null || dexData.liquidity != null) ||
+    (holderData.top10_concentration != null || holderData.concentration_pct != null) ||
+    market.genesis_date != null
+  );
+  if (!hasRiskData) {
+    return {
+      score: 5.0,
+      liquidity_risk_score: 0,
+      reasoning: 'No risk data available — defaulting to neutral 5.0 (unknown risk profile).',
+    };
+  }
+
   let raw = 6; // Start slightly above midpoint (assume moderate risk by default)
 
   // 1. Volatility risk: large price swings = higher risk

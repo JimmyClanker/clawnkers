@@ -327,6 +327,21 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 133 (AutoResearch): Staking APY divergence — advertised vs actual APY mismatch
+  // Large divergence signals unsustainable yield farming (Ponzi dynamics)
+  const advertisedApy = safeN(onchain.advertised_staking_apy ?? onchain.max_apy ?? 0);
+  const actualApy = safeN(onchain.realized_staking_apy ?? onchain.current_apy ?? 0);
+  if (advertisedApy > 0 && actualApy > 0 && advertisedApy > 50) {
+    const apyDivergencePct = ((advertisedApy - actualApy) / advertisedApy) * 100;
+    if (apyDivergencePct > 70) {
+      flags.push({
+        flag: 'staking_apy_divergence',
+        severity: 'warning',
+        detail: `Staking APY divergence: advertised ${advertisedApy.toFixed(0)}% vs realized ${actualApy.toFixed(0)}% (${apyDivergencePct.toFixed(0)}% gap) — unsustainable yield mechanics, Ponzi risk.`,
+      });
+    }
+  }
+
   // Round 128 (AutoResearch): Team/treasury wallet unusual activity
   // Sudden large team wallet movements = insider selling risk
   const teamWalletActivity = safeN(market.team_wallet_activity_usd ?? 0);
