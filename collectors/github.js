@@ -319,6 +319,24 @@ export async function collectGithub(projectName) {
       issue_health_signal: issueHealthSignal,
       issue_resolution_rate: issueResolutionRate,
       commit_frequency: commitFrequency,
+      // Round 215 (AutoResearch): contributor_bus_factor — risk when 1-2 contributors dominate activity
+      // High bus factor = decentralized dev; low = single point of failure
+      contributor_bus_factor: (() => {
+        if (!Array.isArray(contributorStats) || contributorStats.length === 0) return null;
+        // Calculate what % of commits the top contributor accounts for
+        const totalCommits = contributorStats.reduce((s, c) => s + (c?.total || 0), 0);
+        if (totalCommits === 0) return null;
+        const sortedContribs = [...contributorStats].sort((a, b) => (b?.total || 0) - (a?.total || 0));
+        const topPct = (sortedContribs[0]?.total || 0) / totalCommits;
+        if (topPct > 0.8) return 'critical'; // 1 person = 80%+ of commits
+        if (topPct > 0.6) return 'high';     // 1 person = 60%+ of commits
+        if (topPct > 0.4) return 'moderate';
+        return 'healthy'; // well-distributed contributions
+      })(),
+      // Round 210 (AutoResearch): has_recent_release — true if a release was published in last 90 days
+      has_recent_release: latestRelease?.days_since_release != null
+        ? latestRelease.days_since_release <= 90
+        : null,
       // Round 204 (AutoResearch): days since last commit — quick staleness signal
       days_since_last_commit: (() => {
         const lastCommitDate = commitsData?.[0]?.commit?.author?.date;

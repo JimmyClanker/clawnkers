@@ -408,6 +408,11 @@ function scoreOnchainHealth(onchain = {}) {
   if (tvlStickiness === 'sticky') raw += 0.4;
   else if (tvlStickiness === 'fleeing') raw -= 0.5;
 
+  // Round 218 (AutoResearch): revenue trend — improving revenue is a bullish fundamental signal
+  const revenueTrend = onchain.revenue_trend;
+  if (revenueTrend === 'improving') raw += 0.3;
+  else if (revenueTrend === 'declining') raw -= 0.3;
+
   // Round 57: Active addresses as a usage signal
   const activeAddresses7d = safeNumber(onchain.active_addresses_7d ?? onchain.unique_users_7d ?? 0);
   if (activeAddresses7d > 50_000) raw += 0.6;
@@ -637,6 +642,20 @@ function scoreDevelopment(github = {}) {
   // Round 33: multi-language repos signal broader ecosystem integration
   const languageCount = typeof github.languages === 'object' ? Object.keys(github.languages ?? {}).length : 0;
   if (languageCount >= 4) raw += 0.15; // polyglot repo = more integrations
+
+  // Round 216 (AutoResearch): use commit_frequency (commits/week) as a smoothed dev pace signal
+  // Normalizes for repo age — a 5-year-old protocol with 3 commits/week is different from a new one
+  const commitFreq = safeNumber(github.commit_frequency ?? null);
+  if (commitFreq > 0) {
+    if (commitFreq >= 10) raw += 0.3;      // very active: 10+ commits/week
+    else if (commitFreq >= 5) raw += 0.15; // active: 5-10 commits/week
+    else if (commitFreq < 0.5) raw -= 0.2; // stale: less than 1 commit per 2 weeks
+  }
+
+  // Round 216 (AutoResearch): contributor bus factor penalty
+  const busFactor = github.contributor_bus_factor;
+  if (busFactor === 'critical') raw -= 0.5; // single dev dominance
+  else if (busFactor === 'high') raw -= 0.25;
 
   // Round 36 (AutoResearch): dev_quality_index — normalized 0-100 composite quality signal
   // Combines all available dev signals into a single normalized score for external consumers
@@ -899,6 +918,12 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
   if (vol7dAvgR > 0 && volume > 0 && volume > vol7dAvgR * 8) {
     raw -= 0.5; // Sudden volume spike = wash trading or exit pump risk
   }
+
+  // Round 217 (AutoResearch): volume_spike_flag from market collector — tiered risk penalties
+  const volumeSpikeFlag = market.volume_spike_flag;
+  if (volumeSpikeFlag === 'extreme_spike') raw -= 0.6; // 5x+ avg = very suspicious
+  else if (volumeSpikeFlag === 'spike') raw -= 0.3;    // 3-5x avg = caution
+  // 'elevated' is borderline — no penalty, just informational
 
   // Round 58 (AutoResearch): liquidity_risk_score — 0-100 normalized (higher = safer/more liquid)
   const lrsComponents = [

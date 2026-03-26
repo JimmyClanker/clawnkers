@@ -245,6 +245,32 @@ export async function collectMarket(projectName) {
       telegram_channel_user_count: communityData?.telegram_channel_user_count ?? null,
       // Round 201 (AutoResearch): Reddit subscribers from CoinGecko community data
       reddit_subscribers: communityData?.reddit_subscribers ?? null,
+      // Round 214 (AutoResearch): contract addresses per chain from CoinGecko platforms field
+      // Provides direct contract lookup without requiring a separate API call
+      contract_addresses: (() => {
+        const platforms = coinData?.platforms;
+        if (!platforms || typeof platforms !== 'object') return null;
+        const result = {};
+        for (const [chain, addr] of Object.entries(platforms)) {
+          if (chain && addr && typeof addr === 'string' && addr.length > 5) {
+            result[chain] = addr;
+          }
+        }
+        return Object.keys(result).length > 0 ? result : null;
+      })(),
+      // Round 209 (AutoResearch): normalized community score (0-100) from social following signals
+      // Combines twitter followers, telegram users, reddit subscribers into one metric
+      community_score: (() => {
+        const twitter = Number(communityData?.twitter_followers ?? 0);
+        const telegram = Number(communityData?.telegram_channel_user_count ?? 0);
+        const reddit = Number(communityData?.reddit_subscribers ?? 0);
+        // Log scale: 1M followers → ~40 pts, 100K → ~27 pts, 10K → ~13 pts
+        const twitterScore = twitter > 0 ? Math.min(40, (Math.log10(twitter) / 7) * 40) : 0;
+        const telegramScore = telegram > 0 ? Math.min(30, (Math.log10(telegram) / 6.5) * 30) : 0;
+        const redditScore = reddit > 0 ? Math.min(30, (Math.log10(reddit) / 6) * 30) : 0;
+        const total = twitterScore + telegramScore + redditScore;
+        return total > 0 ? Math.round(total) : null;
+      })(),
       // Round 2
       is_trending: isTrending,
       categories,

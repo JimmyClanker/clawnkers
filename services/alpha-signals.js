@@ -475,6 +475,29 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 219 (AutoResearch): Volume spike + buy pressure = high-conviction breakout signal
+  // When volume spikes significantly AND buyers are in control, it's a potential breakout setup
+  const volumeSpike = market.volume_spike_flag;
+  const spikeRatio = safeN(dex.buy_sell_ratio ?? 0);
+  if ((volumeSpike === 'extreme_spike' || volumeSpike === 'spike') && spikeRatio >= 1.1) {
+    signals.push({
+      signal: 'volume_spike_buy_pressure',
+      strength: volumeSpike === 'extreme_spike' && spikeRatio >= 1.3 ? 'strong' : 'moderate',
+      detail: `Volume spike (${volumeSpike}) with net buy pressure (ratio ${spikeRatio.toFixed(2)}) — potential breakout; confirm with price action.`,
+    });
+  }
+
+  // Round 219 (AutoResearch): Revenue trend improvement + fee efficiency = fundamental momentum
+  const revTrend = onchain.revenue_trend;
+  const revEff = safeN(onchain.revenue_efficiency ?? 0);
+  if (revTrend === 'improving' && revEff > 50) {
+    signals.push({
+      signal: 'revenue_momentum',
+      strength: revEff > 200 ? 'strong' : 'moderate',
+      detail: `Revenue improving week-over-week with $${revEff.toFixed(0)}/M TVL/week efficiency — fundamentals strengthening.`,
+    });
+  }
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {

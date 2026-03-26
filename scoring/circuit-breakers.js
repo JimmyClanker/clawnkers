@@ -275,6 +275,20 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     }
   }
 
+  // Round 212 (AutoResearch): Revenue collapse warning — TVL > $50M with zero fees for >7d
+  // Protocols that have significant TVL but generate zero fees may have broken incentives
+  const tvlR212 = safeN(onchain.tvl ?? 0);
+  const fees7dR212 = safeN(onchain.fees_7d ?? 0);
+  const categoryR212 = String(onchain.category || '').toLowerCase();
+  const isDeFiR212 = /defi|lending|dex|yield|liquidity|bridge|derivatives/.test(categoryR212);
+  if (isDeFiR212 && tvlR212 > 50_000_000 && fees7dR212 === 0) {
+    breakers.push({
+      cap: 6.5,
+      reason: `DeFi protocol with $${(tvlR212 / 1_000_000).toFixed(0)}M TVL generates zero fees — value accrual mechanism may be broken`,
+      severity: 'warning',
+    });
+  }
+
   // Applica il cap più restrittivo
   if (breakers.length === 0) {
     return { score: overallScore, breakers: [], capped: false };

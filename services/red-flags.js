@@ -204,6 +204,19 @@ export function detectRedFlags(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 220 (AutoResearch): use unlock_risk_label from tokenomics collector for quick composite check
+  // This catches critical unlock risk even when vesting_info isn't available (uses pct_circulating + overhang)
+  const unlockRiskLabel = tokenomics.unlock_risk_label;
+  const overhangPct = safeN(tokenomics.unlock_overhang_pct ?? 0);
+  if (unlockRiskLabel === 'critical' && teamAllocationPct <= 25) {
+    // Only fire if the per-field check above didn't already flag it
+    flags.push({
+      flag: 'high_unlock_overhang',
+      severity: 'warning',
+      detail: `Token unlock overhang is ${overhangPct.toFixed(0)}% of max supply — large future supply increase could suppress price.`,
+    });
+  }
+
   // 18. Round 24: Social-sourced exploit mentions
   const exploitMentions = safeN(social.exploit_mentions ?? 0);
   if (exploitMentions >= 2) {

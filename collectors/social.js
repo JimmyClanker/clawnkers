@@ -287,6 +287,13 @@ export async function collectSocial(projectName, exaService) {
       ? Math.max(sentimentCounts.bullish, sentimentCounts.bearish, sentimentCounts.neutral) / totalSentiment
       : null;
 
+    // Round 213 (AutoResearch): avg_article_quality_score — mean domain trust score of all articles
+    const avgArticleQualityScore = (() => {
+      if (uniqueNews.length === 0) return null;
+      const total = uniqueNews.reduce((sum, item) => sum + getDomainTrustScore(item.url), 0);
+      return parseFloat((total / uniqueNews.length).toFixed(3));
+    })();
+
     // Round 12 (AutoResearch nightly): recent news momentum — more news in last 3 days vs full window
     const now = Date.now();
     const recentCutoff3d = now - 3 * 24 * 60 * 60 * 1000;
@@ -313,6 +320,7 @@ export async function collectSocial(projectName, exaService) {
       partnership_mentions: partnershipMentions,
       upgrade_mentions: upgradeMentions,
       governance_mentions: governanceMentions,
+      avg_article_quality_score: avgArticleQualityScore,
       // Round 12 (AutoResearch nightly): news recency signals
       very_recent_news_count: veryRecentCount,
       news_momentum: newsMomentum,

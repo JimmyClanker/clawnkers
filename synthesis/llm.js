@@ -345,6 +345,15 @@ export function buildDataSummary(rawData = {}) {
       const topChains = Object.entries(dex.chain_liquidity_breakdown).slice(0, 3).map(([c, v]) => `${c}: $${(v / 1000).toFixed(0)}K`).join(', ');
       dexLines.push(`- Liquidity by chain: ${topChains}`);
     }
+    // Round 221 (AutoResearch): net buy pressure % and volume/liquidity ratio
+    if (dex.net_buy_pressure_pct != null) {
+      const netBuyLabel = dex.net_buy_pressure_pct > 55 ? 'accumulation' : dex.net_buy_pressure_pct < 45 ? 'distribution' : 'balanced';
+      dexLines.push(`- Net buy pressure: ${dex.net_buy_pressure_pct.toFixed(1)}% of txns are buys (${netBuyLabel})`);
+    }
+    if (dex.volume_to_liquidity_ratio != null) {
+      const vtlLabel = dex.volume_to_liquidity_ratio > 1 ? 'high capital efficiency' : dex.volume_to_liquidity_ratio > 0.1 ? 'moderate' : 'low';
+      dexLines.push(`- Volume/Liquidity: ${dex.volume_to_liquidity_ratio.toFixed(3)}x (${vtlLabel})`);
+    }
 
     const validDex = dexLines.filter(Boolean);
     if (validDex.length) {

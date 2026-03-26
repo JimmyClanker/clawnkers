@@ -237,6 +237,11 @@ export async function collectDexScreener(projectName) {
       // Round 198 (AutoResearch): top pair identifiers for direct DexScreener linking
       top_pair_address: topPair?.pairAddress || null,
       top_pair_chain: topPair?.chainId || null,
+      // Round 211 (AutoResearch): net_buy_pressure_pct — % of transactions that are buys
+      // Simple but effective: >55% buys = net accumulation, <45% = net distribution
+      net_buy_pressure_pct: hasTxnData && (totalBuys24h + totalSells24h) > 0
+        ? parseFloat((totalBuys24h / (totalBuys24h + totalSells24h) * 100).toFixed(1))
+        : null,
       // Round 207 (AutoResearch): h6 volume as % of 24h — high pct = activity concentrated in last 6h
       h6_volume_pct_of_24h: (h6Vol > 0 && h24Vol > 0)
         ? parseFloat(((h6Vol / h24Vol) * 100).toFixed(1))
