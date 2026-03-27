@@ -129,11 +129,13 @@
       if (!vals.length) return null;
       return vals.reduce((s,v)=>s+v,0)/vals.length;
     }
+    // Round 23 (UX batch): smoother score color gradient with 5 tiers
     function barColor(v) {
-      if (v >= 8) return '#D4580A';
-      if (v >= 6) return '#ffd3b6';
-      if (v >= 4) return '#ffaaa5';
-      return '#ff8b94';
+      if (v >= 8.5) return '#D4580A';   // strong buy
+      if (v >= 7.0) return '#e8874a';   // good
+      if (v >= 5.5) return '#ffd3b6';   // neutral/hold
+      if (v >= 4.0) return '#ffaaa5';   // weak
+      return '#ff8b94';                  // avoid
     }
     function changeClass(value) {
       const n = Number(value);

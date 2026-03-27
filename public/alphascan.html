@@ -113,6 +113,27 @@
       }
     }
 
+    /* Round 28 (UX batch): light mode fallback (minimal — site is designed dark-first) */
+    @media (prefers-color-scheme: light) {
+      :root {
+        /* Override only the most critical contrast values for light mode users who don't have dark mode */
+        --bg: #f4f4f4;
+        --surface: #ffffff;
+        --surface2: #f8f8f8;
+        --text: #111111;
+        --muted: #555555;
+        --muted2: #444444;
+        --border: rgba(0,0,0,0.12);
+        --border-hover: rgba(0,0,0,0.22);
+        --shadow: 0 4px 24px rgba(0,0,0,0.15);
+        --shadow-lg: 0 8px 48px rgba(0,0,0,0.18);
+      }
+      body { background: var(--bg); color: var(--text); }
+      /* Keep dark header for brand consistency */
+      header { background: #111 !important; border-color: rgba(255,255,255,0.08) !important; }
+      header * { color: #e8e8e8; }
+    }
+
     /* Round 7 (UX batch): forced-colors / Windows High Contrast Mode */
     @media (forced-colors: active) {
       .btn-primary, .btn-secondary { border: 2px solid ButtonText; }
@@ -1177,7 +1198,16 @@
       font-family: 'IBM Plex Mono', monospace;
       /* Round 118: subtle text glow */
       text-shadow: 0 0 20px rgba(212,88,10,0.25);
+      /* Round 25 (UX batch): count-up animation on load */
+      animation: statReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
+    @keyframes statReveal {
+      from { opacity: 0; transform: translateY(8px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .stat-box:nth-child(1) .stat-val { animation-delay: 0.1s; }
+    .stat-box:nth-child(2) .stat-val { animation-delay: 0.2s; }
+    .stat-box:nth-child(3) .stat-val { animation-delay: 0.3s; }
     .stat-label { color: var(--muted2); font-size: 0.85rem; line-height: 1.4; }
     /* Round 118: stat-box hover */
     .stat-box { transition: background 0.2s; }
@@ -1573,8 +1603,10 @@
           <li>Disable extensions that block scripts</li>
           <li>Or use the REST API directly</li>
         </ul>
-        <a href="/api/health">View API Docs</a>
+        <!-- Round 29 (UX batch): improve noscript with direct API link and CLI fallback -->
+        <a href="/api/health" aria-label="View API documentation (works without JavaScript)">View API Docs</a>
         <a href="/" class="sec">← Home</a>
+        <p style="margin-top:16px;font-size:0.78rem;color:#666;">Or scan via CLI: <code style="font-family:monospace;background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#D4580A;">curl https://clawnkers.com/alpha/quick?project=eth</code></p>
       </div>
     </div>
   </noscript>
@@ -1658,18 +1690,19 @@
           <p class="section-sub">A clean pipeline from project name to actionable verdict — powered by 5 live data sources and AI analysis.</p>
         </div>
         <div class="how-grid">
-          <div class="how-step scanner-fade-in">
-            <div class="how-num">🎯</div>
+          <!-- Round 24 (UX batch): tabindex=0 for keyboard navigation on cards -->
+          <div class="how-step scanner-fade-in" tabindex="0" role="article" aria-label="Step 1: Choose a project">
+            <div class="how-num" aria-hidden="true">🎯</div>
             <h3>Choose a project</h3>
             <p>Enter any token name or contract address. We support all major chains and most long-tail tokens via CoinGecko + DexScreener.</p>
           </div>
-          <div class="how-step scanner-fade-in scanner-fade-delay-1">
-            <div class="how-num">⚡</div>
+          <div class="how-step scanner-fade-in scanner-fade-delay-1" tabindex="0" role="article" aria-label="Step 2: AI analyzes 5 sources">
+            <div class="how-num" aria-hidden="true">⚡</div>
             <h3>AI analyzes 5 sources</h3>
             <p>CoinGecko, DeFiLlama, GitHub, Social (X via Grok Fast), On-chain — all queried in parallel and fed to Claude Opus 4.6 for synthesis.</p>
           </div>
-          <div class="how-step scanner-fade-in scanner-fade-delay-2">
-            <div class="how-num">📊</div>
+          <div class="how-step scanner-fade-in scanner-fade-delay-2" tabindex="0" role="article" aria-label="Step 3: Get your verdict">
+            <div class="how-num" aria-hidden="true">📊</div>
             <h3>Get your verdict</h3>
             <p>Comprehensive report with scores, moat assessment, risks, catalysts, competitor comparison, and a BUY/HOLD/AVOID verdict.</p>
           </div>
@@ -1714,12 +1747,12 @@
     <div class="container">
       <div class="footer-inner">
         <div class="footer-logo"><img src="/claw-logo.png?v=3" alt="" width="24" height="24" loading="lazy" decoding="async"><span class="brand-text">Clawnkers<span>.</span></span></div>
-        <div class="footer-links">
-          <a href="/alphascan">Alpha Scanner</a>
+        <nav class="footer-links" aria-label="Footer navigation">
+          <a href="/alphascan" aria-current="page">Alpha Scanner</a>
           <a href="/#api">API Docs</a>
-          <a href="https://github.com/JimmyClanker/x402-research">GitHub</a>
-        </div>
-        <div class="footer-copy">© 2026 Clawnkers</div>
+          <a href="https://github.com/JimmyClanker/x402-research" rel="noopener noreferrer" target="_blank">GitHub <span class="sr-only">(opens in new tab)</span></a>
+        </nav>
+        <div class="footer-copy">© <time datetime="2026">2026</time> Clawnkers · Not financial advice</div>
       </div>
     </div>
   </footer>
