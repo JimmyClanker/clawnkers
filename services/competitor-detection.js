@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * competitor-detection.js — Round 28
  * Auto-detects competitors using DeFiLlama protocols endpoint.
@@ -11,10 +12,6 @@ let _protocolsCache = null;
 let _protocolsCacheAt = 0;
 const PROTOCOLS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 function normalizeCategory(cat) {
   if (!cat) return null;
@@ -22,7 +19,7 @@ function normalizeCategory(cat) {
 }
 
 function fmtTvl(tvl) {
-  const n = safeN(tvl, 0);
+  const n = safeNum(tvl, 0);
   if (n === 0) return 'n/a';
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
@@ -87,7 +84,7 @@ export async function detectCompetitors(projectName, rawData) {
     const pSym = String(p.symbol ?? '').toLowerCase();
     return pName === nameNorm || pSlug === nameNorm || pSym === nameNorm;
   });
-  const projectTvl = safeN(projectEntry?.tvl, rawData?.onchain?.tvl ?? 0);
+  const projectTvl = safeNum(projectEntry?.tvl, rawData?.onchain?.tvl ?? 0);
   const projectSlug = projectEntry?.slug ?? null;
 
   // Round 29: exclude the project itself by name AND slug
@@ -104,17 +101,17 @@ export async function detectCompetitors(projectName, rawData) {
       if (projectSlugNorm && pSlug === projectSlugNorm) return false;
       return true;
     })
-    .sort((a, b) => safeN(b.tvl) - safeN(a.tvl))
+    .sort((a, b) => safeNum(b.tvl) - safeNum(a.tvl))
     .slice(0, 3)
     .map((p) => ({
       name: p.name,
       slug: p.slug ?? null,
-      tvl: safeN(p.tvl, 0),
+      tvl: safeNum(p.tvl, 0),
       tvl_fmt: fmtTvl(p.tvl),
       category: p.category,
       chains: Array.isArray(p.chains) ? p.chains.slice(0, 5) : [],
       // Round 29: include mcap if available for richer comparison
-      mcap: safeN(p.mcap, 0) || null,
+      mcap: safeNum(p.mcap, 0) || null,
     }));
 
   let comparison_summary;
@@ -125,7 +122,7 @@ export async function detectCompetitors(projectName, rawData) {
       (p) => `${p.name} (TVL: ${p.tvl_fmt}${p.mcap ? `, MCap: ${fmtTvl(p.mcap)}` : ''}, chains: ${p.chains.join(', ') || 'n/a'})`
     );
     const rank = peers.filter((p) => p.tvl > projectTvl).length + 1;
-    const projectMcap = safeN(rawData?.market?.market_cap, projectEntry?.mcap ?? 0);
+    const projectMcap = safeNum(rawData?.market?.market_cap, projectEntry?.mcap ?? 0);
     const ptvl = projectTvl > 0 && projectMcap > 0 ? (projectMcap / projectTvl).toFixed(2) : null;
     // Round 69: Add sector TVL dominance percentage
     const sectorTotalTvl = peers.reduce((s, p) => s + p.tvl, 0) + projectTvl;

@@ -1,13 +1,10 @@
+import { safeNum } from '../utils/math.js';
 /**
  * trend-reversal.js — Round 16 (AutoResearch batch)
  * Detects potential trend reversal patterns using multi-timeframe price data.
  * Pure algorithmic detection — no LLM required.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 /**
  * Detect trend reversal patterns.
@@ -25,16 +22,16 @@ export function detectTrendReversal(rawData = {}) {
   const dex = rawData.dex ?? {};
   const onchain = rawData.onchain ?? {};
 
-  const c1h  = safeN(market.price_change_pct_1h);
-  const c24h = safeN(market.price_change_pct_24h);
-  const c7d  = safeN(market.price_change_pct_7d);
-  const c30d = safeN(market.price_change_pct_30d);
-  const volume = safeN(market.total_volume);
-  const mcap   = safeN(market.market_cap);
-  const atlDist = safeN(market.atl_distance_pct);
-  const athDist = safeN(market.ath_distance_pct);
-  const buySellRatio = safeN(dex.buy_sell_ratio);
-  const tvl7d = safeN(onchain.tvl_change_7d);
+  const c1h  = safeNum(market.price_change_pct_1h);
+  const c24h = safeNum(market.price_change_pct_24h);
+  const c7d  = safeNum(market.price_change_pct_7d);
+  const c30d = safeNum(market.price_change_pct_30d);
+  const volume = safeNum(market.total_volume);
+  const mcap   = safeNum(market.market_cap);
+  const atlDist = safeNum(market.atl_distance_pct);
+  const athDist = safeNum(market.ath_distance_pct);
+  const buySellRatio = safeNum(dex.buy_sell_ratio);
+  const tvl7d = safeNum(onchain.tvl_change_7d);
 
   const signals = [];
   let bullishPoints = 0;
@@ -135,9 +132,9 @@ export function detectTrendReversal(rawData = {}) {
   }
 
   // Round 446: DEX price momentum burst with volume confirmation
-  const dexM5 = safeN(rawData?.dex?.dex_price_change_m5);
-  const dexH1 = safeN(rawData?.dex?.dex_price_change_h1);
-  const dexH24 = safeN(rawData?.dex?.dex_price_change_h24);
+  const dexM5 = safeNum(rawData?.dex?.dex_price_change_m5);
+  const dexH1 = safeNum(rawData?.dex?.dex_price_change_h1);
+  const dexH24 = safeNum(rawData?.dex?.dex_price_change_h24);
   if (dexM5 !== null && dexH1 !== null && dexH24 !== null && dexM5 > 2 && dexH1 > 3 && dexH24 > 5 && c30d !== null && c30d < -10) {
     signals.push(`DEX intraday momentum burst (m5: +${dexM5.toFixed(1)}%, h1: +${dexH1.toFixed(1)}%, h24: +${dexH24.toFixed(1)}%) after 30d downtrend — potential reversal catalyst`);
     bullishPoints += 2;

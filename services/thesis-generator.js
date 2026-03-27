@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * thesis-generator.js — Round 20
  * Template-based investment thesis generator (no LLM needed).
@@ -308,18 +309,18 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   const bearEvidence = [];
   if (strongSignals.length > 0) bullEvidence.push(`Alpha signals: ${strongSignals.join(', ')}`);
   if (strongest.length > 0) bullEvidence.push(`Strongest dimensions: ${strongest.join(', ')} (scores 7+)`);
-  if (safeN(o.tvl_change_7d) > 10) bullEvidence.push(`TVL growing ${safeN(o.tvl_change_7d).toFixed(1)}%/7d`);
-  if (safeN(m.price_change_pct_7d) > 10) bullEvidence.push(`Price +${safeN(m.price_change_pct_7d).toFixed(1)}%/7d`);
+  if (safeNum(o.tvl_change_7d) > 10) bullEvidence.push(`TVL growing ${safeNum(o.tvl_change_7d).toFixed(1)}%/7d`);
+  if (safeNum(m.price_change_pct_7d) > 10) bullEvidence.push(`Price +${safeNum(m.price_change_pct_7d).toFixed(1)}%/7d`);
 
   if (critFlags.length > 0) bearEvidence.push(`Critical red flags: ${critFlags.join(', ')}`);
   if (weakest.length > 0) bearEvidence.push(`Weakest dimensions: ${weakest.join(', ')}`);
-  if (safeN(o.tvl_change_7d) < -10) bearEvidence.push(`TVL declining ${safeN(o.tvl_change_7d).toFixed(1)}%/7d`);
-  if (safeN(m.price_change_pct_30d) < -30) bearEvidence.push(`Price ${safeN(m.price_change_pct_30d).toFixed(1)}%/30d`);
+  if (safeNum(o.tvl_change_7d) < -10) bearEvidence.push(`TVL declining ${safeNum(o.tvl_change_7d).toFixed(1)}%/7d`);
+  if (safeNum(m.price_change_pct_30d) < -30) bearEvidence.push(`Price ${safeNum(m.price_change_pct_30d).toFixed(1)}%/30d`);
 
   // Invalidation triggers
   const bullInvalidation = [];
   const bearInvalidation = [];
-  if (safeN(o.tvl) > 0) bullInvalidation.push('TVL drops >30% in 7 days');
+  if (safeNum(o.tvl) > 0) bullInvalidation.push('TVL drops >30% in 7 days');
   bullInvalidation.push('New critical red flags emerge (exploits, regulatory)');
   bullInvalidation.push('Overall score drops below 4.0');
   bearInvalidation.push('Major partnership or listing announcement');
@@ -373,7 +374,3 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   };
 }
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}

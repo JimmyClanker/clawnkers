@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * report-quality.js — Round 27
  * Self-assesses completeness, data freshness, and LLM output quality.
@@ -16,10 +17,6 @@ const EXPECTED_LLM_FIELDS = [
 
 const CACHE_STALENESS_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 // Round 20: Compute a 0-100 data freshness score based on collector source types
 function computeDataFreshness(collectors) {
@@ -67,7 +64,7 @@ export function scoreReportQuality(rawData, scores, analysis) {
   // ── 2. Dimension confidence ────────────────────────────────────
   const DIMENSIONS = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health'];
   const lowConfDims = DIMENSIONS.filter((dim) => {
-    const confidence = safeN(scores?.[dim]?.completeness ?? scores?.[dim]?.confidence, 100);
+    const confidence = safeNum(scores?.[dim]?.completeness ?? scores?.[dim]?.confidence, 100);
     return confidence < 50;
   });
   if (lowConfDims.length > 0) {
@@ -193,8 +190,8 @@ export function scoreReportQuality(rawData, scores, analysis) {
   else grade = 'F';
 
   // Round 64: Verdict confidence assessment based on score spread and data quality
-  const overallScore = safeN(scores?.overall?.score, 5);
-  const overallConf = safeN(scores?.overall?.overall_confidence, 50);
+  const overallScore = safeNum(scores?.overall?.score, 5);
+  const overallConf = safeNum(scores?.overall?.overall_confidence, 50);
   const scoreSpread = overallScore > 7 || overallScore < 4 ? 'polarized' : 'ambiguous';
   const verdictConfidence = overallConf >= 70 && score >= 70 ? 'high' : overallConf >= 50 && score >= 50 ? 'medium' : 'low';
 
@@ -215,7 +212,7 @@ export function scoreReportQuality(rawData, scores, analysis) {
 
   // Round 236 (AutoResearch): verdict-score consistency check
   // LLM verdict should be consistent with algorithmic score; large divergence = suspect analysis
-  const verdictScore = safeN(scores?.overall?.score, 5);
+  const verdictScore = safeNum(scores?.overall?.score, 5);
   const llmVerdict = analysis?.verdict;
   if (llmVerdict && verdictScore > 0) {
     const VERDICT_EXPECTED_RANGES = {
@@ -245,7 +242,7 @@ export function scoreReportQuality(rawData, scores, analysis) {
   // Round 237b (AutoResearch nightly): Falling social velocity quality bonus/penalty
   // If social is declining and bearish, add a quality note
   const socialNewsMomentum = rawData?.social?.news_momentum;
-  const socialSentimentCred = safeN(rawData?.social?.sentiment_credibility_score ?? 50);
+  const socialSentimentCred = safeNum(rawData?.social?.sentiment_credibility_score ?? 50);
   if (socialNewsMomentum === 'declining' && socialSentimentCred < 30) {
     issues.push('Social signal credibility is very low (<30/100) with declining news momentum — sentiment analysis has limited reliability.');
     score = Math.max(0, score - 5);

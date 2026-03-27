@@ -1,12 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * risk-reward.js — Round 26
  * Provides risk/reward assessment with probability estimates and Kelly criterion sizing.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 function round(v, decimals = 4) {
   const factor = Math.pow(10, decimals);
@@ -68,12 +65,12 @@ function kellyCriterion(b, p) {
  * }}
  */
 export function assessRiskReward(rawData, scores, tradeSetup) {
-  const overallScore = safeN(scores?.overall?.score, 0);
-  const rrRatio = safeN(tradeSetup?.risk_reward_ratio);
+  const overallScore = safeNum(scores?.overall?.score, 0);
+  const rrRatio = safeNum(tradeSetup?.risk_reward_ratio);
   const notes = [];
 
   // Round 22: pass confidence to probability functions
-  const confidence = safeN(scores?.overall?.overall_confidence, 100);
+  const confidence = safeNum(scores?.overall?.overall_confidence, 100);
   const pTP1 = probabilityTP1(overallScore, confidence);
   const pTP2 = probabilityTP2(overallScore, confidence);
   if (confidence < 60) {
@@ -177,7 +174,7 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
   // Recent ATH (< 30d) = strong momentum confirmation → boost EV slightly
   // Very old ATH (> 2yr, >80% below) = structural headwind → penalize EV
   const daysSinceAth = rawData?.market?.days_since_ath;
-  const athDistancePct = safeN(rawData?.market?.ath_distance_pct, 0);
+  const athDistancePct = safeNum(rawData?.market?.ath_distance_pct, 0);
   if (daysSinceAth != null && expectedValue !== null) {
     if (daysSinceAth <= 30 && expectedValue > 0) {
       volAdjustedEv = round(volAdjustedEv * 1.05, 4);
@@ -203,7 +200,7 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
 
   // Round 454: momentum_score adjustment — use weighted momentum_score to adjust EV
   // momentum_score 0-100 from calculateMomentum — high score = higher probability of TP hits
-  const momentumScore = safeN(rawData?.momentum?.momentum_score, null);
+  const momentumScore = safeNum(rawData?.momentum?.momentum_score, null);
   if (momentumScore !== null && expectedValue !== null) {
     // Normalize to -0.15 to +0.15 multiplier (50 = neutral, 75+ = +10%, 25- = -10%)
     const momentumAdjust = 1 + ((momentumScore - 50) / 50) * 0.15;
@@ -238,8 +235,8 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
   // Round 465: supply_unlock_ev_adjustment — upcoming unlock = headwind for price targets
   const supplyUnlock465 = rawData?.supply_unlock ?? rawData?.onchain?.supply_unlock ?? null;
   if (supplyUnlock465 && expectedValue !== null) {
-    const unlockPct = safeN(supplyUnlock465.pct_of_supply_30d ?? supplyUnlock465.unlock_pct ?? 0);
-    const daysToUnlock = safeN(supplyUnlock465.days_to_next_unlock ?? 999);
+    const unlockPct = safeNum(supplyUnlock465.pct_of_supply_30d ?? supplyUnlock465.unlock_pct ?? 0);
+    const daysToUnlock = safeNum(supplyUnlock465.days_to_next_unlock ?? 999);
     if (unlockPct >= 10 && daysToUnlock <= 14) {
       volAdjustedEv = round(volAdjustedEv * 0.75, 4);
       notes.push(`⚠️ Large supply unlock ${unlockPct.toFixed(0)}% in ${daysToUnlock}d — significant EV discount 25%.`);
@@ -252,8 +249,8 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
 
   // Round 443: signal_count_multiplier — more strong alpha signals = higher EV confidence
   // Each strong alpha signal beyond 2 boosts EV by 3% (max +15%)
-  const alphaSignalsCount = safeN(rawData?._alpha_signals_count, 0);
-  const strongSignalsCount = safeN(rawData?._strong_signals_count, 0);
+  const alphaSignalsCount = safeNum(rawData?._alpha_signals_count, 0);
+  const strongSignalsCount = safeNum(rawData?._strong_signals_count, 0);
   if (expectedValue !== null && expectedValue > 0 && strongSignalsCount >= 3) {
     const extraStrong = Math.min(5, strongSignalsCount - 2);
     const signalBoost = 1 + (extraStrong * 0.03);

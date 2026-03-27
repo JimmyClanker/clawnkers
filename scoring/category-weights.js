@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 import { safeNumber } from '../utils/math.js';
 /**
  * Category-Adaptive Weighting — Clawnkers Scoring Engine v2 (Phase 3)
@@ -290,10 +291,6 @@ for (const [catKey, weights] of Object.entries(CATEGORY_WEIGHTS)) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function safeNum(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
 
 /**
  * Try to resolve a raw category string against CATEGORY_MAP.

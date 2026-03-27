@@ -1,12 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * momentum.js — Round 19
  * Computes momentum direction for each scoring dimension.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 /**
  * Determine momentum direction given two values (current vs reference).
@@ -45,15 +42,15 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   const pt   = prev.tokenomics ?? {};
 
   // ── Market: 7d vs 30d price change direction ──────────────────────────────
-  const change7d  = safeN(market.price_change_pct_7d);
-  const change30d = safeN(market.price_change_pct_30d);
+  const change7d  = safeNum(market.price_change_pct_7d);
+  const change30d = safeNum(market.price_change_pct_30d);
   let marketMomentum;
   if (change7d != null && change30d != null) {
     // If recent 7d is stronger than 30d context, momentum improving
     marketMomentum = direction(change7d, change30d, 2);
   } else if (previousScanData) {
-    const prevScore = safeN(pm.price_change_pct_24h);
-    const currScore = safeN(market.price_change_pct_24h);
+    const prevScore = safeNum(pm.price_change_pct_24h);
+    const currScore = safeNum(market.price_change_pct_24h);
     marketMomentum = direction(currScore, prevScore, 1);
   } else {
     marketMomentum = change7d != null
@@ -62,13 +59,13 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   }
 
   // ── Onchain: TVL 7d vs 30d ────────────────────────────────────────────────
-  const tvl7d  = safeN(onchain.tvl_change_7d);
-  const tvl30d = safeN(onchain.tvl_change_30d);
+  const tvl7d  = safeNum(onchain.tvl_change_7d);
+  const tvl30d = safeNum(onchain.tvl_change_30d);
   let onchainMomentum;
   if (tvl7d != null && tvl30d != null) {
     onchainMomentum = direction(tvl7d, tvl30d, 3);
   } else if (previousScanData) {
-    onchainMomentum = direction(safeN(onchain.tvl_change_7d), safeN(po.tvl_change_7d), 3);
+    onchainMomentum = direction(safeNum(onchain.tvl_change_7d), safeNum(po.tvl_change_7d), 3);
   } else {
     onchainMomentum = tvl7d != null
       ? (tvl7d > 3 ? 'improving' : tvl7d < -3 ? 'declining' : 'stable')
@@ -76,8 +73,8 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   }
 
   // ── Social: sentiment trend ───────────────────────────────────────────────
-  const currSentiment = safeN(social.sentiment_score);
-  const prevSentiment = previousScanData ? safeN(ps.sentiment_score) : null;
+  const currSentiment = safeNum(social.sentiment_score);
+  const prevSentiment = previousScanData ? safeNum(ps.sentiment_score) : null;
   let socialMomentum = direction(currSentiment, prevSentiment, 0.1);
   // Round 383 (AutoResearch): supplement social momentum with Reddit sentiment_momentum
   // Reddit provides a within-week acceleration/deceleration signal not captured by Exa sentiment
@@ -94,35 +91,35 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   if (commitTrend === 'accelerating') devMomentum = 'improving';
   else if (commitTrend === 'decelerating' || commitTrend === 'inactive') devMomentum = 'declining';
   else if (previousScanData) {
-    devMomentum = direction(safeN(github.commits_30d), safeN(pg.commits_30d), 2);
+    devMomentum = direction(safeNum(github.commits_30d), safeNum(pg.commits_30d), 2);
   } else {
     devMomentum = 'stable';
   }
 
   // ── Tokenomics: circulating supply trend (more circulating = healthier) ───
-  const currCirc = safeN(tokenomics.pct_circulating);
-  const prevCirc = previousScanData ? safeN(pt.pct_circulating) : null;
+  const currCirc = safeNum(tokenomics.pct_circulating);
+  const prevCirc = previousScanData ? safeNum(pt.pct_circulating) : null;
   const tokenomicsMomentum = direction(currCirc, prevCirc, 1);
 
   // ── Round 19: DEX liquidity trend ────────────────────────────────────────
   const dex = rawData.dex ?? {};
   const pd  = (prev.dex ?? {});
-  const currDexLiq = safeN(dex.dex_liquidity_usd);
-  const prevDexLiq = previousScanData ? safeN(pd.dex_liquidity_usd) : null;
+  const currDexLiq = safeNum(dex.dex_liquidity_usd);
+  const prevDexLiq = previousScanData ? safeNum(pd.dex_liquidity_usd) : null;
   // Also use 24h price change direction from DEX as signal when no prev scan
   let dexMomentum;
   if (currDexLiq != null && prevDexLiq != null) {
     dexMomentum = direction(currDexLiq, prevDexLiq, currDexLiq * 0.05); // 5% threshold
   } else {
-    const dexChange24h = safeN(dex.dex_price_change_h24);
+    const dexChange24h = safeNum(dex.dex_price_change_h24);
     dexMomentum = dexChange24h != null
       ? (dexChange24h > 2 ? 'improving' : dexChange24h < -2 ? 'declining' : 'stable')
       : 'stable';
   }
 
   // ── Round 61: Social velocity — compare current mentions to expected baseline ─
-  const currentMentions = safeN(social.filtered_mentions ?? social.mentions);
-  const prevMentions = previousScanData ? safeN(ps.filtered_mentions ?? ps.mentions) : null;
+  const currentMentions = safeNum(social.filtered_mentions ?? social.mentions);
+  const prevMentions = previousScanData ? safeNum(ps.filtered_mentions ?? ps.mentions) : null;
   let socialVelocity = null;
   if (currentMentions != null && prevMentions != null && prevMentions > 0) {
     const velocityPct = ((currentMentions - prevMentions) / prevMentions) * 100;
@@ -143,9 +140,9 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   // High volume + neutral/down price = potential accumulation (bullish divergence)
   // Low volume + up price = potential fake rally (bearish divergence)
   const m = rawData.market ?? {};
-  const mcap = safeN(m.market_cap);
-  const vol24h = safeN(m.total_volume);
-  const c24h = safeN(m.price_change_pct_24h);
+  const mcap = safeNum(m.market_cap);
+  const vol24h = safeNum(m.total_volume);
+  const c24h = safeNum(m.price_change_pct_24h);
   let priceVolDivergence = 'none';
   if (mcap > 0 && vol24h > 0 && c24h !== null) {
     const volMcapRatio = vol24h / mcap;

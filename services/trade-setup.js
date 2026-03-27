@@ -1,12 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * trade-setup.js — Round 25
  * Generates an actionable trade setup based on market data and scores.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 function round(v, decimals = 6) {
   const factor = Math.pow(10, decimals);
@@ -39,11 +36,11 @@ export function generateTradeSetup(rawData, scores) {
   const market = rawData?.market ?? {};
   const onchain = rawData?.onchain ?? {};
 
-  const price = safeN(market.current_price ?? market.price);
-  const ath = safeN(market.ath);
-  const atl = safeN(market.atl);
-  const overallScore = safeN(scores?.overall?.score, 0);
-  const priceChange7d = Math.abs(safeN(market.price_change_pct_7d, 0));
+  const price = safeNum(market.current_price ?? market.price);
+  const ath = safeNum(market.ath);
+  const atl = safeNum(market.atl);
+  const overallScore = safeNum(scores?.overall?.score, 0);
+  const priceChange7d = Math.abs(safeNum(market.price_change_pct_7d, 0));
 
   const notes = [];
 
@@ -224,7 +221,7 @@ export function generateTradeSetup(rawData, scores) {
   }
 
   // Round 236 (AutoResearch): realized_vol_90d annotation — educate user on structural volatility
-  const realizedVol90d = safeN(rawData?.market?.realized_vol_90d, null);
+  const realizedVol90d = safeNum(rawData?.market?.realized_vol_90d, null);
   if (realizedVol90d !== null) {
     const volTier = realizedVol90d > 200 ? 'extreme' : realizedVol90d > 100 ? 'high' : realizedVol90d > 50 ? 'moderate' : 'low';
     notes.push(`90-day realized volatility: ${realizedVol90d.toFixed(0)}% annualized (${volTier}) — size positions accordingly.`);

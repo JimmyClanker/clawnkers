@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * score-velocity.js — Round 52 (AutoResearch)
  * Computes the velocity (rate of change) of the overall score over time.
@@ -7,10 +8,6 @@
  * High negative velocity = deteriorating → weight AVOID verdict more
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 /**
  * Compute score velocity for a project.
@@ -46,7 +43,7 @@ export function computeScoreVelocity(db, projectName) {
       return {
         velocity: null,
         direction: 'stable',
-        current_score: rows[0] ? safeN(JSON.parse(rows[0].scores_json ?? '{}')?.overall?.score) : null,
+        current_score: rows[0] ? safeNum(JSON.parse(rows[0].scores_json ?? '{}')?.overall?.score) : null,
         prev_score: null,
         days_between: null,
         sample_size: rows.length,
@@ -57,8 +54,8 @@ export function computeScoreVelocity(db, projectName) {
     const current = rows[0];
     const previous = rows[rows.length - 1]; // Oldest of the set
 
-    const currentScore = safeN(JSON.parse(current.scores_json ?? '{}')?.overall?.score);
-    const prevScore = safeN(JSON.parse(previous.scores_json ?? '{}')?.overall?.score);
+    const currentScore = safeNum(JSON.parse(current.scores_json ?? '{}')?.overall?.score);
+    const prevScore = safeNum(JSON.parse(previous.scores_json ?? '{}')?.overall?.score);
 
     if (currentScore === null || prevScore === null) {
       return { velocity: null, direction: 'stable', current_score: currentScore, prev_score: prevScore, days_between: null, sample_size: rows.length, note: 'Score data missing in history rows.' };
@@ -81,8 +78,8 @@ export function computeScoreVelocity(db, projectName) {
       const s1 = JSON.parse(rows[1].scores_json ?? '{}');
       const daysBetween2 = Math.max(0.1, (new Date(rows[0].scanned_at) - new Date(rows[1].scanned_at)) / 86400000);
       for (const dim of DIMS) {
-        const v0 = safeN(s0[dim]?.score ?? s0[dim]);
-        const v1 = safeN(s1[dim]?.score ?? s1[dim]);
+        const v0 = safeNum(s0[dim]?.score ?? s0[dim]);
+        const v1 = safeNum(s1[dim]?.score ?? s1[dim]);
         if (v0 !== null && v1 !== null) {
           const dv = (v0 - v1) / daysBetween2;
           dimVelocity[dim] = {

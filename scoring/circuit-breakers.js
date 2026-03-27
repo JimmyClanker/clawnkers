@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 import { safeNumber } from '../utils/math.js';
 /**
  * Circuit breakers: condizioni che impongono un tetto allo score.
@@ -6,10 +7,6 @@ import { safeNumber } from '../utils/math.js';
  * Filosofia: certi rischi sono binari. Non li "pesi" — li applichi
  * come vincoli hard.
  */
-function safeN(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
 
 export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   const breakers = [];
@@ -109,7 +106,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 237 (AutoResearch nightly): Zero volume with high market cap — ghost token
   // A token with >$5M mcap and literally zero 24h volume is likely exchange-delisted or dead
-  if ('total_volume' in market && safeN(market.total_volume) === 0 && mcap > 5_000_000) {
+  if ('total_volume' in market && safeNum(market.total_volume) === 0 && mcap > 5_000_000) {
     breakers.push({
       cap: 4.0,
       reason: `Zero 24h trading volume with $${(mcap / 1e6).toFixed(1)}M market cap — ghost token or exchange-delisted`,
@@ -161,8 +158,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 236 (AutoResearch): Extreme sell dominance on DEX — 5:1+ sell ratio = active exit
   // When sellers outnumber buyers 5:1 or more, it signals an organized exit or token unlock dump
-  const buys24h = safeN(dex?.buys_24h ?? 0);
-  const sells24h = safeN(dex?.sells_24h ?? 0);
+  const buys24h = safeNum(dex?.buys_24h ?? 0);
+  const sells24h = safeNum(dex?.sells_24h ?? 0);
   if (sells24h > 0 && buys24h > 0 && sells24h / buys24h >= 5 && (buys24h + sells24h) >= 100) {
     breakers.push({
       cap: 4.5,
@@ -227,8 +224,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 127 (AutoResearch): DeFi ghost protocol — significant TVL but zero social presence
   // This is unusual and may indicate: abandoned project, bot TVL, or data collection failure
-  const socialMentions = safeN(rawData?.social?.mentions ?? rawData?.social?.filtered_mentions ?? 0);
-  const tvlForGhost = safeN(onchain.tvl ?? 0);
+  const socialMentions = safeNum(rawData?.social?.mentions ?? rawData?.social?.filtered_mentions ?? 0);
+  const tvlForGhost = safeNum(onchain.tvl ?? 0);
   if (tvlForGhost > 100_000_000 && socialMentions === 0 && !rawData?.social?.error) {
     breakers.push({
       cap: 6.5,
@@ -239,10 +236,10 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 132 (AutoResearch): Persistent revenue decline for DeFi protocols
   // If revenue_7d and revenue_30d show consistent negative trend, the protocol is losing value capture
-  const rev7d = safeN(onchain.revenue_7d ?? 0);
-  const rev30d = safeN(onchain.revenue_30d ?? 0);
-  const rev7dPrev = safeN(onchain.revenue_7d_prev ?? 0);
-  const fees7dR132 = safeN(onchain.fees_7d ?? 0); // renamed to avoid duplicate with later declaration
+  const rev7d = safeNum(onchain.revenue_7d ?? 0);
+  const rev30d = safeNum(onchain.revenue_30d ?? 0);
+  const rev7dPrev = safeNum(onchain.revenue_7d_prev ?? 0);
+  const fees7dR132 = safeNum(onchain.fees_7d ?? 0); // renamed to avoid duplicate with later declaration
   if (fees7dR132 > 100_000 && rev7d > 0 && rev7dPrev > 0) {
     const revenueDeclinePct = ((rev7d - rev7dPrev) / rev7dPrev) * 100;
     // If 7d revenue is down > 50% vs prior 7d and monthly revenue also in decline
@@ -258,8 +255,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 127 (AutoResearch): Negative token velocity — market cap >> 100x volume
   // Token velocity < 0.01% = nearly untradeable despite market cap
-  const mcapForVelocity = safeN(market.market_cap ?? 0);
-  const volForVelocity = safeN(market.total_volume ?? 0);
+  const mcapForVelocity = safeNum(market.market_cap ?? 0);
+  const volForVelocity = safeNum(market.total_volume ?? 0);
   if (mcapForVelocity > 10_000_000 && volForVelocity > 0) {
     const velocityPct = (volForVelocity / mcapForVelocity) * 100;
     if (velocityPct < 0.01) {
@@ -285,9 +282,9 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round R12 (AutoResearch batch): Suspicious volume — 24h vol < 0.05% of market cap for established coin
   // Very low token velocity for a mid-cap coin = illiquid, manipulation risk, hard to exit
-  const mcapR12 = safeN(market.market_cap ?? 0);
-  const vol24hR12 = safeN(market.total_volume ?? 0);
-  const vol7dAvgR12 = safeN(market.volume_7d_avg ?? 0);
+  const mcapR12 = safeNum(market.market_cap ?? 0);
+  const vol24hR12 = safeNum(market.total_volume ?? 0);
+  const vol7dAvgR12 = safeNum(market.volume_7d_avg ?? 0);
   if (mcapR12 > 50_000_000 && vol24hR12 > 0 && vol7dAvgR12 > 0) {
     // If today's volume is suspiciously 10x+ above 7d average = possible wash trading
     const spikeRatio = vol24hR12 / vol7dAvgR12;
@@ -302,8 +299,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round R12: Zero liquidity + high score guard
   // A project with no DEX liquidity cannot be traded and should never score above 7.0
-  const dexLiqR12 = safeN(dex.dex_liquidity_usd ?? dex.liquidity ?? dex.total_liquidity ?? 0);
-  const mcapR12b = safeN(market.market_cap ?? 0);
+  const dexLiqR12 = safeNum(dex.dex_liquidity_usd ?? dex.liquidity ?? dex.total_liquidity ?? 0);
+  const mcapR12b = safeNum(market.market_cap ?? 0);
   if (dexLiqR12 === 0 && mcapR12b > 0 && mcapR12b < 10_000_000 && !onchain.tvl) {
     breakers.push({
       cap: 6.5,
@@ -318,11 +315,11 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 155 (AutoResearch): Negative real yield circuit breaker
   // When estimated weekly token emissions are 5x+ protocol fees, the yield model is Ponzi
-  const inflationForCB = safeN(market.market_cap ?? 0) > 0
-    ? safeN(rawData?.tokenomics?.inflation_rate ?? 0)
+  const inflationForCB = safeNum(market.market_cap ?? 0) > 0
+    ? safeNum(rawData?.tokenomics?.inflation_rate ?? 0)
     : 0;
-  const fees7dCB = safeN(onchain.fees_7d ?? 0);
-  const mcapForCB = safeN(market.market_cap ?? 0);
+  const fees7dCB = safeNum(onchain.fees_7d ?? 0);
+  const mcapForCB = safeNum(market.market_cap ?? 0);
   if (inflationForCB > 0 && fees7dCB > 0 && mcapForCB > 0) {
     const weeklyEmissionValue = (inflationForCB / 100) * mcapForCB / 52;
     if (weeklyEmissionValue > fees7dCB * 10) {
@@ -337,10 +334,10 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // Round 233 (AutoResearch nightly): Social credibility collapse breaker
   // High sentiment_credibility_score (>60) acts as a positive signal, but very low (<15)
   // with many mentions indicates coordinated noise — cap to prevent false signals driving scores up
-  // Round 357 (AutoResearch): safeN(null, null) returns 0 not null — use direct field check instead
+  // Round 357 (AutoResearch): safeNum(null, null) returns 0 not null — use direct field check instead
   const _rawSocialCredibility = rawData?.social?.sentiment_credibility_score;
-  const socialCredibility = _rawSocialCredibility != null ? safeN(_rawSocialCredibility) : null;
-  const socialMentionsForCB = safeN(rawData?.social?.filtered_mentions ?? rawData?.social?.mentions ?? 0);
+  const socialCredibility = _rawSocialCredibility != null ? safeNum(_rawSocialCredibility) : null;
+  const socialMentionsForCB = safeNum(rawData?.social?.filtered_mentions ?? rawData?.social?.mentions ?? 0);
   if (socialCredibility !== null && socialCredibility < 15 && socialMentionsForCB >= 10) {
     breakers.push({
       cap: 6.5,
@@ -351,8 +348,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 212 (AutoResearch): Revenue collapse warning — TVL > $50M with zero fees for >7d
   // Protocols that have significant TVL but generate zero fees may have broken incentives
-  const tvlR212 = safeN(onchain.tvl ?? 0);
-  const fees7dR212 = safeN(onchain.fees_7d ?? 0);
+  const tvlR212 = safeNum(onchain.tvl ?? 0);
+  const fees7dR212 = safeNum(onchain.fees_7d ?? 0);
   const categoryR212 = String(onchain.category || '').toLowerCase();
   const isDeFiR212 = /defi|lending|dex|yield|liquidity|bridge|derivatives/.test(categoryR212);
   if (isDeFiR212 && tvlR212 > 50_000_000 && fees7dR212 === 0) {
@@ -365,8 +362,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 234 (AutoResearch): Persistent sell pressure circuit breaker
   // When DEX sellers consistently outnumber buyers 2:1+ with sufficient volume, cap score
-  const buys234 = safeN(dex?.buys_24h ?? 0);
-  const sells234 = safeN(dex?.sells_24h ?? 0);
+  const buys234 = safeNum(dex?.buys_24h ?? 0);
+  const sells234 = safeNum(dex?.sells_24h ?? 0);
   const totalTxns234 = buys234 + sells234;
   if (totalTxns234 >= 100 && sells234 > 0 && buys234 / sells234 < 0.4) {
     breakers.push({
@@ -378,8 +375,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 235 (AutoResearch): Extreme FDV overhang circuit breaker
   // Less than 5% of supply circulating with >$10M market cap = near-certain future price suppression
-  const mcapFdvCB = safeN(market.market_cap ?? 0);
-  const fdvCB = safeN(market.fully_diluted_valuation ?? 0);
+  const mcapFdvCB = safeNum(market.market_cap ?? 0);
+  const fdvCB = safeNum(market.fully_diluted_valuation ?? 0);
   if (mcapFdvCB > 10_000_000 && fdvCB > 0 && mcapFdvCB / fdvCB < 0.05) {
     breakers.push({
       cap: 5.0,
@@ -392,7 +389,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // When multiple news articles report active hacks/exploits, cap score aggressively
   // Round 334 (AutoResearch): only apply to non-meme, non-stablecoin, non-wrapped tokens
   // Meme/stable/wrapped tokens can have high hackMentions from ecosystem news without being directly hacked
-  const hackMentions = safeN((rawData?.social?.hack_exploit_mentions ?? 0) + (rawData?.social?.exploit_mentions ?? 0));
+  const hackMentions = safeNum((rawData?.social?.hack_exploit_mentions ?? 0) + (rawData?.social?.exploit_mentions ?? 0));
   const _hackSymbol = (market.symbol || '').toUpperCase();
   const _isPassiveHackTarget = /^(USDT|USDC|DAI|WBTC|WETH|WBNB|WRAPPED|STAKED)/.test(_hackSymbol) ||
     String(rawData?.onchain?.category || '').toLowerCase().includes('meme');
@@ -414,9 +411,9 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 238 (AutoResearch): Revenue collapse breaker — 7d fees < 10% of 30d weekly avg
   // Sudden fee collapse signals a broken protocol, liquidity exit, or exploit aftermath
-  const fees7dR238 = safeN(onchain.fees_7d ?? 0);
-  const fees30dR238 = safeN(onchain.fees_30d ?? 0);
-  const tvlR238 = safeN(onchain.tvl ?? 0);
+  const fees7dR238 = safeNum(onchain.fees_7d ?? 0);
+  const fees30dR238 = safeNum(onchain.fees_30d ?? 0);
+  const tvlR238 = safeNum(onchain.tvl ?? 0);
   if (fees30dR238 > 0 && fees7dR238 > 0 && tvlR238 > 10_000_000) {
     const weeklyAvg = fees30dR238 / 4;
     if (weeklyAvg > 50_000 && fees7dR238 < weeklyAvg * 0.1) {
@@ -431,8 +428,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // Round 238b (AutoResearch): Mercenary TVL trap — TVL > 10x MCap = incentivized capital at risk
   // When TVL is massively > MCap, it often means unsustainable yield farming is holding capital
   // Round 333 (AutoResearch): raised minimum mcap to $2M — below that, TVL imbalance is noise not signal
-  const tvlR238b = safeN(onchain.tvl ?? 0);
-  const mcapR238b = safeN(market.market_cap ?? 0);
+  const tvlR238b = safeNum(onchain.tvl ?? 0);
+  const mcapR238b = safeNum(market.market_cap ?? 0);
   if (tvlR238b > 0 && mcapR238b > 2_000_000) {
     const tvlMcapRatio = tvlR238b / mcapR238b;
     if (tvlMcapRatio > 15) {
@@ -459,7 +456,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // When both wash trading is elevated AND sell pressure exists, data is both unreliable AND bearish
   // This is a compounded risk: fake volume masking a distribution phase
   if (washRisk === 'elevated' && dex?.pressure_signal === 'sell_pressure') {
-    const ratio = safeN(dex?.buy_sell_ratio ?? 1);
+    const ratio = safeNum(dex?.buy_sell_ratio ?? 1);
     breakers.push({
       cap: 6.0,
       reason: `Wash trading (elevated) + sell pressure (ratio ${ratio.toFixed(2)}) compound risk — volume data unreliable and sellers dominant`,
@@ -471,7 +468,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // Tokens that are >90% below ATH (set over 1 year ago) have historically poor recovery rates
   // unless accompanied by a new catalyst — prevents false BUY signals on dead cat bounces
   const daysSinceAthCB = rawData?.market?.days_since_ath;
-  const athDistCB = safeN(rawData?.market?.ath_distance_pct ?? 0);
+  const athDistCB = safeNum(rawData?.market?.ath_distance_pct ?? 0);
   if (daysSinceAthCB != null && daysSinceAthCB > 365 && athDistCB < -90) {
     breakers.push({
       cap: 5.5,
@@ -483,7 +480,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // Round 381 (AutoResearch): market_cap_to_volume_ratio extreme premium check
   // Tokens with MCap/Volume > 1000 have almost no organic trading — easy to manipulate prices
   const mcapVolRatio381 = rawData?.market?.market_cap_to_volume_ratio;
-  const mcap381 = safeN(rawData?.market?.market_cap ?? 0);
+  const mcap381 = safeNum(rawData?.market?.market_cap ?? 0);
   if (mcapVolRatio381 != null && mcapVolRatio381 > 1000 && mcap381 > 1_000_000) {
     breakers.push({
       cap: 6.0,
@@ -505,7 +502,7 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 383 (AutoResearch): High sell tax circuit breaker
   // A sell tax > 20% makes exit impossible without massive loss — effectively a soft honeypot.
-  const sellTaxCB = safeN(rawData?.contract?.sell_tax ?? 0);
+  const sellTaxCB = safeNum(rawData?.contract?.sell_tax ?? 0);
   if (sellTaxCB > 20) {
     breakers.push({
       cap: 2.5,
@@ -522,8 +519,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 383 (AutoResearch): Hyperinflationary supply + low market cap = economic spiral
   // Tokens with >200%/yr inflation and <$10M mcap typically see supply outrun demand → collapse
-  const inflationCB = safeN(rawData?.tokenomics?.inflation_rate ?? 0);
-  const mcapForInflation = safeN(rawData?.market?.market_cap ?? 0);
+  const inflationCB = safeNum(rawData?.tokenomics?.inflation_rate ?? 0);
+  const mcapForInflation = safeNum(rawData?.market?.market_cap ?? 0);
   if (inflationCB > 200 && mcapForInflation < 10_000_000) {
     breakers.push({
       cap: 4.0,

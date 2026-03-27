@@ -1,13 +1,10 @@
+import { safeNum } from '../utils/math.js';
 /**
  * supply-unlock-detector.js — Round 234 (AutoResearch)
  * Analyzes tokenomics data to detect upcoming supply unlock risk.
  * Works with existing collector data — no new API calls needed.
  */
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 /**
  * Analyze supply unlock pressure from existing tokenomics data.
@@ -25,12 +22,12 @@ function safeN(v, fb = 0) {
 export function analyzeSupplyUnlockRisk(tokenomics = {}, market = {}) {
   const notes = [];
 
-  const pctCirculating = safeN(tokenomics.pct_circulating ?? null, null);
-  const unlockOverhang = safeN(tokenomics.unlock_overhang_pct ?? null, null);
+  const pctCirculating = safeNum(tokenomics.pct_circulating ?? null, null);
+  const unlockOverhang = safeNum(tokenomics.unlock_overhang_pct ?? null, null);
   const dilutionRisk = tokenomics.dilution_risk ?? null;
-  const inflationRate = safeN(tokenomics.inflation_rate ?? null, null);
-  const mcap = safeN(market.market_cap ?? 0);
-  const fdv = safeN(market.fully_diluted_valuation ?? 0);
+  const inflationRate = safeNum(tokenomics.inflation_rate ?? null, null);
+  const mcap = safeNum(market.market_cap ?? 0);
+  const fdv = safeNum(market.fully_diluted_valuation ?? 0);
 
   // Case 1: No tokenomics data
   if (pctCirculating === null && fdv === 0) {

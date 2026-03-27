@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * volatility-guard.js — Round 35 (AutoResearch)
  * Detects when market volatility is so extreme that scores and trade setups
@@ -7,10 +8,6 @@
  * Uses only data already present in rawData — no extra API calls.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 const VOLATILITY_THRESHOLDS = {
   EXTREME: 40,   // >40% 24h move
@@ -34,9 +31,9 @@ export function assessVolatility(rawData = {}) {
   const market = rawData.market ?? {};
   const dex    = rawData.dex   ?? {};
 
-  const change24h = safeN(market.price_change_pct_24h);
-  const change7d  = safeN(market.price_change_pct_7d);
-  const dexChange24h = safeN(dex.dex_price_change_h24);
+  const change24h = safeNum(market.price_change_pct_24h);
+  const change7d  = safeNum(market.price_change_pct_7d);
+  const dexChange24h = safeNum(dex.dex_price_change_h24);
 
   // Use absolute values for regime detection
   const abs24h = change24h != null ? Math.abs(change24h) : (dexChange24h != null ? Math.abs(dexChange24h) : null);
@@ -66,7 +63,7 @@ export function assessVolatility(rawData = {}) {
 
   // Round 156 (AutoResearch): 90-day realized annualized volatility — structural context
   // Helps distinguish high-vol regime that's normal for this asset vs truly unusual
-  const realizedVol90d = safeN(rawData?.market?.realized_vol_90d);
+  const realizedVol90d = safeNum(rawData?.market?.realized_vol_90d);
   if (realizedVol90d !== null && abs24h !== null) {
     // If realized vol is very low (<30%) but 24h move is high → unusual event, increase caution
     if (realizedVol90d < 30 && abs24h > 10 && regime === 'elevated') {
@@ -78,7 +75,7 @@ export function assessVolatility(rawData = {}) {
   }
 
   // Buy/sell imbalance amplifies regime
-  const buySellRatio = safeN(dex.buy_sell_ratio);
+  const buySellRatio = safeNum(dex.buy_sell_ratio);
   if (buySellRatio != null && (buySellRatio > 1.8 || buySellRatio < 0.5)) {
     if (regime === 'calm') regime = 'elevated';
     notes.push(`Extreme DEX buy/sell imbalance (ratio: ${buySellRatio}) indicates panic or FOMO conditions.`);
@@ -128,8 +125,8 @@ export function assessVolatility(rawData = {}) {
   // Round 381 (AutoResearch): ATH recency context for volatility interpretation
   // If token is near ATH, elevated volatility is "good" volatility (price discovery)
   // If token is far from ATH (>80% below), elevated volatility likely means continued decline
-  const daysSinceAth = safeN(rawData?.market?.days_since_ath);
-  const athDistPct = safeN(rawData?.market?.ath_distance_pct);
+  const daysSinceAth = safeNum(rawData?.market?.days_since_ath);
+  const athDistPct = safeNum(rawData?.market?.ath_distance_pct);
   let athVolatilityContext = null;
   if (daysSinceAth !== null && regime !== 'calm') {
     if (daysSinceAth <= 30) {

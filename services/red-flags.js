@@ -1,11 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * red-flags.js — Round 14
  * Detects qualitative red flags from raw scanner data and scores.
  */
 
-function safeN(v, fb = 0) {
-  return Number.isFinite(Number(v)) ? Number(v) : fb;
-}
 
 /**
  * Detect red flags in a project scan.
@@ -36,7 +34,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 2. Market cap < $1M
-  const mcap = safeN(market.market_cap);
+  const mcap = safeNum(market.market_cap);
   if (mcap > 0 && mcap < 1_000_000) {
     flags.push({
       flag: 'low_market_cap',
@@ -58,7 +56,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // 4. Whale concentration > 30%
   const holders = rawData.holders ?? rawData.holderData ?? {};
   // Round 345 (AutoResearch): include collector field name in fallback chain
-  const whaleConcentration = safeN(holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_holder_concentration_pct);
+  const whaleConcentration = safeNum(holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_holder_concentration_pct);
   if (whaleConcentration > 30) {
     flags.push({
       flag: 'whale_concentration',
@@ -78,10 +76,10 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 6. Declining TVL > 30%
-  // Round 356 (AutoResearch): also check null — safeN(undefined) = 0 which would not trigger,
+  // Round 356 (AutoResearch): also check null — safeNum(undefined) = 0 which would not trigger,
   // but we only want to check if the field was actually provided
-  const tvlChange7d  = onchain.tvl_change_7d  != null ? safeN(onchain.tvl_change_7d)  : 0;
-  const tvlChange30d = onchain.tvl_change_30d != null ? safeN(onchain.tvl_change_30d) : 0;
+  const tvlChange7d  = onchain.tvl_change_7d  != null ? safeNum(onchain.tvl_change_7d)  : 0;
+  const tvlChange30d = onchain.tvl_change_30d != null ? safeNum(onchain.tvl_change_30d) : 0;
   const hasTvlChangeData = onchain.tvl_change_7d != null || onchain.tvl_change_30d != null;
   if (hasTvlChangeData && (tvlChange7d < -30 || tvlChange30d < -30)) {
     const worst = Math.min(tvlChange7d, tvlChange30d);
@@ -93,7 +91,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 7. Volume < $50K
-  const volume = safeN(market.total_volume);
+  const volume = safeNum(market.total_volume);
   if (volume > 0 && volume < 50_000) {
     flags.push({
       flag: 'low_volume',
@@ -103,9 +101,9 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 8. All social sentiment bearish
-  const bullish = safeN(social.sentiment_counts?.bullish);
-  const bearish  = safeN(social.sentiment_counts?.bearish);
-  const sentScore = safeN(social.sentiment_score, NaN);
+  const bullish = safeNum(social.sentiment_counts?.bullish);
+  const bearish  = safeNum(social.sentiment_counts?.bearish);
+  const sentScore = safeNum(social.sentiment_score, NaN);
   const allBearish = (bullish === 0 && bearish > 0) ||
     (Number.isFinite(sentScore) && sentScore < -0.5);
   if (allBearish) {
@@ -126,7 +124,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 10. FDV/MCap > 10x
-  const fdv = safeN(market.fully_diluted_valuation ?? market.fdv);
+  const fdv = safeNum(market.fully_diluted_valuation ?? market.fdv);
   if (fdv > 0 && mcap > 0) {
     const fdvRatio = fdv / mcap;
     if (fdvRatio > 10) {
@@ -148,7 +146,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 12. Round 5: Severe price decline > 50% in 30d
-  const change30d = safeN(market.price_change_pct_30d);
+  const change30d = safeNum(market.price_change_pct_30d);
   if (change30d < -50) {
     flags.push({
       flag: 'severe_price_decline',
@@ -160,7 +158,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // 13. Round 5: Stablecoin depeg signal (price < $0.90 for named stablecoins)
   const tokenName = String(market.name || market.symbol || '').toLowerCase();
   const isStablecoin = /usd|dai|usdt|usdc|frax|tusd|lusd|susd|busd|crvusd|usde/i.test(tokenName);
-  const price = safeN(market.current_price ?? market.price);
+  const price = safeNum(market.current_price ?? market.price);
   if (isStablecoin && price > 0 && (price < 0.96 || price > 1.04)) {
     flags.push({
       flag: 'stablecoin_depeg',
@@ -180,7 +178,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 15. Round 4: Extremely low DEX liquidity (< $50K)
-  const dexLiquidity = safeN(dex.dex_liquidity_usd ?? 0);
+  const dexLiquidity = safeNum(dex.dex_liquidity_usd ?? 0);
   if (dexLiquidity > 0 && dexLiquidity < 50_000) {
     flags.push({
       flag: 'very_low_dex_liquidity',
@@ -190,7 +188,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 16. Round 4: Extremely high top-pair liquidity concentration (>90%)
-  const topPairLiqPct = safeN(dex.top_pair_liquidity_pct ?? 0);
+  const topPairLiqPct = safeNum(dex.top_pair_liquidity_pct ?? 0);
   if (topPairLiqPct > 90 && dexLiquidity > 100_000) {
     flags.push({
       flag: 'single_pool_liquidity_concentration',
@@ -201,7 +199,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // 17. Round 18: High team allocation — potential insider sell pressure
   const vestingInfo = tokenomics.vesting_info;
-  const teamAllocationPct = safeN(vestingInfo?.team_allocation_pct ?? 0);
+  const teamAllocationPct = safeNum(vestingInfo?.team_allocation_pct ?? 0);
   if (teamAllocationPct > 25) {
     flags.push({
       flag: 'high_team_allocation',
@@ -213,7 +211,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // Round 220 (AutoResearch): use unlock_risk_label from tokenomics collector for quick composite check
   // This catches critical unlock risk even when vesting_info isn't available (uses pct_circulating + overhang)
   const unlockRiskLabel = tokenomics.unlock_risk_label;
-  const overhangPct = safeN(tokenomics.unlock_overhang_pct ?? 0);
+  const overhangPct = safeNum(tokenomics.unlock_overhang_pct ?? 0);
   if (unlockRiskLabel === 'critical' && teamAllocationPct <= 25) {
     // Only fire if the per-field check above didn't already flag it
     flags.push({
@@ -225,7 +223,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // 18. Round 24: Social-sourced exploit mentions
   // Round 238 (AutoResearch): also check new hack_exploit_mentions field for richer coverage
-  const exploitMentions = safeN((social.exploit_mentions ?? 0) + (social.hack_exploit_mentions ?? 0));
+  const exploitMentions = safeNum((social.exploit_mentions ?? 0) + (social.hack_exploit_mentions ?? 0));
   if (exploitMentions >= 2) {
     flags.push({
       flag: 'exploit_mentions_social',
@@ -235,7 +233,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 19. Round 24: Social-sourced unlock/vesting mentions (potential sell pressure)
-  const unlockMentions = safeN(social.unlock_mentions ?? 0);
+  const unlockMentions = safeNum(social.unlock_mentions ?? 0);
   if (unlockMentions >= 2) {
     flags.push({
       flag: 'token_unlock_news',
@@ -245,8 +243,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 20. Round 32: Revenue-to-fees ratio collapse — protocol not capturing value
-  const revenueToFees = safeN(rawData?.onchain?.revenue_to_fees_ratio ?? null, null);
-  if (revenueToFees !== null && revenueToFees < 0.05 && safeN(onchain.fees_7d) > 100_000) {
+  const revenueToFees = safeNum(rawData?.onchain?.revenue_to_fees_ratio ?? null, null);
+  if (revenueToFees !== null && revenueToFees < 0.05 && safeNum(onchain.fees_7d) > 100_000) {
     flags.push({
       flag: 'low_revenue_capture',
       severity: 'warning',
@@ -267,7 +265,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 22. Round 32: Declining commit count + no CI = dev quality concerns
-  if (github.commit_trend === 'decelerating' && github.has_ci === false && safeN(github.commits_30d) < 5) {
+  if (github.commit_trend === 'decelerating' && github.has_ci === false && safeNum(github.commits_30d) < 5) {
     flags.push({
       flag: 'dev_quality_concern',
       severity: 'warning',
@@ -276,7 +274,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 25. Round 42: Regulatory risk from social mentions
-  const regulatoryMentions = safeN(social.regulatory_mentions ?? 0);
+  const regulatoryMentions = safeNum(social.regulatory_mentions ?? 0);
   if (regulatoryMentions >= 2) {
     flags.push({
       flag: 'regulatory_risk_mentions',
@@ -301,7 +299,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 23. Round 32: Near-ATL risk — price within 20% of all-time low
-  const atlDistancePct = safeN(market.atl_distance_pct ?? null, null);
+  const atlDistancePct = safeNum(market.atl_distance_pct ?? null, null);
   if (atlDistancePct !== null && atlDistancePct < 20 && atlDistancePct >= 0) {
     flags.push({
       flag: 'near_all_time_low',
@@ -311,8 +309,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 26. Round 56: Zero revenue despite significant fees — value extraction risk
-  const fees7d = safeN(onchain.fees_7d ?? 0);
-  const revenue7d = safeN(onchain.revenue_7d ?? 0);
+  const fees7d = safeNum(onchain.fees_7d ?? 0);
+  const revenue7d = safeNum(onchain.revenue_7d ?? 0);
   if (fees7d > 500_000 && revenue7d === 0) {
     flags.push({
       flag: 'zero_revenue_capture',
@@ -325,7 +323,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   if (genesisDate) {
     const ageMs = Date.now() - new Date(genesisDate).getTime();
     const ageMonths = ageMs / (1000 * 60 * 60 * 24 * 30.44);
-    const tvl = safeN(onchain.tvl ?? 0);
+    const tvl = safeNum(onchain.tvl ?? 0);
     if (ageMonths > 24 && tvl < 100_000 && tvl > 0) {
       flags.push({
         flag: 'zombie_protocol',
@@ -338,8 +336,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // Round 128 (AutoResearch): Suspicious volume spike — 24h vol > 5x typical (7d avg)
   // Sudden volume spikes without corresponding price context = possible wash trading or exit pump
   // Round 347 (AutoResearch): added $500K minimum — small absolute spikes are noise not signal
-  const vol24h = safeN(market.total_volume ?? 0);
-  const vol7dAvg = safeN(market.volume_7d_avg ?? 0);
+  const vol24h = safeNum(market.total_volume ?? 0);
+  const vol7dAvg = safeNum(market.volume_7d_avg ?? 0);
   if (vol7dAvg > 0 && vol24h > 500_000 && vol24h > vol7dAvg * 5) {
     flags.push({
       flag: 'suspicious_volume_spike',
@@ -350,9 +348,9 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 143 (AutoResearch): Price pump without fundamental backing
   // +300% in 30d with no TVL or revenue growth = likely unsustainable pump
-  const change30d_rf = safeN(market.price_change_pct_30d ?? 0);
-  const tvl_rf = safeN(onchain.tvl ?? 0);
-  const fees7d_rf = safeN(onchain.fees_7d ?? 0);
+  const change30d_rf = safeNum(market.price_change_pct_30d ?? 0);
+  const tvl_rf = safeNum(onchain.tvl ?? 0);
+  const fees7d_rf = safeNum(onchain.fees_7d ?? 0);
   if (change30d_rf > 300) {
     const hasOnchainBacking = tvl_rf > 1_000_000 || fees7d_rf > 50_000;
     if (!hasOnchainBacking) {
@@ -366,8 +364,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 133 (AutoResearch): Staking APY divergence — advertised vs actual APY mismatch
   // Large divergence signals unsustainable yield farming (Ponzi dynamics)
-  const advertisedApy = safeN(onchain.advertised_staking_apy ?? onchain.max_apy ?? 0);
-  const actualApy = safeN(onchain.realized_staking_apy ?? onchain.current_apy ?? 0);
+  const advertisedApy = safeNum(onchain.advertised_staking_apy ?? onchain.max_apy ?? 0);
+  const actualApy = safeNum(onchain.realized_staking_apy ?? onchain.current_apy ?? 0);
   if (advertisedApy > 0 && actualApy > 0 && advertisedApy > 50) {
     const apyDivergencePct = ((advertisedApy - actualApy) / advertisedApy) * 100;
     if (apyDivergencePct > 70) {
@@ -381,7 +379,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 128 (AutoResearch): Team/treasury wallet unusual activity
   // Sudden large team wallet movements = insider selling risk
-  const teamWalletActivity = safeN(market.team_wallet_activity_usd ?? 0);
+  const teamWalletActivity = safeNum(market.team_wallet_activity_usd ?? 0);
   if (teamWalletActivity > 1_000_000) {
     flags.push({
       flag: 'team_wallet_spike',
@@ -393,8 +391,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // Round 237 (AutoResearch nightly): Falling social velocity — news declining AND bearish sentiment
   // Combination of low recent news + bearish tone = community losing interest while bears dominate
   const newsMomentum = social.news_momentum;
-  const socialSentScore = safeN(social.sentiment_score ?? 0);
-  const filteredMentions = safeN(social.filtered_mentions ?? social.mentions ?? 0);
+  const socialSentScore = safeNum(social.sentiment_score ?? 0);
+  const filteredMentions = safeNum(social.filtered_mentions ?? social.mentions ?? 0);
   if (newsMomentum === 'declining' && socialSentScore < -0.2 && filteredMentions > 0) {
     flags.push({
       flag: 'falling_social_velocity',
@@ -405,7 +403,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 237b (AutoResearch nightly): competitor_content_ratio — high ratio means project only
   // appears as a competitor context item, not as the primary subject of coverage
-  const competitorContentRatio = safeN(social.competitor_content_ratio ?? null, null);
+  const competitorContentRatio = safeNum(social.competitor_content_ratio ?? null, null);
   if (competitorContentRatio !== null && competitorContentRatio > 0.6 && filteredMentions >= 5) {
     flags.push({
       flag: 'secondary_coverage_only',
@@ -417,7 +415,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // 28. Round 1 (AutoResearch batch): No social mentions at all — ghost project
   // Round 340 (AutoResearch): only fire if we have evidence the social search ran (has sentiment or narratives)
   // Prevents false positive when social collector never ran or returned no data object at all
-  const mentions = safeN(social.mentions ?? social.filtered_mentions ?? 0);
+  const mentions = safeNum(social.mentions ?? social.filtered_mentions ?? 0);
   const socialSearchRan = social.sentiment_score != null || Array.isArray(social.key_narratives) || social.bot_filtered_count != null;
   if (mentions === 0 && !social.error && socialSearchRan) {
     flags.push({
@@ -428,7 +426,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 29. Round 9 (AutoResearch batch): Very high inflation (>100% annualized)
-  const inflationRate = safeN(tokenomics.inflation_rate ?? 0);
+  const inflationRate = safeNum(tokenomics.inflation_rate ?? 0);
   if (inflationRate > 100) {
     flags.push({
       flag: 'hyperinflationary',
@@ -444,21 +442,21 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 30. Round 19 (AutoResearch batch): Very low exchange count for established project
-  const exchangeCount = safeN(market.exchange_count ?? 0);
+  const exchangeCount = safeNum(market.exchange_count ?? 0);
   const ageMs2 = genesisDate ? Date.now() - new Date(genesisDate).getTime() : 0;
   const ageMonths2 = ageMs2 / (1000 * 60 * 60 * 24 * 30.44);
-  if (exchangeCount > 0 && exchangeCount <= 2 && ageMonths2 > 12 && safeN(market.market_cap) > 5_000_000) {
+  if (exchangeCount > 0 && exchangeCount <= 2 && ageMonths2 > 12 && safeNum(market.market_cap) > 5_000_000) {
     flags.push({
       flag: 'very_low_exchange_count',
       severity: 'warning',
-      detail: `Only listed on ${exchangeCount} exchange(s) despite $${(safeN(market.market_cap) / 1e6).toFixed(1)}M market cap and ${ageMonths2.toFixed(0)} months age — liquidity fragility risk.`,
+      detail: `Only listed on ${exchangeCount} exchange(s) despite $${(safeNum(market.market_cap) / 1e6).toFixed(1)}M market cap and ${ageMonths2.toFixed(0)} months age — liquidity fragility risk.`,
     });
   }
 
   // ── Price-based red flags (migrated from price-alerts.js) ──
 
-  const c1h = safeN(market.price_change_pct_1h, null);
-  const atl = safeN(market.atl, null);
+  const c1h = safeNum(market.price_change_pct_1h, null);
+  const atl = safeNum(market.atl, null);
 
   // 31. Flash crash: 1h < -15%
   if (c1h !== null && c1h <= -15) {
@@ -480,7 +478,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 23 (AutoResearch nightly): Score anomaly — wildly uneven dimension scores signal fragility
   const scoreAnomaly = scores?.overall?.score_anomaly;
-  const dimStddev = safeN(scores?.overall?.dim_stddev ?? null, null);
+  const dimStddev = safeNum(scores?.overall?.dim_stddev ?? null, null);
   if (scoreAnomaly === 'high_variance' && dimStddev !== null) {
     flags.push({
       flag: 'uneven_dimension_scores',
@@ -490,7 +488,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // Round 7 (AutoResearch nightly): Single-chain TVL dominance — concentration risk for multi-chain protocols
-  const chainTvlDominance = safeN(onchain.chain_tvl_dominance_pct ?? null, null);
+  const chainTvlDominance = safeNum(onchain.chain_tvl_dominance_pct ?? null, null);
   const chainCount = Array.isArray(onchain.chains) ? onchain.chains.length : 0;
   if (chainTvlDominance !== null && chainCount >= 3 && chainTvlDominance > 85) {
     flags.push({
@@ -501,8 +499,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // Round 7 (AutoResearch nightly): Low revenue efficiency signal for established protocols
-  const revenueEfficiency = safeN(onchain.revenue_efficiency ?? null, null);
-  const tvlForEff = safeN(onchain.tvl ?? 0);
+  const revenueEfficiency = safeNum(onchain.revenue_efficiency ?? null, null);
+  const tvlForEff = safeNum(onchain.tvl ?? 0);
   if (revenueEfficiency !== null && tvlForEff > 10_000_000 && revenueEfficiency < 1) {
     flags.push({
       flag: 'very_low_revenue_efficiency',
@@ -513,8 +511,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 151 (AutoResearch): Zombie token — established market cap but functionally untradeable DEX presence
   // A token with >$5M mcap and zero DEX liquidity after 12+ months = possible exchange-only ghost token
-  const dexLiquidityForZombie = safeN(dex.dex_liquidity_usd ?? 0);
-  const mcapForZombie = safeN(market.market_cap ?? 0);
+  const dexLiquidityForZombie = safeNum(dex.dex_liquidity_usd ?? 0);
+  const mcapForZombie = safeNum(market.market_cap ?? 0);
   if (dexLiquidityForZombie === 0 && mcapForZombie > 5_000_000 && genesisDate) {
     const ageMonthsZ = (Date.now() - new Date(genesisDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44);
     if (ageMonthsZ > 12) {
@@ -528,9 +526,9 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 152 (AutoResearch): Negative real yield — emissions higher than fee revenue (Ponzi subsidy)
   // Net token inflation exceeds protocol revenue → yield is artificial, not sustainable
-  const inflationForRY = safeN(tokenomics.inflation_rate ?? 0);
-  const fees7dForRY = safeN(onchain.fees_7d ?? 0);
-  const mcapForRY = safeN(market.market_cap ?? 0);
+  const inflationForRY = safeNum(tokenomics.inflation_rate ?? 0);
+  const fees7dForRY = safeNum(onchain.fees_7d ?? 0);
+  const mcapForRY = safeNum(market.market_cap ?? 0);
   if (inflationForRY > 0 && fees7dForRY > 0 && mcapForRY > 0) {
     // Estimate weekly emission value: annual inflation% * mcap / 52 weeks
     const weeklyEmissionValue = (inflationForRY / 100) * mcapForRY / 52;
@@ -546,7 +544,7 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   // Round 232 (AutoResearch nightly): Old ATH stagnation — token hasn't recovered in 2+ years
   // Indicates structural demand failure; market has forgotten about this project
   const athRecency = market.ath_recency;
-  const c200d = safeN(market.price_change_pct_200d ?? null, null);
+  const c200d = safeNum(market.price_change_pct_200d ?? null, null);
   if (athRecency === 'old_ath' && c200d !== null && c200d < -30) {
     flags.push({
       flag: 'old_ath_stagnation',
@@ -557,19 +555,19 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 233b (AutoResearch nightly): Very low protocol efficiency for established DeFi
   // A protocol with >$50M TVL and efficiency score <10 is barely extracting value from its capital
-  const protocolEfficiency = safeN(onchain.protocol_efficiency_score ?? null, null);
-  if (protocolEfficiency !== null && protocolEfficiency < 10 && safeN(onchain.tvl ?? 0) > 50_000_000) {
+  const protocolEfficiency = safeNum(onchain.protocol_efficiency_score ?? null, null);
+  if (protocolEfficiency !== null && protocolEfficiency < 10 && safeNum(onchain.tvl ?? 0) > 50_000_000) {
     flags.push({
       flag: 'very_low_protocol_efficiency',
       severity: 'warning',
-      detail: `Protocol efficiency score is ${protocolEfficiency}/100 despite $${(safeN(onchain.tvl) / 1e6).toFixed(0)}M TVL — token holders are poorly served by current fee/revenue structure.`,
+      detail: `Protocol efficiency score is ${protocolEfficiency}/100 despite $${(safeNum(onchain.tvl) / 1e6).toFixed(0)}M TVL — token holders are poorly served by current fee/revenue structure.`,
     });
   }
 
   // Round 233 (AutoResearch nightly): Volume-to-market-cap anomaly — extremely low velocity
   // Vol/MCap < 0.001 (0.1%) for established tokens = near-dead trading / possible liquidity trap
-  const vol24hForAnomaly = safeN(market.total_volume ?? 0);
-  const mcapForAnomaly = safeN(market.market_cap ?? 0);
+  const vol24hForAnomaly = safeNum(market.total_volume ?? 0);
+  const mcapForAnomaly = safeNum(market.market_cap ?? 0);
   if (vol24hForAnomaly > 0 && mcapForAnomaly > 10_000_000) {
     const volMcapRatio = vol24hForAnomaly / mcapForAnomaly;
     if (volMcapRatio < 0.001) {
@@ -583,9 +581,9 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 233 (AutoResearch nightly): Community score collapse — large following but zero engagement signals
   // High follower count + zero recent mentions = ghost followers / dead community
-  const communityScore = safeN(market.community_score ?? null, null);
-  const twitterFollowers = safeN(market.twitter_followers ?? 0);
-  const mentionsForCS = safeN(social.mentions ?? social.filtered_mentions ?? 0);
+  const communityScore = safeNum(market.community_score ?? null, null);
+  const twitterFollowers = safeNum(market.twitter_followers ?? 0);
+  const mentionsForCS = safeNum(social.mentions ?? social.filtered_mentions ?? 0);
   if (twitterFollowers > 100_000 && mentionsForCS === 0 && communityScore !== null && communityScore < 10) {
     flags.push({
       flag: 'ghost_community',
@@ -596,8 +594,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 236 (AutoResearch): commits_per_contributor too low = ghost contributors
   // Many contributors with very few commits = inflated team size claims
-  const commitsPerContrib = safeN(github.commits_per_contributor ?? null, null);
-  if (commitsPerContrib !== null && commitsPerContrib < 1.5 && safeN(github.contributors ?? 0) > 20) {
+  const commitsPerContrib = safeNum(github.commits_per_contributor ?? null, null);
+  if (commitsPerContrib !== null && commitsPerContrib < 1.5 && safeNum(github.contributors ?? 0) > 20) {
     flags.push({
       flag: 'ghost_contributors',
       severity: 'info',
@@ -624,8 +622,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // Round 235 (AutoResearch): Low buy/sell ratio on DEX — sellers dominating
-  const buys24h = safeN(dex?.buys_24h ?? 0);
-  const sells24h = safeN(dex?.sells_24h ?? 0);
+  const buys24h = safeNum(dex?.buys_24h ?? 0);
+  const sells24h = safeNum(dex?.sells_24h ?? 0);
   const totalTxns = buys24h + sells24h;
   if (totalTxns >= 50 && buys24h > 0) {
     const buySellRatio = buys24h / sells24h;

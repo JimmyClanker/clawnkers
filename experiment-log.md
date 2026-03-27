@@ -2744,3 +2744,109 @@ Focus: responsive layout, spacing, typography, loading states, animations, acces
 - **Files:** `utils/math.js`
 - **Tests:** 177/177 pass
 - **Result:** kept — better IntelliSense and dev UX
+
+### Round 473 — Deduplicate safeN in circuit-breakers.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** scoring/circuit-breakers.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 474 — Deduplicate safeN in category-weights.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** scoring/category-weights.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 475 — Deduplicate safeN in alpha-signals.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/alpha-signals.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 476 — Deduplicate safeN in change-detector.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/change-detector.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 477 — Deduplicate safeN in competitor-detection.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/competitor-detection.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 478 — Deduplicate safeN in elevator-pitch.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/elevator-pitch.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 479 — Deduplicate safeN in momentum.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/momentum.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 480 — Deduplicate safeN in narrative-momentum.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/narrative-momentum.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+### Round 481 — Deduplicate safeN in red-flags.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/red-flags.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 482 — Deduplicate safeN in report-quality.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/report-quality.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 483 — Deduplicate safeN in risk-reward.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/risk-reward.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 484 — Deduplicate safeN in score-velocity.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/score-velocity.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 485 — Deduplicate safeN in supply-unlock-detector.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/supply-unlock-detector.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 486 — Deduplicate safeN in thesis-generator.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/thesis-generator.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 487 — Deduplicate safeN in trade-setup.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/trade-setup.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 488 — Deduplicate safeN in trend-reversal.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/trend-reversal.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 489 — Deduplicate safeN in volatility-guard.js
+- **Change:** Removed inline safeN, import from utils/math.js
+- **Files:** services/volatility-guard.js
+- **Tests:** 177/177 pass
+- **Result:** kept
+
+### Round 490 — Skip complex file synthesis/scoring.js
+- **Change:** N/A (file too complex for automated refactor)
+- **Result:** skipped
+

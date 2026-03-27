@@ -1,11 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * alpha-signals.js — Round 15
  * Detects positive alpha signals from raw scanner data and scores.
  */
 
-function safeN(v, fb = 0) {
-  return Number.isFinite(Number(v)) ? Number(v) : fb;
-}
 
 /**
  * Detect alpha signals in a project scan.
@@ -23,9 +21,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   const sector     = rawData.sector     ?? rawData.sector_comparison ?? {};
 
   // 1. Volume spike without price move
-  const mcap   = safeN(market.market_cap);
-  const volume = safeN(market.total_volume);
-  const change24h = safeN(market.price_change_pct_24h);
+  const mcap   = safeNum(market.market_cap);
+  const volume = safeNum(market.total_volume);
+  const change24h = safeNum(market.price_change_pct_24h);
   if (mcap > 0 && volume > 0) {
     const volRatio = volume / mcap;
     if (volRatio > 0.3 && Math.abs(change24h) < 5) {
@@ -50,8 +48,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // 2b. Dev acceleration
   const commitTrend = github.commit_trend;
   if (commitTrend === 'accelerating') {
-    const commits30d = safeN(github.commits_30d);
-    const commits30dPrev = safeN(github.commits_30d_prev);
+    const commits30d = safeNum(github.commits_30d);
+    const commits30dPrev = safeNum(github.commits_30d_prev);
     const accelPct = commits30dPrev > 0
       ? ((commits30d - commits30dPrev) / commits30dPrev) * 100
       : 0;
@@ -63,7 +61,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 3. New exchange listings (exchange_count > 5)
-  const exchangeCount = safeN(market.exchange_count ?? dex.exchange_count);
+  const exchangeCount = safeNum(market.exchange_count ?? dex.exchange_count);
   if (exchangeCount > 5) {
     signals.push({
       signal: 'multi_exchange_listing',
@@ -73,7 +71,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 4. TVL growth > 20% in 7d
-  const tvlChange7d = safeN(onchain.tvl_change_7d);
+  const tvlChange7d = safeNum(onchain.tvl_change_7d);
   if (tvlChange7d > 20) {
     signals.push({
       signal: 'tvl_growth_spike',
@@ -83,8 +81,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 5. High sentiment score with significant mentions
-  const sentimentScore = safeN(social.sentiment_score, NaN);
-  const mentions = safeN(social.filtered_mentions ?? social.mentions);
+  const sentimentScore = safeNum(social.sentiment_score, NaN);
+  const mentions = safeNum(social.filtered_mentions ?? social.mentions);
   if (Number.isFinite(sentimentScore) && sentimentScore > 0.5 && mentions >= 5) {
     signals.push({
       signal: 'strong_positive_sentiment',
@@ -94,8 +92,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 6. Improving sector position
-  const sectorRank = safeN(sector.rank ?? sector.sector_rank, NaN);
-  const sectorPrevRank = safeN(sector.prev_rank ?? sector.sector_prev_rank, NaN);
+  const sectorRank = safeNum(sector.rank ?? sector.sector_rank, NaN);
+  const sectorPrevRank = safeNum(sector.prev_rank ?? sector.sector_prev_rank, NaN);
   if (Number.isFinite(sectorRank) && Number.isFinite(sectorPrevRank) && sectorRank < sectorPrevRank) {
     const improvement = sectorPrevRank - sectorRank;
     signals.push({
@@ -115,7 +113,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 8. Round 4: Near ATH breakout (within 10% of ATH)
-  const athDistancePct = safeN(market.ath_distance_pct, NaN);
+  const athDistancePct = safeNum(market.ath_distance_pct, NaN);
   if (Number.isFinite(athDistancePct) && athDistancePct >= -10 && athDistancePct < 0) {
     signals.push({
       signal: 'near_ath_breakout',
@@ -125,8 +123,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 9. Round 4: High DEX liquidity with growing DEX pair count (expansion)
-  const dexPairCount = safeN(dex.dex_pair_count ?? 0);
-  const dexLiquidity = safeN(dex.dex_liquidity_usd ?? 0);
+  const dexPairCount = safeNum(dex.dex_pair_count ?? 0);
+  const dexLiquidity = safeNum(dex.dex_liquidity_usd ?? 0);
   if (dexPairCount >= 5 && dexLiquidity >= 500_000) {
     signals.push({
       signal: 'strong_dex_presence',
@@ -145,8 +143,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 11. Round 3: revenue-positive signal — protocol generating meaningful fees
-  const revEfficiency = safeN(onchain.revenue_efficiency ?? 0);
-  const fees7d = safeN(onchain.fees_7d ?? 0);
+  const revEfficiency = safeNum(onchain.revenue_efficiency ?? 0);
+  const fees7d = safeNum(onchain.fees_7d ?? 0);
   if (fees7d > 100_000 && revEfficiency > 50) {
     signals.push({
       signal: 'revenue_generating',
@@ -156,7 +154,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 12. Round 42: Institutional interest from social mentions
-  const institutionalMentions = safeN(social.institutional_mentions ?? 0);
+  const institutionalMentions = safeNum(social.institutional_mentions ?? 0);
   if (institutionalMentions >= 3) {
     signals.push({
       signal: 'institutional_interest',
@@ -176,8 +174,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 13. Round 31: High treasury balance signal — runway indicator
-  const treasuryBalance = safeN(onchain.treasury_balance ?? 0);
-  const marketCap = safeN(market.market_cap ?? 0);
+  const treasuryBalance = safeNum(onchain.treasury_balance ?? 0);
+  const marketCap = safeNum(market.market_cap ?? 0);
   if (treasuryBalance > 1_000_000 && marketCap > 0) {
     const treasuryPctMcap = (treasuryBalance / marketCap) * 100;
     if (treasuryPctMcap > 10) {
@@ -200,8 +198,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 15. Round 55: Governance activity — active on-chain governance = community engagement
-  const governanceProposals = safeN(onchain.governance_proposals_30d ?? 0);
-  const governanceParticipation = safeN(onchain.governance_participation_pct ?? 0);
+  const governanceProposals = safeNum(onchain.governance_proposals_30d ?? 0);
+  const governanceParticipation = safeNum(onchain.governance_participation_pct ?? 0);
   if (governanceProposals >= 3 || governanceParticipation >= 10) {
     signals.push({
       signal: 'active_governance',
@@ -211,7 +209,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 16. Round 55: Partnership or integration news from social
-  const partnershipMentions = safeN(social.partnership_mentions ?? 0);
+  const partnershipMentions = safeNum(social.partnership_mentions ?? 0);
   if (partnershipMentions >= 2) {
     signals.push({
       signal: 'partnership_news',
@@ -221,8 +219,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 17. Round 55: ATL recovery with momentum — price recovering strongly from bottom
-  const atlDist = safeN(market.atl_distance_pct, NaN);
-  const c7d = safeN(market.price_change_pct_7d, NaN);
+  const atlDist = safeNum(market.atl_distance_pct, NaN);
+  const c7d = safeNum(market.price_change_pct_7d, NaN);
   if (Number.isFinite(atlDist) && Number.isFinite(c7d) && atlDist > 20 && atlDist < 100 && c7d > 15) {
     signals.push({
       signal: 'atl_recovery_momentum',
@@ -232,8 +230,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 18. Round 68: High fees/TVL efficiency — extremely capital-efficient protocol
-  const tvlForEfficiency = safeN(onchain.tvl ?? 0);
-  const fees7dForEfficiency = safeN(onchain.fees_7d ?? 0);
+  const tvlForEfficiency = safeNum(onchain.tvl ?? 0);
+  const fees7dForEfficiency = safeNum(onchain.fees_7d ?? 0);
   if (tvlForEfficiency > 1_000_000 && fees7dForEfficiency > 0) {
     const feesPerMTvl = (fees7dForEfficiency / (tvlForEfficiency / 1_000_000));
     if (feesPerMTvl > 10_000) { // $10K+ fees per $1M TVL per week
@@ -247,7 +245,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // 19. Round 2 (AutoResearch batch): Trending on CoinGecko
   if (market.is_trending === true) {
-    const topRank = safeN(market.market_cap_rank, 0);
+    const topRank = safeNum(market.market_cap_rank, 0);
     signals.push({
       signal: 'coingecko_trending',
       strength: topRank > 0 && topRank <= 50 ? 'strong' : 'moderate',
@@ -256,8 +254,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 20. Round 3 (AutoResearch batch): Strong longer-term trend (200d positive)
-  const c200d = safeN(market.price_change_pct_200d, NaN);
-  const c1y   = safeN(market.price_change_pct_1y, NaN);
+  const c200d = safeNum(market.price_change_pct_200d, NaN);
+  const c1y   = safeNum(market.price_change_pct_1y, NaN);
   if (Number.isFinite(c200d) && c200d > 50 && Number.isFinite(c1y) && c1y > 50) {
     signals.push({
       signal: 'strong_long_term_trend',
@@ -267,8 +265,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 21. Round 4 (AutoResearch batch): High CEX volume share — institutional distribution
-  const cexVolumePct = safeN(market.cex_volume_pct, NaN);
-  if (Number.isFinite(cexVolumePct) && cexVolumePct >= 75 && safeN(market.total_volume) > 500_000) {
+  const cexVolumePct = safeNum(market.cex_volume_pct, NaN);
+  if (Number.isFinite(cexVolumePct) && cexVolumePct >= 75 && safeNum(market.total_volume) > 500_000) {
     signals.push({
       signal: 'high_cex_volume_share',
       strength: cexVolumePct >= 90 ? 'strong' : 'moderate',
@@ -277,9 +275,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // 22. Round 32 (AutoResearch): SUPPLY_SHOCK — circulating supply compressed, low FDV overhang
-  const circulatingSupply = safeN(market.circulating_supply);
-  const totalSupply = safeN(market.total_supply);
-  const fdvMcapRatio = safeN(market.fdv_mcap_ratio ?? onchain.fdv_mcap_ratio, NaN);
+  const circulatingSupply = safeNum(market.circulating_supply);
+  const totalSupply = safeNum(market.total_supply);
+  const fdvMcapRatio = safeNum(market.fdv_mcap_ratio ?? onchain.fdv_mcap_ratio, NaN);
   if (circulatingSupply > 0 && totalSupply > 0 && Number.isFinite(fdvMcapRatio)) {
     const supplyPct = (circulatingSupply / totalSupply) * 100;
     // Supply shock: low circulating % (<30%) + FDV/MCap < 2 = supply compressed
@@ -294,9 +292,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // 23. Round 33 (AutoResearch): CROSS_CHAIN_TVL_GROWTH — TVL growing on multiple chains simultaneously
   if (Array.isArray(onchain.chains) && onchain.chains.length >= 3) {
-    const growingChains = onchain.chains.filter(ch => safeN(ch.tvl_change_7d, 0) > 15);
+    const growingChains = onchain.chains.filter(ch => safeNum(ch.tvl_change_7d, 0) > 15);
     if (growingChains.length >= 2) {
-      const totalChainTvl = onchain.chains.reduce((sum, ch) => sum + safeN(ch.tvl), 0);
+      const totalChainTvl = onchain.chains.reduce((sum, ch) => sum + safeNum(ch.tvl), 0);
       signals.push({
         signal: 'cross_chain_tvl_growth',
         strength: growingChains.length >= 3 ? 'strong' : 'moderate',
@@ -307,9 +305,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // ── Price-based alpha signals (migrated from price-alerts.js) ──
 
-  const c1hPrice = safeN(market.price_change_pct_1h, NaN);
-  const c30dPrice = safeN(market.price_change_pct_30d, NaN);
-  const athPrice = safeN(market.ath, NaN);
+  const c1hPrice = safeNum(market.price_change_pct_1h, NaN);
+  const c30dPrice = safeNum(market.price_change_pct_30d, NaN);
+  const athPrice = safeNum(market.ath, NaN);
 
   // 22. Flash pump: 1h > +15% (caution: potential FOMO trap)
   if (Number.isFinite(c1hPrice) && c1hPrice >= 15) {
@@ -364,7 +362,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 13 (AutoResearch nightly): News momentum signal — accelerating news coverage
   const newsMomentum = social.news_momentum;
-  const veryRecentCount = safeN(social.very_recent_news_count ?? 0);
+  const veryRecentCount = safeNum(social.very_recent_news_count ?? 0);
   if (newsMomentum === 'accelerating' && veryRecentCount >= 3) {
     signals.push({
       signal: 'accelerating_news_coverage',
@@ -374,7 +372,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 8 (AutoResearch nightly): Revenue-to-fees ratio above 30% = strong value capture
-  const revenueToFees = safeN(rawData?.onchain?.revenue_to_fees_ratio ?? null, NaN);
+  const revenueToFees = safeNum(rawData?.onchain?.revenue_to_fees_ratio ?? null, NaN);
   if (Number.isFinite(revenueToFees) && revenueToFees >= 0.30) {
     signals.push({
       signal: 'strong_revenue_capture',
@@ -384,7 +382,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 8 (AutoResearch nightly): Liquidity health score above 70 = well-distributed DEX presence
-  const liqHealth = safeN(rawData?.dex?.liquidity_health_score ?? null, NaN);
+  const liqHealth = safeNum(rawData?.dex?.liquidity_health_score ?? null, NaN);
   if (Number.isFinite(liqHealth) && liqHealth >= 70) {
     signals.push({
       signal: 'strong_dex_liquidity_health',
@@ -395,10 +393,10 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 49 (AutoResearch): Short interest proxy signal — extreme sell pressure + high FDV overhang
   // These conditions suggest informed sellers (team, VCs) may be distributing
-  const shortFdv = safeN(market.fully_diluted_valuation ?? 0);
-  const shortMcap = safeN(market.market_cap ?? 0);
+  const shortFdv = safeNum(market.fully_diluted_valuation ?? 0);
+  const shortMcap = safeNum(market.market_cap ?? 0);
   const shortFdvRatio = shortMcap > 0 && shortFdv > 0 ? shortFdv / shortMcap : null;
-  const shortBuySellRatio = safeN(dex.buy_sell_ratio ?? 0);
+  const shortBuySellRatio = safeNum(dex.buy_sell_ratio ?? 0);
   if (shortFdvRatio !== null && shortFdvRatio > 5 && shortBuySellRatio > 0 && shortBuySellRatio < 0.6) {
     signals.push({
       signal: 'short_interest_proxy',
@@ -456,8 +454,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round R11 (AutoResearch batch): BTC risk-off macro context — btc_dominance rising = alt risk
   // If BTC dominance > 58% AND rising global market cap → alts outperforming BTC regime not confirmed
-  const btcDominance = safeN(market.btc_dominance ?? 0);
-  const globalMcapChange = safeN(market.market_cap_change_pct_24h_global ?? 0);
+  const btcDominance = safeNum(market.btc_dominance ?? 0);
+  const globalMcapChange = safeNum(market.market_cap_change_pct_24h_global ?? 0);
   if (btcDominance > 0 && btcDominance < 45 && globalMcapChange > 2) {
     signals.push({
       signal: 'altcoin_season_macro',
@@ -467,8 +465,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round R11: Strong recovery signal — price bouncing off ATL with volume
-  const atlDistSig = safeN(market.atl_distance_pct ?? null, null);
-  const change7dSig = safeN(market.price_change_pct_7d ?? 0);
+  const atlDistSig = safeNum(market.atl_distance_pct ?? null, null);
+  const change7dSig = safeNum(market.price_change_pct_7d ?? 0);
   const volRatioSig = mcap > 0 && volume > 0 ? volume / mcap : 0;
   if (atlDistSig !== null && atlDistSig < 50 && atlDistSig > 10 && change7dSig > 15 && volRatioSig > 0.1) {
     signals.push({
@@ -480,9 +478,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 151 (AutoResearch): Fee switch candidate — protocol generates fees but captures zero revenue
   // This is a bullish setup: a governance vote to enable fee switch → direct value accrual to token
-  const fees7dFS = safeN(onchain.fees_7d ?? 0);
-  const revenue7dFS = safeN(onchain.revenue_7d ?? 0);
-  const tvlFS = safeN(onchain.tvl ?? 0);
+  const fees7dFS = safeNum(onchain.fees_7d ?? 0);
+  const revenue7dFS = safeNum(onchain.revenue_7d ?? 0);
+  const tvlFS = safeNum(onchain.tvl ?? 0);
   if (fees7dFS > 200_000 && revenue7dFS === 0 && tvlFS > 5_000_000) {
     signals.push({
       signal: 'fee_switch_candidate',
@@ -493,9 +491,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 152 (AutoResearch): Smart accumulation — DEX buy pressure + low volume volatility + flat price
   // Classic smart money accumulation: high buy/sell ratio + stable price = quiet hand-over-fist buying
-  const buySellSig = safeN(dex.buy_sell_ratio ?? 0);
-  const c24hSig = safeN(market.price_change_pct_24h ?? 0);
-  const c7dSig = safeN(market.price_change_pct_7d ?? 0);
+  const buySellSig = safeNum(dex.buy_sell_ratio ?? 0);
+  const c24hSig = safeNum(market.price_change_pct_24h ?? 0);
+  const c7dSig = safeNum(market.price_change_pct_7d ?? 0);
   if (buySellSig >= 1.2 && Math.abs(c24hSig) < 5 && Math.abs(c7dSig) < 10) {
     signals.push({
       signal: 'smart_accumulation_pattern',
@@ -506,8 +504,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 230 (AutoResearch): Veteran protocol with strong fees signal
   // A protocol that's been live for 2+ years and still generating significant fees is battle-tested
-  const protocolAgeDays = safeN(onchain.protocol_age_days ?? 0);
-  const fees7dVet = safeN(onchain.fees_7d ?? 0);
+  const protocolAgeDays = safeNum(onchain.protocol_age_days ?? 0);
+  const fees7dVet = safeNum(onchain.fees_7d ?? 0);
   if (protocolAgeDays >= 730 && fees7dVet > 500_000) {
     signals.push({
       signal: 'veteran_protocol_strong_fees',
@@ -519,7 +517,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // Round 219 (AutoResearch): Volume spike + buy pressure = high-conviction breakout signal
   // When volume spikes significantly AND buyers are in control, it's a potential breakout setup
   const volumeSpike = market.volume_spike_flag;
-  const spikeRatio = safeN(dex.buy_sell_ratio ?? 0);
+  const spikeRatio = safeNum(dex.buy_sell_ratio ?? 0);
   if ((volumeSpike === 'extreme_spike' || volumeSpike === 'spike') && spikeRatio >= 1.1) {
     signals.push({
       signal: 'volume_spike_buy_pressure',
@@ -530,7 +528,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 219 (AutoResearch): Revenue trend improvement + fee efficiency = fundamental momentum
   const revTrend = onchain.revenue_trend;
-  const revEff = safeN(onchain.revenue_efficiency ?? 0);
+  const revEff = safeNum(onchain.revenue_efficiency ?? 0);
   if (revTrend === 'improving' && revEff > 50) {
     signals.push({
       signal: 'revenue_momentum',
@@ -541,7 +539,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 232 (AutoResearch nightly): Social velocity spike — mentions growing fast vs momentum data
   const mentionVelocity = rawData?.momentum?.social?.velocity_pct;
-  const filteredMentionsForVel = safeN(social.filtered_mentions ?? social.mentions);
+  const filteredMentionsForVel = safeNum(social.filtered_mentions ?? social.mentions);
   if (mentionVelocity != null && mentionVelocity >= 150 && filteredMentionsForVel >= 10) {
     signals.push({
       signal: 'social_velocity_spike',
@@ -556,8 +554,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 233b (AutoResearch nightly): High protocol efficiency signal
   // Protocols with high efficiency score (>70) are efficiently deploying their TVL to generate revenue
-  const protocolEffScoreAlpha = safeN(onchain.protocol_efficiency_score ?? null, null);
-  const tvlForAlpha = safeN(onchain.tvl ?? 0);
+  const protocolEffScoreAlpha = safeNum(onchain.protocol_efficiency_score ?? null, null);
+  const tvlForAlpha = safeNum(onchain.tvl ?? 0);
   if (protocolEffScoreAlpha !== null && protocolEffScoreAlpha >= 70 && tvlForAlpha >= 10_000_000) {
     signals.push({
       signal: 'high_fee_efficiency',
@@ -568,8 +566,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 233 (AutoResearch nightly): P/TVL undervaluation signal
   // When market cap is below TVL (P/TVL < 1), token is priced below on-chain value
-  const mcapPtvl = safeN(market.market_cap ?? 0);
-  const tvlPtvl = safeN(onchain.tvl ?? 0);
+  const mcapPtvl = safeNum(market.market_cap ?? 0);
+  const tvlPtvl = safeNum(onchain.tvl ?? 0);
   if (mcapPtvl > 0 && tvlPtvl > 0) {
     const ptvl = mcapPtvl / tvlPtvl;
     if (ptvl < 1.0 && tvlPtvl > 5_000_000) {
@@ -588,7 +586,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // Round 234b (AutoResearch): Multi-chain expansion signal
   // When a protocol is deployed on 4+ chains and TVL is growing, cross-chain expansion is a bullish catalyst
   const chainCount234 = Array.isArray(onchain.chains) ? onchain.chains.length : 0;
-  const tvlChange7d234 = safeN(onchain.tvl_change_7d);
+  const tvlChange7d234 = safeNum(onchain.tvl_change_7d);
   if (chainCount234 >= 4 && tvlChange7d234 > 10) {
     signals.push({
       signal: 'multi_chain_expansion',
@@ -609,17 +607,17 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 235b (AutoResearch): Volume increasing but price flat — silent accumulation upgrade
-  if (volTrend7d === 'increasing' && safeN(market.price_change_pct_7d) != null && Math.abs(safeN(market.price_change_pct_7d)) < 5) {
+  if (volTrend7d === 'increasing' && safeNum(market.price_change_pct_7d) != null && Math.abs(safeNum(market.price_change_pct_7d)) < 5) {
     signals.push({
       signal: 'volume_building_flat_price',
       strength: 'moderate',
-      detail: `Volume trend increasing over 7 days while price change is ${safeN(market.price_change_pct_7d).toFixed(1)}% — accumulation building under the surface.`,
+      detail: `Volume trend increasing over 7 days while price change is ${safeNum(market.price_change_pct_7d).toFixed(1)}% — accumulation building under the surface.`,
     });
   }
 
   // Round 236b (AutoResearch): CEX listing mention signal — significant catalyst
   // Even rumors of major exchange listings drive significant price action
-  const listingMentions = safeN(social.listing_mentions ?? 0);
+  const listingMentions = safeNum(social.listing_mentions ?? 0);
   if (listingMentions >= 2) {
     signals.push({
       signal: 'exchange_listing_catalyst',
@@ -651,7 +649,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 235 (AutoResearch): Fee acceleration signal — fundamentals improving faster than TVL growth
   const feeAccel = onchain.fee_revenue_acceleration;
-  const dailyFeeRate = safeN(onchain.daily_fee_rate_annualized ?? 0);
+  const dailyFeeRate = safeNum(onchain.daily_fee_rate_annualized ?? 0);
   if (feeAccel === 'accelerating' && dailyFeeRate > 2) {
     signals.push({
       signal: 'fee_revenue_acceleration',
@@ -662,7 +660,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 237d (AutoResearch nightly): low_bus_factor_risk_cleared signal
   // When bus_factor_score is high AND recent release exists, single-dev risk is manageable
-  const busFScore = safeN(github.bus_factor_score ?? 0);
+  const busFScore = safeNum(github.bus_factor_score ?? 0);
   const hasRecentRelease = github.has_recent_release === true;
   if (busFScore >= 75 && hasRecentRelease) {
     signals.push({
@@ -675,7 +673,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // Round 237 (AutoResearch nightly): community_score_leader — top community score vs peers
   // CoinGecko's community score aggregates Twitter + Telegram + Reddit followers into one metric.
   // A score >70 means the project has a large, established following relative to crypto-wide median.
-  const communityScore = safeN(social.community_score ?? market.community_score ?? 0);
+  const communityScore = safeNum(social.community_score ?? market.community_score ?? 0);
   if (communityScore >= 70) {
     signals.push({
       signal: 'community_score_leader',
@@ -686,8 +684,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 237b (AutoResearch nightly): news_acceleration — rising recent news coverage signals fresh catalyst
   const newsMomentum237 = social.news_momentum;
-  const recentNewsCount = safeN(social.very_recent_news_count ?? 0);
-  const filteredMentionsForNM = safeN(social.filtered_mentions ?? social.mentions ?? 0);
+  const recentNewsCount = safeNum(social.very_recent_news_count ?? 0);
+  const filteredMentionsForNM = safeNum(social.filtered_mentions ?? social.mentions ?? 0);
   if (newsMomentum237 === 'accelerating' && recentNewsCount >= 3 && filteredMentionsForNM >= 5) {
     signals.push({
       signal: 'news_acceleration',
@@ -697,7 +695,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 237c (AutoResearch nightly): governance_activity — DAO votes signal active community engagement
-  const governanceMentions = safeN(social.governance_mentions ?? 0);
+  const governanceMentions = safeNum(social.governance_mentions ?? 0);
   if (governanceMentions >= 3) {
     signals.push({
       signal: 'governance_activity',
@@ -707,7 +705,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 238 (AutoResearch): Airdrop catalyst signal — community demand driver
-  const airdropMentions = safeN(social.airdrop_mentions ?? 0);
+  const airdropMentions = safeNum(social.airdrop_mentions ?? 0);
   if (airdropMentions >= 2) {
     signals.push({
       signal: 'airdrop_catalyst',
@@ -717,8 +715,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   }
 
   // Round 238b (AutoResearch): Volume acceleration on DEX — m5 + h1 both bullish = momentum burst
-  const m5Change = safeN(dex.dex_price_change_m5 ?? NaN);
-  const h1Change = safeN(dex.dex_price_change_h1 ?? NaN);
+  const m5Change = safeNum(dex.dex_price_change_m5 ?? NaN);
+  const h1Change = safeNum(dex.dex_price_change_h1 ?? NaN);
   if (Number.isFinite(m5Change) && Number.isFinite(h1Change) && m5Change > 3 && h1Change > 5) {
     signals.push({
       signal: 'dex_momentum_burst',
@@ -732,7 +730,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   if (athMomentumSignal) signals.push(athMomentumSignal);
 
   // Round 381 (AutoResearch): Narrative freshness signal — fresh narratives = active catalyst cycle
-  const narrativeFreshness = safeN(social.narrative_freshness_score ?? null, null);
+  const narrativeFreshness = safeNum(social.narrative_freshness_score ?? null, null);
   if (narrativeFreshness !== null && narrativeFreshness >= 60) {
     signals.push({
       signal: 'fresh_narrative_momentum',
@@ -762,11 +760,11 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 469 (AutoResearch): social_leads_price — high social conviction + price not moved yet
   // Classic leading indicator: KOLs and community bullish, but price hasn't reacted → early entry
-  const socialSentiment469 = safeN(social.sentiment_score ?? NaN);
+  const socialSentiment469 = safeNum(social.sentiment_score ?? NaN);
   const kolSentiment = social.kol_sentiment ?? null;
   const xSocial469 = rawData.x_social ?? {};
-  const priceChange24h469 = safeN(market.price_change_pct_24h ?? NaN);
-  const priceChange7d469 = safeN(market.price_change_pct_7d ?? NaN);
+  const priceChange24h469 = safeNum(market.price_change_pct_24h ?? NaN);
+  const priceChange7d469 = safeNum(market.price_change_pct_7d ?? NaN);
   if (
     Number.isFinite(socialSentiment469) && socialSentiment469 > 0.6 &&
     (kolSentiment === 'bullish' || xSocial469.kol_sentiment === 'bullish') &&
@@ -782,9 +780,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 467 (AutoResearch): sector_outperforming_btc — project's sector is beating BTC this week
   // When a sector is outperforming BTC (beta-adjusted), it indicates sector rotation flow
-  const sectorPerf7d = safeN(sector.sector_performance_7d ?? NaN);
-  const btcPerf7d = safeN(market.btc_price_change_7d ?? NaN);
-  const projectPerf7d = safeN(market.price_change_pct_7d ?? NaN);
+  const sectorPerf7d = safeNum(sector.sector_performance_7d ?? NaN);
+  const btcPerf7d = safeNum(market.btc_price_change_7d ?? NaN);
+  const projectPerf7d = safeNum(market.price_change_pct_7d ?? NaN);
   if (Number.isFinite(sectorPerf7d) && Number.isFinite(btcPerf7d) && sectorPerf7d > btcPerf7d + 5) {
     const relativeOut = sectorPerf7d - btcPerf7d;
     signals.push({
@@ -806,8 +804,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // Supply unlock detector: if unlock > 5% of supply within 30 days = significant overhang risk
   const supplyUnlock = rawData?.supply_unlock ?? rawData?.onchain?.supply_unlock ?? null;
   if (supplyUnlock && typeof supplyUnlock === 'object') {
-    const unlockPct = safeN(supplyUnlock.pct_of_supply_30d ?? supplyUnlock.unlock_pct ?? 0);
-    const daysToUnlock = safeN(supplyUnlock.days_to_next_unlock ?? 999);
+    const unlockPct = safeNum(supplyUnlock.pct_of_supply_30d ?? supplyUnlock.unlock_pct ?? 0);
+    const daysToUnlock = safeNum(supplyUnlock.days_to_next_unlock ?? 999);
     if (unlockPct >= 5 && daysToUnlock <= 30) {
       signals.push({
         signal: 'upcoming_supply_unlock_risk',
@@ -817,14 +815,14 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     }
   } else {
     // Check via market data: circulating_to_max_ratio changing + decreasing supply → unlock pressure
-    const maxSupply = safeN(market.max_supply ?? 0);
-    const circulatingSupply452 = safeN(market.circulating_supply ?? 0);
+    const maxSupply = safeNum(market.max_supply ?? 0);
+    const circulatingSupply452 = safeNum(market.circulating_supply ?? 0);
     if (maxSupply > 0 && circulatingSupply452 > 0) {
       const supplyUtilization = circulatingSupply452 / maxSupply;
       // If supply util is 30-70% it's mid-unlock phase — potentially concerning if price is at highs
       if (supplyUtilization >= 0.3 && supplyUtilization <= 0.7) {
         // Only surface this if price is at high (near ATH) — unlock at ATH = sell pressure setup
-        const athDist464 = safeN(market.ath_distance_pct ?? NaN);
+        const athDist464 = safeNum(market.ath_distance_pct ?? NaN);
         if (Number.isFinite(athDist464) && athDist464 > -20) {
           signals.push({
             signal: 'mid_unlock_near_ath_caution',
@@ -838,9 +836,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 462 (AutoResearch): net_buying_pressure_composite — multi-source buy pressure confirmation
   // Fires when 3 independent buy pressure signals align: DEX buys + CEX volume + 24h price
-  const dexBuySell = safeN(dex.buy_sell_ratio ?? 0);
-  const cexVolChange = safeN(market.volume_change_pct_24h ?? NaN);
-  const price24hChange = safeN(market.price_change_pct_24h ?? NaN);
+  const dexBuySell = safeNum(dex.buy_sell_ratio ?? 0);
+  const cexVolChange = safeNum(market.volume_change_pct_24h ?? NaN);
+  const price24hChange = safeNum(market.price_change_pct_24h ?? NaN);
   let buyPressureScore = 0;
   if (dexBuySell >= 1.15) buyPressureScore++;
   if (Number.isFinite(cexVolChange) && cexVolChange > 20) buyPressureScore++;
@@ -856,8 +854,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 460 (AutoResearch): active_addresses_growth — growing active addresses = increasing adoption
   // When active_addresses_7d is growing vs active_addresses_30d average, organic usage is expanding
-  const activeAddresses7d = safeN(onchain.active_addresses_7d ?? 0);
-  const activeAddresses30d = safeN(onchain.active_addresses_30d ?? 0);
+  const activeAddresses7d = safeNum(onchain.active_addresses_7d ?? 0);
+  const activeAddresses30d = safeNum(onchain.active_addresses_30d ?? 0);
   if (activeAddresses7d > 0 && activeAddresses30d > 0) {
     // Weekly rate vs monthly rate: if 7d rate (×4) > 30d count × 1.3
     const weeklyRate = activeAddresses7d * 4; // annualize to 4 weeks
@@ -873,12 +871,12 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 457 (AutoResearch): high_token_velocity — on-chain transactions per day / circulating supply
   // High velocity = token actively used (not just held), DeFi utility demand
-  const dailyTxns = safeN(onchain.daily_transactions ?? 0);
-  const circulatingTokens = safeN(market.circulating_supply ?? 0);
-  const tokenPrice = safeN(market.current_price ?? market.price ?? 0);
+  const dailyTxns = safeNum(onchain.daily_transactions ?? 0);
+  const circulatingTokens = safeNum(market.circulating_supply ?? 0);
+  const tokenPrice = safeNum(market.current_price ?? market.price ?? 0);
   if (dailyTxns > 1000 && circulatingTokens > 0 && tokenPrice > 0) {
     // Token velocity = daily volume / market cap (simplified)
-    const dailyVolume = safeN(market.total_volume ?? 0);
+    const dailyVolume = safeNum(market.total_volume ?? 0);
     const tokenVelocityPct = (dailyVolume / (circulatingTokens * tokenPrice)) * 100;
     if (tokenVelocityPct > 10) { // >10% of circulating supply transacted daily = very active
       signals.push({
@@ -891,9 +889,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 455 (AutoResearch): deep_liquidity_pool — total liquidity (DEX + CEX depth) > 5% MCap
   // High liquidity relative to market cap = institutional market making, reduced slippage, institutional interest
-  const dexLiquidityAbs = safeN(dex.dex_liquidity_usd ?? 0);
+  const dexLiquidityAbs = safeNum(dex.dex_liquidity_usd ?? 0);
   const totalLiquidityEst = dexLiquidityAbs; // in future could add cex_depth
-  const mcapForLiq = safeN(market.market_cap ?? 0);
+  const mcapForLiq = safeNum(market.market_cap ?? 0);
   if (dexLiquidityAbs > 0 && mcapForLiq > 0) {
     const liqRatio = dexLiquidityAbs / mcapForLiq;
     if (liqRatio >= 0.05 && dexLiquidityAbs >= 1_000_000) {
@@ -907,11 +905,11 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 452 (AutoResearch): high_developer_activity composite signal
   // Combines: stars growth + forks + recent releases + commit acceleration for a dev health verdict
-  const starsGrowth30d = safeN(github.stars_growth_30d ?? 0);
-  const forkCount = safeN(github.forks ?? 0);
-  const openIssues = safeN(github.open_issues ?? 0);
-  const recentPRs = safeN(github.recent_prs_30d ?? 0);
-  const commits30d = safeN(github.commits_30d ?? 0);
+  const starsGrowth30d = safeNum(github.stars_growth_30d ?? 0);
+  const forkCount = safeNum(github.forks ?? 0);
+  const openIssues = safeNum(github.open_issues ?? 0);
+  const recentPRs = safeNum(github.recent_prs_30d ?? 0);
+  const commits30d = safeNum(github.commits_30d ?? 0);
   // Composite: 3+ indicators all showing growth = strong development signal
   let devActivityScore = 0;
   if (starsGrowth30d > 100) devActivityScore++;
@@ -932,8 +930,8 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // When a DeFi protocol's TVL is primarily USDC/USDT/DAI (vs algorithmic stablecoins), systemic risk is lower
   const stablecoinComposition = rawData?.onchain?.stablecoin_composition ?? null;
   if (stablecoinComposition && typeof stablecoinComposition === 'object') {
-    const blueChipPct = safeN(stablecoinComposition.blue_chip_pct ?? 0);
-    const algorithmicPct = safeN(stablecoinComposition.algorithmic_pct ?? 0);
+    const blueChipPct = safeNum(stablecoinComposition.blue_chip_pct ?? 0);
+    const algorithmicPct = safeNum(stablecoinComposition.algorithmic_pct ?? 0);
     if (blueChipPct >= 80 && algorithmicPct < 10) {
       signals.push({
         signal: 'low_stablecoin_systemic_risk',
@@ -950,7 +948,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     /v\d\s*launch|protocol upgrade|mainnet launch|migration|token upgrade|v2|v3|upgrade vote|hard fork|new version/i.test(n)
   );
   if (hasUpgradeCatalyst) {
-    const upgradeMentions = safeN(social.upgrade_mentions ?? 0);
+    const upgradeMentions = safeNum(social.upgrade_mentions ?? 0);
     signals.push({
       signal: 'protocol_upgrade_catalyst',
       strength: upgradeMentions >= 5 ? 'strong' : 'moderate',
@@ -961,7 +959,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   // Round 445 (AutoResearch): holder_distribution_improving — Gini index improving = healthier token distribution
   // When holder concentration decreases (more distributed), it reduces whale dump risk
   // tokenomics.holder_gini < 0.7 AND gini improving trend = bullish tokenomics signal
-  const holderGini = safeN(rawData?.tokenomics?.holder_gini ?? null, NaN);
+  const holderGini = safeNum(rawData?.tokenomics?.holder_gini ?? null, NaN);
   const holderGiniTrend = rawData?.tokenomics?.holder_gini_trend ?? null;
   if (Number.isFinite(holderGini) && holderGini < 0.7) {
     signals.push({
@@ -979,9 +977,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 444 (AutoResearch): on_chain_fee_velocity — fees growing faster than TVL = expanding protocol margins
   // If fees_7d/tvl ratio is higher than fees_30d/tvl × 1.3, protocol is extracting more value per dollar locked
-  const fees7dVelocity = safeN(onchain.fees_7d ?? 0);
-  const fees30dVelocity = safeN(onchain.fees_30d ?? 0);
-  const tvlVelocity = safeN(onchain.tvl ?? 0);
+  const fees7dVelocity = safeNum(onchain.fees_7d ?? 0);
+  const fees30dVelocity = safeNum(onchain.fees_30d ?? 0);
+  const tvlVelocity = safeNum(onchain.tvl ?? 0);
   if (fees7dVelocity > 0 && fees30dVelocity > 0 && tvlVelocity > 1_000_000) {
     // Annualize: fees7d×52 vs fees30d×12 — if weekly rate accelerating
     const annualizedWeeklyRate = fees7dVelocity * 52;
@@ -997,9 +995,9 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 439 (AutoResearch): multi_timeframe_momentum — 1h + 24h + 7d ALL positive = strong trend alignment
   // When short, medium, and long timeframes all confirm the trend, it's a high-conviction setup
-  const mtf1h  = safeN(market.price_change_pct_1h, NaN);
-  const mtf24h = safeN(market.price_change_pct_24h, NaN);
-  const mtf7d_mtf = safeN(market.price_change_pct_7d, NaN);
+  const mtf1h  = safeNum(market.price_change_pct_1h, NaN);
+  const mtf24h = safeNum(market.price_change_pct_24h, NaN);
+  const mtf7d_mtf = safeNum(market.price_change_pct_7d, NaN);
   if (Number.isFinite(mtf1h) && Number.isFinite(mtf24h) && Number.isFinite(mtf7d_mtf)) {
     if (mtf1h > 1 && mtf24h > 3 && mtf7d_mtf > 10) {
       signals.push({
@@ -1018,7 +1016,7 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
 
   // Round 440 (AutoResearch): momentum_score_alignment — alpha signal strength score correlates with price momentum
   // When oracle overall score is high AND price momentum is strong, it's a double-confirmation
-  const oracleScore = safeN(scores?.overall?.score, NaN);
+  const oracleScore = safeNum(scores?.overall?.score, NaN);
   const momentumTier = market.price_momentum_tier;
   if (Number.isFinite(oracleScore) && oracleScore >= 7.0 && (momentumTier === 'strong_uptrend' || momentumTier === 'uptrend')) {
     signals.push({

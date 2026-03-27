@@ -1,3 +1,4 @@
+import { safeNum } from '../utils/math.js';
 /**
  * narrative-momentum.js — Round 26 (AutoResearch batch)
  * Measures the momentum of on-chain narratives and social sentiment vectors.
@@ -104,7 +105,7 @@ export function detectNarrativeMomentum(rawData = {}) {
 
   // Round 381 (AutoResearch): narrative_momentum_quality — combines dominance + social freshness
   // Fresh narratives (from recent news) + strong dominance = highest quality signal
-  const narrativeFreshness = safeN(rawData?.social?.narrative_freshness_score ?? 0);
+  const narrativeFreshness = safeNum(rawData?.social?.narrative_freshness_score ?? 0);
   const narrativeMomentumQuality = Math.min(100, Math.round(
     narrativeDominanceScore * 0.6 + narrativeFreshness * 0.4
   ));
@@ -121,8 +122,4 @@ export function detectNarrativeMomentum(rawData = {}) {
   };
 }
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 

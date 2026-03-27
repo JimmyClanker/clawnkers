@@ -1,15 +1,12 @@
+import { safeNum } from '../utils/math.js';
 /**
  * elevator-pitch.js — Round 29
  * Generates a template-based 1-paragraph elevator pitch for a project.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 function fmtNum(value) {
-  const n = safeN(value, 0);
+  const n = safeNum(value, 0);
   if (n === 0) return null;
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
@@ -76,7 +73,7 @@ export function generateElevatorPitch(projectName, rawData, scores, analysis) {
     : 'Key on-chain metrics are not yet available.';
 
   // Sentence 3: Competitive position + momentum
-  const overallScore = safeN(scores?.overall?.score, 0);
+  const overallScore = safeNum(scores?.overall?.score, 0);
   const competitorSummary = rawData?.competitors?.comparison_summary;
   const momentum = momentumLabel(overallScore);
   let sentence3;

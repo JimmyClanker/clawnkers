@@ -1,12 +1,9 @@
+import { safeNum } from '../utils/math.js';
 /**
  * change-detector.js — Round 24
  * Detects what changed between the current scan and the previous one.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
 
 function changePct(previous, current) {
   if (previous === null || current === null) return null;
@@ -65,27 +62,27 @@ export function detectChanges(db, projectName, currentData) {
   const currMarket = currentData?.rawData?.market ?? {};
 
   const metricPairs = [
-    { metric: 'price', prev: safeN(prevMarket.current_price ?? prevMarket.price), curr: safeN(currMarket.current_price ?? currMarket.price) },
-    { metric: 'market_cap', prev: safeN(prevMarket.market_cap), curr: safeN(currMarket.market_cap) },
-    { metric: 'volume_24h', prev: safeN(prevMarket.total_volume ?? prevMarket.volume_24h), curr: safeN(currMarket.total_volume ?? currMarket.volume_24h) },
+    { metric: 'price', prev: safeNum(prevMarket.current_price ?? prevMarket.price), curr: safeNum(currMarket.current_price ?? currMarket.price) },
+    { metric: 'market_cap', prev: safeNum(prevMarket.market_cap), curr: safeNum(currMarket.market_cap) },
+    { metric: 'volume_24h', prev: safeNum(prevMarket.total_volume ?? prevMarket.volume_24h), curr: safeNum(currMarket.total_volume ?? currMarket.volume_24h) },
   ];
 
   // ── Onchain metrics ─────────────────────────────────────────────
   const prevOnchain = prevReport?.raw_data?.onchain ?? {};
   const currOnchain = currentData?.rawData?.onchain ?? {};
   metricPairs.push(
-    { metric: 'tvl', prev: safeN(prevOnchain.tvl), curr: safeN(currOnchain.tvl) },
-    { metric: 'fees_7d', prev: safeN(prevOnchain.fees_7d), curr: safeN(currOnchain.fees_7d) },
+    { metric: 'tvl', prev: safeNum(prevOnchain.tvl), curr: safeNum(currOnchain.tvl) },
+    { metric: 'fees_7d', prev: safeNum(prevOnchain.fees_7d), curr: safeNum(currOnchain.fees_7d) },
   );
 
   // ── Round 17: DEX metrics ──────────────────────────────────────
   const prevDex = prevReport?.raw_data?.dex ?? {};
   const currDex = currentData?.rawData?.dex ?? {};
   metricPairs.push(
-    { metric: 'dex_liquidity', prev: safeN(prevDex.dex_liquidity_usd), curr: safeN(currDex.dex_liquidity_usd) },
-    { metric: 'dex_volume_24h', prev: safeN(prevDex.dex_volume_24h), curr: safeN(currDex.dex_volume_24h) },
+    { metric: 'dex_liquidity', prev: safeNum(prevDex.dex_liquidity_usd), curr: safeNum(currDex.dex_liquidity_usd) },
+    { metric: 'dex_volume_24h', prev: safeNum(prevDex.dex_volume_24h), curr: safeNum(currDex.dex_volume_24h) },
     // Round 382 (AutoResearch): Track buy/sell ratio changes (distribution phase detection)
-    { metric: 'buy_sell_ratio', prev: safeN(prevDex.buy_sell_ratio), curr: safeN(currDex.buy_sell_ratio) },
+    { metric: 'buy_sell_ratio', prev: safeNum(prevDex.buy_sell_ratio), curr: safeNum(currDex.buy_sell_ratio) },
   );
 
   // Round 382 (AutoResearch): Detect wash trading risk state changes
@@ -120,8 +117,8 @@ export function detectChanges(db, projectName, currentData) {
   // ── Score changes ───────────────────────────────────────────────
   const DIMENSIONS = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health', 'overall'];
   for (const dim of DIMENSIONS) {
-    const prevScore = safeN(prevScores?.[dim]?.score ?? prevScores?.[dim]);
-    const currScore = safeN(currentData?.scores?.[dim]?.score ?? currentData?.scores?.[dim]);
+    const prevScore = safeNum(prevScores?.[dim]?.score ?? prevScores?.[dim]);
+    const currScore = safeNum(currentData?.scores?.[dim]?.score ?? currentData?.scores?.[dim]);
     const pct = changePct(prevScore, currScore);
     changes.push({
       metric: `score_${dim}`,
@@ -166,8 +163,8 @@ export function detectChanges(db, projectName, currentData) {
   }
 
   // Round 74: Overall score delta (absolute, not percent)
-  const prevOverallScore = safeN(prevScores?.overall?.score ?? prevScores?.overall);
-  const currOverallScore = safeN(currentData?.scores?.overall?.score ?? currentData?.scores?.overall);
+  const prevOverallScore = safeNum(prevScores?.overall?.score ?? prevScores?.overall);
+  const currOverallScore = safeNum(currentData?.scores?.overall?.score ?? currentData?.scores?.overall);
   const overallScoreDelta = prevOverallScore != null && currOverallScore != null
     ? parseFloat((currOverallScore - prevOverallScore).toFixed(2))
     : null;
@@ -197,9 +194,9 @@ export function detectChanges(db, projectName, currentData) {
       "SELECT scores_json FROM scan_history WHERE project_name = ? ORDER BY scanned_at DESC LIMIT 3"
     ).all(currentData.projectName ?? currentData.project_name ?? '');
     if (rows.length >= 3) {
-      const s0 = safeN(JSON.parse(rows[0].scores_json ?? '{}')?.overall?.score);
-      const s1 = safeN(JSON.parse(rows[1].scores_json ?? '{}')?.overall?.score);
-      const s2 = safeN(JSON.parse(rows[2].scores_json ?? '{}')?.overall?.score);
+      const s0 = safeNum(JSON.parse(rows[0].scores_json ?? '{}')?.overall?.score);
+      const s1 = safeNum(JSON.parse(rows[1].scores_json ?? '{}')?.overall?.score);
+      const s2 = safeNum(JSON.parse(rows[2].scores_json ?? '{}')?.overall?.score);
       if (s0 != null && s1 != null && s2 != null) {
         const delta1 = s0 - s1; // most recent change
         const delta2 = s1 - s2; // prior change
