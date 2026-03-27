@@ -24,6 +24,20 @@ const DELAY_MS = 3000;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function ensureColumn(db, table, column, typeSql) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((r) => r.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
+}
+
+function scoreBucket(score) {
+  const n = Number(score);
+  if (!Number.isFinite(n)) return null;
+  if (n < 3) return '0-3';
+  if (n < 5) return '3-5';
+  if (n < 7) return '5-7';
+  return '7-10';
+}
+
 function initDb() {
   mkdirSync(dirname(DB_PATH), { recursive: true });
   const db = new Database(DB_PATH);
@@ -48,6 +62,9 @@ function initDb() {
     score_distribution REAL,
     score_risk REAL,
     score_overall REAL,
+    score_bucket TEXT,
+    verdict_snapshot TEXT,
+    confidence_snapshot REAL,
     raw_json TEXT,
     return_7d REAL,
     return_30d REAL,
@@ -58,6 +75,9 @@ function initDb() {
   
   db.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_date ON snapshots(snapshot_date)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_snapshots_symbol ON snapshots(symbol)`);
+  ensureColumn(db, 'snapshots', 'score_bucket', 'TEXT');
+  ensureColumn(db, 'snapshots', 'verdict_snapshot', 'TEXT');
+  ensureColumn(db, 'snapshots', 'confidence_snapshot', 'REAL');
   
   return db;
 }
@@ -96,6 +116,7 @@ function extractScores(scanResult) {
     if (typeof v === 'object') return v.score ?? null;
     return v;
   };
+  const overall = get('overall');
   return {
     market: get('market_strength') ?? get('market'),
     onchain: get('onchain_health') ?? get('onchain'),
@@ -104,7 +125,10 @@ function extractScores(scanResult) {
     tokenomics: get('tokenomics_health') ?? get('tokenomics'),
     distribution: get('distribution'),
     risk: get('risk'),
-    overall: get('overall'),
+    overall,
+    score_bucket: scoreBucket(overall),
+    verdict: scanResult?.quick_analysis?.verdict ?? scanResult?.analysis?.verdict ?? null,
+    confidence: scanResult?.scores?.overall?.overall_confidence ?? null,
   };
 }
 
@@ -119,8 +143,8 @@ async function main() {
      price_change_24h, price_change_7d, price_change_30d,
      score_market, score_onchain, score_social, score_dev,
      score_tokenomics, score_distribution, score_risk, score_overall,
-     raw_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     score_bucket, verdict_snapshot, confidence_snapshot, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   
   let assets;
@@ -157,6 +181,9 @@ async function main() {
         scores?.distribution,
         scores?.risk,
         scores?.overall,
+        scores?.score_bucket,
+        scores?.verdict,
+        scores?.confidence,
         scan ? JSON.stringify(scan) : null,
       );
       
