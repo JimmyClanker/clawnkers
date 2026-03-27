@@ -3090,3 +3090,65 @@ Focus: responsive layout, spacing, typography, loading states, animations, acces
 - **Files:** public/index.html
 - **Tests:** 177/177 pass
 - **Result:** kept
+
+## AutoResearch Batch — Data Collectors & Error Resilience (2026-03-27 09:24 UTC)
+
+### Round 1 — Market collector numeric sanitizers
+- **Change:** Added shared local sanitizers for finite, positive, non-negative, and bounded percentage values inside `collectors/market.js`.
+- **Why:** CoinGecko occasionally returns NaN/Infinity/impossible values; centralizing cleanup prevents dirty propagation.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 2 — CoinGecko payload completeness guard
+- **Change:** Return a specific partial-error payload when search succeeds but the coin detail response is structurally incomplete (`id`/`market_data` missing).
+- **Why:** Better than a generic catch-all error; downstream can distinguish not-found vs bad payload.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 3 — Sanitized FDV parsing
+- **Change:** Sanitized `fully_diluted_valuation` and added `fully_diluted_to_market_cap_ratio` plus `market_cap_fdv_gap_usd`.
+- **Why:** Better dilution visibility and safer handling of bad FDV numbers.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 4 — ATL sanitization parity
+- **Change:** Sanitized ATL the same way as price/ATH before derived distance calculations.
+- **Why:** Avoids invalid ATL values corrupting distance/range metrics.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 5 — Bounded price-change parsing
+- **Change:** Added bounded sanitization for 1h/24h/7d/14d/30d/60d/200d/1y CoinGecko percentage fields.
+- **Why:** Prevents absurd outliers from poisoning scoring or report text.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 6 — Cleaner ticker volume parsing
+- **Change:** Sanitized per-ticker USD volume before exchange aggregation.
+- **Why:** Prevents negative/invalid ticker volumes from skewing CEX/DEX share calculations.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 7 — Richer CoinGecko ticker coverage
+- **Change:** Added `market_pair_count`, `cex_pair_count`, `dex_pair_count`, `anomalous_ticker_count`, `stale_ticker_count`, and `trust_score_avg`.
+- **Why:** Extracts more useful quality/liquidity context from existing tickers data at zero extra API cost.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 8 — Exchange list cleanup
+- **Change:** Normalized exchange names and filtered noisy `unknown` values from `top_exchanges`.
+- **Why:** Report output becomes cleaner and less repetitive.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 9 — More community fields from CoinGecko
+- **Change:** Added sanitized `reddit_subscribers` and `facebook_likes` passthrough.
+- **Why:** Existing payload already had those fields; now they’re available for templates/scoring.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 10 — Market freshness + platforms passthrough
+- **Change:** Added `platforms`, `last_updated`, and `last_updated_age_minutes`; sanitized global market context fields too.
+- **Why:** Helps downstream collectors use CoinGecko contract data directly and makes freshness visible.
+- **Files:** `collectors/market.js`
+- **Tests:** `npm test` → 179/179 pass

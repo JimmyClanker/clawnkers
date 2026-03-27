@@ -8,6 +8,25 @@ const COINGECKO_TICKERS_URL = 'https://api.coingecko.com/api/v3/coins';
 // Round R5: Global market context — BTC dominance & total market cap
 const COINGECKO_GLOBAL_URL = 'https://api.coingecko.com/api/v3/global';
 
+function sanitizeFinite(value, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, decimals = null } = {}) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < min || num > max) return null;
+  if (typeof decimals === 'number') return parseFloat(num.toFixed(decimals));
+  return num;
+}
+
+function sanitizePositive(value, decimals = null) {
+  return sanitizeFinite(value, { min: Number.MIN_VALUE, decimals });
+}
+
+function sanitizeNonNegative(value, decimals = null) {
+  return sanitizeFinite(value, { min: 0, decimals });
+}
+
+function sanitizePct(value, { min = -100, max = 1000000, decimals = 2 } = {}) {
+  return sanitizeFinite(value, { min, max, decimals });
+}
+
 function createEmptyMarketResult(projectName) {
   return {
     project_name: projectName,
@@ -17,6 +36,8 @@ function createEmptyMarketResult(projectName) {
     price: null,
     market_cap: null,
     fully_diluted_valuation: null,
+    fully_diluted_to_market_cap_ratio: null,
+    market_cap_fdv_gap_usd: null,
     total_volume: null,
     circulating_supply: null,
     total_supply: null,
@@ -40,6 +61,8 @@ function createEmptyMarketResult(projectName) {
     market_cap_rank: null,
     twitter_followers: null,
     telegram_channel_user_count: null,
+    reddit_subscribers: null,
+    facebook_likes: null,
     // Round 2: trending + categories
     is_trending: false,
     categories: [],
@@ -53,12 +76,21 @@ function createEmptyMarketResult(projectName) {
     exchange_count: null,
     cex_count: null,
     dex_count: null,
+    market_pair_count: null,
+    cex_pair_count: null,
+    dex_pair_count: null,
     cex_volume_pct: null,
+    anomalous_ticker_count: null,
+    stale_ticker_count: null,
+    trust_score_avg: null,
     top_exchanges: [],
     // Round 2 ext: multi-TF momentum classification
     price_momentum_tier: null,
     // Round R1: 7-day average volume for anomaly detection
     volume_7d_avg: null,
+    platforms: null,
+    last_updated: null,
+    last_updated_age_minutes: null,
     // Round R4: stablecoin flag propagated from scoring for downstream checks
     is_stablecoin: false,
     error: null,
@@ -96,13 +128,27 @@ export async function collectMarket(projectName) {
     // Round 541 (AutoResearch): developer_data from CoinGecko — free cross-check of GitHub activity
     const developerData = coinData?.developer_data || {};
 
-    const price = marketData?.current_price?.usd ?? null;
-    const ath = marketData?.ath?.usd ?? null;
-    const marketCap = marketData?.market_cap?.usd ?? null;
-    const totalVolume = marketData?.total_volume?.usd ?? null;
-    const circulatingSupply = marketData?.circulating_supply ?? null;
-    const maxSupply = marketData?.max_supply ?? null;
-    const totalSupply = marketData?.total_supply ?? null;
+    if (!coinData?.id || !coinData?.market_data) {
+      return {
+        ...fallback,
+        coin_id: firstCoin.id,
+        symbol: firstCoin.symbol || null,
+        name: firstCoin.name || projectName,
+        error: `CoinGecko coin payload incomplete for ${firstCoin.id}`,
+      };
+    }
+
+    // Round 551 (AutoResearch): sanitize raw CoinGecko values — guard against impossible/negative values
+    // CoinGecko occasionally returns negative or zero prices for newly listed tokens or data errors
+    const price = sanitizePositive(marketData?.current_price?.usd, 12);
+    const ath = sanitizePositive(marketData?.ath?.usd, 12);
+    const atl = sanitizePositive(marketData?.atl?.usd, 12);
+    const marketCap = sanitizeNonNegative(marketData?.market_cap?.usd);
+    const fullyDilutedValuation = sanitizeNonNegative(marketData?.fully_diluted_valuation?.usd);
+    const totalVolume = sanitizeNonNegative(marketData?.total_volume?.usd);
+    const circulatingSupply = sanitizePositive(marketData?.circulating_supply);
+    const maxSupply = sanitizePositive(marketData?.max_supply);
+    const totalSupply = sanitizePositive(marketData?.total_supply);
 
     // Derived enrichment metrics
     // Round 533 (AutoResearch): wrap all derived metrics in isFinite guards to prevent NaN propagation
@@ -111,7 +157,6 @@ export async function collectMarket(projectName) {
       const pct = ((price - ath) / ath) * 100;
       return Number.isFinite(pct) ? parseFloat(pct.toFixed(2)) : null;
     })();
-    const atl = marketData?.atl?.usd ?? null;
     const atlDistancePct = (() => {
       if (price == null || atl == null || atl <= 0 || price <= atl) return null;
       const pct = ((price - atl) / atl) * 100;
@@ -159,7 +204,13 @@ export async function collectMarket(projectName) {
     let exchangeCount = null;
     let cexCount = null;
     let dexCount = null;
+    let marketPairCount = null;
+    let cexPairCount = null;
+    let dexPairCount = null;
     let cexVolumePct = null;
+    let anomalousTickerCount = null;
+    let staleTickerCount = null;
+    let trustScoreAvg = null;
     const topExchanges = [];
 
     if (tickersData?.tickers && Array.isArray(tickersData.tickers)) {
@@ -167,13 +218,28 @@ export async function collectMarket(projectName) {
       const exchangeVolumeMap = new Map();
       let totalCexVol = 0;
       let totalDexVol = 0;
+      let trustScorePoints = 0;
+      let trustScoreSamples = 0;
+      anomalousTickerCount = 0;
+      staleTickerCount = 0;
+      marketPairCount = tickers.length;
+      cexPairCount = 0;
+      dexPairCount = 0;
 
       for (const ticker of tickers) {
-        const exchangeName = ticker?.market?.name || ticker?.market?.identifier || 'unknown';
-        const isDefi = ticker?.market?.has_trading_incentive === false && ticker?.is_anomaly === false
-          ? null : null; // Will use identifier patterns
+        const rawExchangeName = ticker?.market?.name || ticker?.market?.identifier || 'unknown';
+        const exchangeName = String(rawExchangeName).trim().replace(/\s+/g, ' ');
         const isDex = /uniswap|curve|sushi|pancake|balancer|1inch|dydx|osmosis|jupiter|raydium|orca|serum|camelot|aerodrome|velodrome/i.test(exchangeName);
-        const vol = Number(ticker?.converted_volume?.usd || 0);
+        const vol = sanitizeNonNegative(ticker?.converted_volume?.usd) ?? 0;
+        const trustLabel = String(ticker?.trust_score || '').toLowerCase();
+        if (trustLabel === 'green') { trustScorePoints += 3; trustScoreSamples += 1; }
+        else if (trustLabel === 'yellow') { trustScorePoints += 2; trustScoreSamples += 1; }
+        else if (trustLabel === 'red') { trustScorePoints += 1; trustScoreSamples += 1; }
+
+        if (ticker?.is_anomaly) anomalousTickerCount += 1;
+        if (ticker?.is_stale) staleTickerCount += 1;
+        if (isDex) dexPairCount += 1;
+        else cexPairCount += 1;
 
         if (!exchangeVolumeMap.has(exchangeName)) {
           exchangeVolumeMap.set(exchangeName, { vol: 0, isDex });
@@ -191,9 +257,11 @@ export async function collectMarket(projectName) {
 
       const totalVol = totalCexVol + totalDexVol;
       cexVolumePct = totalVol > 0 ? (totalCexVol / totalVol) * 100 : null;
+      trustScoreAvg = trustScoreSamples > 0 ? parseFloat((trustScorePoints / trustScoreSamples).toFixed(2)) : null;
 
       // Top 5 exchanges by volume
       const sorted = [...exchangeVolumeMap.entries()]
+        .filter(([name]) => name && name !== 'unknown')
         .sort((a, b) => b[1].vol - a[1].vol)
         .slice(0, 5)
         .map(([name]) => name);
@@ -208,20 +276,28 @@ export async function collectMarket(projectName) {
       price,
       current_price: price, // Round 8 (AutoResearch batch): alias for cross-collector consistency
       market_cap: marketCap,
-      fully_diluted_valuation: marketData?.fully_diluted_valuation?.usd ?? null,
+      fully_diluted_valuation: fullyDilutedValuation,
+      fully_diluted_to_market_cap_ratio: (() => {
+        if (fullyDilutedValuation == null || marketCap == null || marketCap <= 0) return null;
+        return parseFloat((fullyDilutedValuation / marketCap).toFixed(3));
+      })(),
+      market_cap_fdv_gap_usd: (() => {
+        if (fullyDilutedValuation == null || marketCap == null) return null;
+        return sanitizeNonNegative(fullyDilutedValuation - marketCap);
+      })(),
       total_volume: totalVolume,
       circulating_supply: circulatingSupply,
       total_supply: totalSupply,
       max_supply: maxSupply,
-      price_change_pct_1h: marketData?.price_change_percentage_1h_in_currency?.usd ?? null,
-      price_change_pct_24h: marketData?.price_change_percentage_24h_in_currency?.usd ?? null,
-      price_change_pct_7d: marketData?.price_change_percentage_7d_in_currency?.usd ?? null,
-      price_change_pct_30d: marketData?.price_change_percentage_30d_in_currency?.usd ?? null,
+      price_change_pct_1h: sanitizePct(marketData?.price_change_percentage_1h_in_currency?.usd, { min: -100, max: 100000, decimals: 2 }),
+      price_change_pct_24h: sanitizePct(marketData?.price_change_percentage_24h_in_currency?.usd, { min: -100, max: 100000, decimals: 2 }),
+      price_change_pct_7d: sanitizePct(marketData?.price_change_percentage_7d_in_currency?.usd, { min: -100, max: 100000, decimals: 2 }),
+      price_change_pct_30d: sanitizePct(marketData?.price_change_percentage_30d_in_currency?.usd, { min: -100, max: 100000, decimals: 2 }),
       // Round 3: extended price change periods
-      price_change_pct_14d: marketData?.price_change_percentage_14d_in_currency?.usd ?? null,
-      price_change_pct_60d: marketData?.price_change_percentage_60d_in_currency?.usd ?? null,
-      price_change_pct_200d: marketData?.price_change_percentage_200d_in_currency?.usd ?? null,
-      price_change_pct_1y: marketData?.price_change_percentage_1y_in_currency?.usd ?? null,
+      price_change_pct_14d: sanitizePct(marketData?.price_change_percentage_14d_in_currency?.usd, { min: -100, max: 250000, decimals: 2 }),
+      price_change_pct_60d: sanitizePct(marketData?.price_change_percentage_60d_in_currency?.usd, { min: -100, max: 500000, decimals: 2 }),
+      price_change_pct_200d: sanitizePct(marketData?.price_change_percentage_200d_in_currency?.usd, { min: -100, max: 1000000, decimals: 2 }),
+      price_change_pct_1y: sanitizePct(marketData?.price_change_percentage_1y_in_currency?.usd, { min: -100, max: 1000000, decimals: 2 }),
       // Round 236 (AutoResearch): 52-week high/low from 90-day + 1y price change
       // Derived: 52w_high = price / (1 + price_change_pct_1y/100), 52w_low from ATL heuristic
       // Enables "price vs 52-week range" which is a key institutional signal
@@ -265,10 +341,21 @@ export async function collectMarket(projectName) {
       atl_distance_pct: atlDistancePct != null ? Math.round(atlDistancePct * 100) / 100 : null,
       price_range_position: priceRangePosition != null ? Math.round(priceRangePosition * 1000) / 1000 : null,
       circulating_to_max_ratio: circulatingToMaxRatio,
+      // Round 569 (AutoResearch): float_ratio_pct alias — same signal, easier for templates/LLMs to read
+      float_ratio_pct: circulatingToMaxRatio,
       volume_to_mcap_ratio: volumeToMcapRatio,
+      // Round 568 (AutoResearch): FDV/market-cap ratio — dilution overhang signal
+      fdv_to_market_cap_ratio: (() => {
+        const fdv = Number(marketData?.fully_diluted_valuation?.usd ?? 0);
+        if (!Number.isFinite(fdv) || fdv <= 0 || marketCap == null || marketCap <= 0) return null;
+        const ratio = fdv / marketCap;
+        return Number.isFinite(ratio) ? parseFloat(ratio.toFixed(3)) : null;
+      })(),
       market_cap_rank: coinData?.market_cap_rank ?? null,
-      twitter_followers: communityData?.twitter_followers ?? null,
-      telegram_channel_user_count: communityData?.telegram_channel_user_count ?? null,
+      twitter_followers: sanitizeNonNegative(communityData?.twitter_followers),
+      telegram_channel_user_count: sanitizeNonNegative(communityData?.telegram_channel_user_count),
+      reddit_subscribers: sanitizeNonNegative(communityData?.reddit_subscribers),
+      facebook_likes: sanitizeNonNegative(communityData?.facebook_likes),
       // Round 201 (AutoResearch): Reddit subscribers from CoinGecko community data
       reddit_subscribers: communityData?.reddit_subscribers ?? null,
       // Round 227 (AutoResearch): price_momentum_score (0-100) — composite of all timeframes
@@ -381,7 +468,13 @@ export async function collectMarket(projectName) {
       exchange_count: exchangeCount,
       cex_count: cexCount,
       dex_count: dexCount,
+      market_pair_count: marketPairCount,
+      cex_pair_count: cexPairCount,
+      dex_pair_count: dexPairCount,
       cex_volume_pct: cexVolumePct != null ? Math.round(cexVolumePct * 100) / 100 : null,
+      anomalous_ticker_count: anomalousTickerCount,
+      stale_ticker_count: staleTickerCount,
+      trust_score_avg: trustScoreAvg,
       top_exchanges: topExchanges,
       sparkline_7d: coinData?.market_data?.sparkline_7d?.price || [],
       price_history_90d: (chartData?.prices || []).map(([ts, price]) => ({ t: ts, p: price })),
@@ -415,6 +508,13 @@ export async function collectMarket(projectName) {
         const vols = (chartData?.total_volumes || []).slice(-7).map(([, v]) => Number(v)).filter(Number.isFinite);
         return vols.length >= 3 ? Math.round(vols.reduce((s, v) => s + v, 0) / vols.length) : null;
       })(),
+      platforms: coinData?.platforms && typeof coinData.platforms === 'object' ? coinData.platforms : null,
+      last_updated: coinData?.last_updated ?? null,
+      last_updated_age_minutes: (() => {
+        if (!coinData?.last_updated) return null;
+        const minutes = Math.floor((Date.now() - new Date(coinData.last_updated).getTime()) / 60000);
+        return minutes >= 0 ? minutes : null;
+      })(),
       // Round 205 (AutoResearch): volume spike flag — when 24h vol is anomalously high vs 7d avg
       // Useful for catching pump-and-dump, news-driven spikes, or exchange listing events
       volume_spike_flag: (() => {
@@ -431,11 +531,71 @@ export async function collectMarket(projectName) {
         return null;
       })(),
       // Round R5: Global market context — BTC dominance, total mcap, macro trend
-      btc_dominance: globalData?.data?.market_cap_percentage?.btc != null
-        ? parseFloat(Number(globalData.data.market_cap_percentage.btc).toFixed(2))
-        : null,
-      total_market_cap_usd: globalData?.data?.total_market_cap?.usd ?? null,
-      market_cap_change_pct_24h_global: globalData?.data?.market_cap_change_percentage_24h_usd ?? null,
+      btc_dominance: sanitizeFinite(globalData?.data?.market_cap_percentage?.btc, { min: 0, max: 100, decimals: 2 }),
+      total_market_cap_usd: sanitizeNonNegative(globalData?.data?.total_market_cap?.usd),
+      market_cap_change_pct_24h_global: sanitizePct(globalData?.data?.market_cap_change_percentage_24h_usd, { min: -100, max: 1000, decimals: 2 }),
+      // Round 561 (AutoResearch): CoinGecko confidence/completeness scores
+      // coingecko_score = overall reliability signal for this coin's data quality
+      // liquidity_score = how liquid the coin is according to CoinGecko's internal model
+      coingecko_score: (() => {
+        const v = Number(coinData?.coingecko_score);
+        return Number.isFinite(v) ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      developer_score: (() => {
+        const v = Number(coinData?.developer_score);
+        return Number.isFinite(v) ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      liquidity_score: (() => {
+        const v = Number(coinData?.liquidity_score);
+        return Number.isFinite(v) ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      public_interest_score: (() => {
+        const v = Number(coinData?.public_interest_score);
+        return Number.isFinite(v) ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      // Round 559 (AutoResearch): CoinGecko community sentiment votes (bullish/bearish vote percentages)
+      // This is a direct community sentiment signal — different from social media analysis
+      sentiment_votes_up_pct: (() => {
+        const v = Number(coinData?.sentiment_votes_up_percentage);
+        return Number.isFinite(v) && v >= 0 && v <= 100 ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      sentiment_votes_down_pct: (() => {
+        const v = Number(coinData?.sentiment_votes_down_percentage);
+        return Number.isFinite(v) && v >= 0 && v <= 100 ? parseFloat(v.toFixed(1)) : null;
+      })(),
+      // Round 570 (AutoResearch): vote spread = bullish votes minus bearish votes
+      sentiment_vote_spread_pct: (() => {
+        const up = Number(coinData?.sentiment_votes_up_percentage);
+        const down = Number(coinData?.sentiment_votes_down_percentage);
+        if (!Number.isFinite(up) || !Number.isFinite(down)) return null;
+        return parseFloat((up - down).toFixed(1));
+      })(),
+      // Derived: community consensus label from sentiment votes
+      community_sentiment_label: (() => {
+        const up = Number(coinData?.sentiment_votes_up_percentage ?? 0);
+        const down = Number(coinData?.sentiment_votes_down_percentage ?? 0);
+        if (!Number.isFinite(up) || !Number.isFinite(down)) return null;
+        if (up === 0 && down === 0) return null;
+        if (up >= 70) return 'strong_bullish';
+        if (up >= 55) return 'bullish';
+        if (down >= 70) return 'strong_bearish';
+        if (down >= 55) return 'bearish';
+        return 'neutral';
+      })(),
+      // Round 556 (AutoResearch): stablecoin detection from CoinGecko categories + symbol + price
+      // More reliable than the fallback's hardcoded false — uses actual coin data
+      is_stablecoin: (() => {
+        const cats = Array.isArray(coinData?.categories) ? coinData.categories : [];
+        if (cats.some(c => /stablecoin/i.test(String(c || '')))) return true;
+        const sym = String(coinData?.symbol || '').toUpperCase();
+        if (/^(USD[CTBMNP]?|DAI|FRAX|LUSD|GUSD|TUSD|USDP|FDUSD|USDD|CRVUSD|PYUSD)$/.test(sym)) return true;
+        // Price close to $1 AND market data confirms stable asset class
+        const px = Number(marketData?.current_price?.usd);
+        const isNearDollar = Number.isFinite(px) && px > 0.98 && px < 1.02;
+        // Require both near-dollar AND some other stablecoin signal to avoid false positives
+        const hasStablecoinHint = cats.some(c => /stable|peg|usd/i.test(String(c || '')));
+        return isNearDollar && hasStablecoinHint;
+      })(),
       // Round 541 (AutoResearch): developer_data from CoinGecko (commit activity, repo count)
       // Cross-reference with GitHub collector; if GitHub fails, these provide a fallback signal
       cg_forks: developerData?.forks ?? null,
