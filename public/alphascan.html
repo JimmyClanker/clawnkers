@@ -113,6 +113,30 @@
       }
     }
 
+    /* Round 7 (UX batch): forced-colors / Windows High Contrast Mode */
+    @media (forced-colors: active) {
+      .btn-primary, .btn-secondary { border: 2px solid ButtonText; }
+      .panel { border: 1px solid CanvasText; }
+      .bar > span { forced-color-adjust: none; }
+      .verdict.buy { color: Highlight; }
+      .verdict.avoid { color: LinkText; }
+      :focus-visible { outline: 3px solid Highlight !important; }
+    }
+
+    /* Round 4 (UX batch): print stylesheet — clean report output */
+    @media print {
+      header, #scroll-top-btn, #scroll-top, #toast-container,
+      .toolbar, .hero-note, .status, .payment-overlay,
+      .mobile-nav, .nav-hamburger, .btn-primary, .btn-secondary,
+      .rescan-btn, .scanner-form-section, .how-section, .stats-section { display: none !important; }
+      body { background: #fff !important; color: #000 !important; font-size: 11pt; }
+      .panel { border: 1px solid #ccc !important; background: #fff !important; page-break-inside: avoid; box-shadow: none !important; margin-bottom: 12pt; }
+      .bar > span { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      a::after { display: none !important; }
+      #results-section { display: block !important; }
+      .container { max-width: 100% !important; padding: 0 !important; }
+    }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -1019,6 +1043,9 @@
       background: var(--surface);
       border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
+      /* Round 8 (UX batch): defer rendering of below-fold sections */
+      content-visibility: auto;
+      contain-intrinsic-size: auto 280px;
     }
     /* R295: how-grid auto-fit — 3 cols on desktop, 2 on tablet, 1 on mobile */
     .how-grid {
@@ -1098,7 +1125,11 @@
     }
 
     /* ── Stats Section ── */
-    .stats-section { background: var(--bg); }
+    .stats-section {
+      background: var(--bg);
+      content-visibility: auto;
+      contain-intrinsic-size: auto 200px;
+    }
     /* R293: stats grid — fluid 3→1 col with auto-fit for tablet */
     .stats-grid {
       display: grid;

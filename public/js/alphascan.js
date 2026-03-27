@@ -1713,7 +1713,29 @@
       } catch (_) { /* silently fail */ }
     })();
 
-    // ── Round R19: Global keyboard shortcut — Ctrl+Shift+C to copy report ────────
+    // ── Round 5 (UX batch): Global keyboard shortcuts ────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      // '/' focuses the input (when not already in an input/textarea)
+      if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+        return;
+      }
+      // Escape: close dropdown or clear results section if showing
+      if (e.key === 'Escape') {
+        const overlay = document.getElementById('payment-overlay');
+        if (overlay && overlay.style.display !== 'none' && overlay.style.display !== '') return; // let modal handle
+        const resultsSection = document.getElementById('results-section');
+        if (resultsSection && resultsSection.style.display !== 'none') {
+          resultsSection.style.display = 'none';
+          history.replaceState({}, '', location.pathname);
+          input.focus();
+        }
+      }
+    });
+
+// ── Round R19: Global keyboard shortcut — Ctrl+Shift+C to copy report ────────
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
         const reportBox = document.getElementById('report');

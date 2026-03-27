@@ -239,10 +239,27 @@
     .full-width { grid-column: 1 / -1; }
     /* Auto-refresh countdown */
     #countdown { font-size: 0.75rem; color: var(--muted); }
+    /* Round 3 (UX batch): skip-link */
+    .skip-link {
+      position: absolute; top: -100%; left: 12px;
+      background: var(--accent); color: #000;
+      padding: 8px 16px; border-radius: 0 0 8px 8px;
+      font-weight: 700; font-size: 0.9rem; z-index: 9999;
+      text-decoration: none; transition: top 0.2s;
+    }
+    .skip-link:focus { top: 0; outline: 3px solid #000; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header role="banner">
 <div class="header">
   <div class="header-left">
     <h1>📊 Metrics Dashboard</h1>
@@ -255,19 +272,20 @@
     <button id="refresh-btn" onclick="loadMetrics()">↺ Refresh</button>
   </div>
 </div>
+</header>
 
-<div id="key-bar">
+<div id="key-bar" role="form" aria-label="Authentication">
   <label for="auth-key-input">Auth Key:</label>
-  <input type="password" id="auth-key-input" placeholder="Enter alpha auth key..." autocomplete="off" />
+  <input type="password" id="auth-key-input" placeholder="Enter alpha auth key..." autocomplete="off" aria-label="Authentication key" />
   <button id="load-btn" onclick="loadMetrics()">Load</button>
 </div>
 
-<div class="container">
-  <div id="error-message"></div>
-  <div id="main-content">
+<main class="container">
+  <div id="error-message" role="alert" aria-live="assertive"></div>
+  <div id="main-content" tabindex="-1">
     <div id="loading-overlay">Enter your auth key above and click Load.</div>
   </div>
-</div>
+</main>
 
 <script>
 (function() {

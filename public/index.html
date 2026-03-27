@@ -351,7 +351,12 @@
 
     /* ── Products ──────────────────────────────── */
     /* R319: products grid — auto-fit for fluid responsiveness without media query */
-    .products-section { background: var(--surface); }
+    /* Round 9 (UX batch): content-visibility for below-fold sections */
+    .products-section {
+      background: var(--surface);
+      content-visibility: auto;
+      contain-intrinsic-size: auto 500px;
+    }
     .products-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
@@ -789,7 +794,13 @@
     .trust-logo span { font-size: 1rem; }
 
     /* ── Differentiator section — R329: fluid diff grid ─────────────── */
-    .diff-section { background: var(--surface); border-top: 1px solid var(--border); padding: 72px 0; }
+    .diff-section {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 72px 0;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 480px;
+    }
     .diff-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
@@ -1091,6 +1102,10 @@
           <a href="/alphascan" class="btn-primary">Scan Any Project — Free →</a>
           <a href="#api" class="btn-secondary">View API Docs</a>
         </div>
+        <!-- Round 6 (UX batch): keyboard hint -->
+        <p class="hero-kbd-hint fade-in visible" style="font-size:0.78rem;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:6px;justify-content:center;">
+          <kbd style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:1px 6px;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;">/</kbd> to focus search
+        </p>
       </div>
     </div>
   </section>
