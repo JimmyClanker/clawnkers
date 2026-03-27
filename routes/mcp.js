@@ -134,15 +134,25 @@ export function createMcpRouter({ config, exaService, signalsService }) {
             };
           }
 
+          // Round 416 (AutoResearch): structured header + per-signal formatting with R:R context
           const bullish = result.signals.filter(s => ['LONG','BUY'].includes(s.direction?.toUpperCase())).length;
           const bearish = result.signals.filter(s => ['SHORT','SELL'].includes(s.direction?.toUpperCase())).length;
-          const header = `Found ${result.signals.length} signal(s) | ${bullish} bullish / ${bearish} bearish | last ${result.query.hours}h${coin ? ` | filter: ${coin}` : ''}\n\n`;
+          const neutral = result.signals.length - bullish - bearish;
+          const bias = bullish > bearish ? '🟢 bullish bias' : bearish > bullish ? '🔴 bearish bias' : '🟡 neutral';
+          const header = [
+            `## 📡 Trading Signals`,
+            `${result.signals.length} signal(s) | ${bullish}🟢 ${bearish}🔴${neutral > 0 ? ` ${neutral}⚪` : ''} | ${bias} | last ${result.query.hours}h${coin ? ` | ${coin}` : ''}`,
+            '',
+          ].join('\n');
 
           const text = result.signals
             .map(
-              (signal, index) =>
-                `${index + 1}. **${signal.symbol} ${signal.direction}** [${signal.strategy}] — ${signal.timestamp}\n` +
-                `   Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp} | R:R: ${signal.rr}`
+              (signal, index) => {
+                const rrNum = Number(signal.rr);
+                const rrLabel = Number.isFinite(rrNum) ? (rrNum >= 3 ? '🔥' : rrNum >= 2 ? '✅' : rrNum >= 1 ? '⚠️' : '❌') : '';
+                return `${index + 1}. **${signal.symbol} ${signal.direction}** [${signal.strategy}] — ${signal.timestamp}\n` +
+                  `   Entry: ${signal.entry} | SL: ${signal.sl} | TP: ${signal.tp} | R:R: ${signal.rr} ${rrLabel}`;
+              }
             )
             .join('\n\n');
 

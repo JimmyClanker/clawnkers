@@ -334,6 +334,15 @@ const json = {
     ...(keyMetrics.fdv_mcap_ratio != null && keyMetrics.fdv_mcap_ratio > 1 ? [`- FDV/MCap: ${keyMetrics.fdv_mcap_ratio.toFixed(2)}x (FDV: ${keyMetrics.fdv_fmt})`] : []),
     ...(keyMetrics.pct_circulating != null ? [`- Circulating Supply: ${keyMetrics.pct_circulating_fmt}`] : []),
     ...(keyMetrics.ath_distance_fmt !== 'n/a' ? [`- ATH: ${keyMetrics.ath_distance_fmt}${keyMetrics.days_since_ath_fmt !== 'n/a' ? ` — ${keyMetrics.days_since_ath_fmt}` : ''}`] : []),
+    // Round 419 (AutoResearch): onchain context section in text report
+    ...(rawData?.onchain?.tvl_change_7d != null || rawData?.onchain?.fee_revenue_usd_30d != null ? [
+      '',
+      '⛓️ Onchain Context',
+      ...(rawData.onchain.tvl_change_7d != null ? [`- TVL 7d: ${rawData.onchain.tvl_change_7d > 0 ? '+' : ''}${rawData.onchain.tvl_change_7d.toFixed(1)}%`] : []),
+      ...(rawData.onchain.fee_revenue_usd_30d != null ? [`- Fee Revenue 30d: $${(rawData.onchain.fee_revenue_usd_30d / 1e6).toFixed(2)}M`] : []),
+      ...(rawData.onchain.active_addresses_7d != null ? [`- Active Addresses 7d: ${rawData.onchain.active_addresses_7d.toLocaleString()}`] : []),
+      ...(rawData.onchain.ptvl_ratio != null ? [`- P/TVL: ${rawData.onchain.ptvl_ratio.toFixed(2)}x`] : []),
+    ] : []),
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -423,7 +432,12 @@ const json = {
           <div style="color:#888888;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">Research verdict</div>
           <div style="display:inline-block;padding:12px 20px;border-radius:999px;border:1px dashed rgba(232,232,232,0.28);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:rgba(255,255,255,0.04);color:${verdictColor(json.verdict)};">${escapeHtml(json.verdict)}</div>${volatileRegimeBadge(rawData?.volatility)}
           ${json.composite_alpha_index != null ? `<div style="margin-top:8px;color:#b5c7d3;font-size:12px;">⚡ Alpha Index: <strong style="color:#ffd3b6;">${json.composite_alpha_index}/100</strong></div>` : ''}
-          <div style="margin-top:10px;color:#ffd3b6;">Collector failures: ${escapeHtml(failedCollectors.length ? failedCollectors.join(' | ') : 'none')}</div>
+          <div style="margin-top:8px;color:#888;font-size:11px;">
+            Coverage: <span style="color:${json.data_quality.quality_tier === 'high' ? '#22c55e' : json.data_quality.quality_tier === 'medium' ? '#fbbf24' : '#f87171'};">${json.data_quality.coverage_pct ?? 'n/a'}%</span>
+            &nbsp;·&nbsp; Completeness: <span style="color:#b5c7d3;">${json.data_quality.completeness_pct ?? 'n/a'}%</span>
+            &nbsp;·&nbsp; Tier: <span style="font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${json.data_quality.quality_tier === 'high' ? '#22c55e' : json.data_quality.quality_tier === 'medium' ? '#fbbf24' : '#f87171'};">${escapeHtml(json.data_quality.quality_tier ?? 'n/a')}</span>
+          </div>
+          <div style="margin-top:6px;color:#555;font-size:11px;">Failures: ${escapeHtml(failedCollectors.length ? failedCollectors.map(f => f.split(':')[0]).join(', ') : 'none')}</div>
         </div>
       </header>
 
@@ -482,23 +496,45 @@ const json = {
       </section>
 
       <section style="margin-bottom:20px;">
-        <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 10px;color:#b5c7d3;">📊 Scores</h2>
-        <ul style="margin:0;padding-left:18px;line-height:1.8;">
-          <li><span style="color:${scoreColor(scores?.market_strength)};font-weight:700;">${escapeHtml(String(scores?.market_strength?.score ?? 'n/a'))}/10</span> Market strength${scores?.market_strength?.confidence_label ? ` [${escapeHtml(scores.market_strength.confidence_label)}]` : ''} — ${escapeHtml(scores?.market_strength?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.onchain_health)};font-weight:700;">${escapeHtml(String(scores?.onchain_health?.score ?? 'n/a'))}/10</span> Onchain health${scores?.onchain_health?.confidence_label ? ` [${escapeHtml(scores.onchain_health.confidence_label)}]` : ''} — ${escapeHtml(scores?.onchain_health?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.social_momentum)};font-weight:700;">${escapeHtml(String(scores?.social_momentum?.score ?? 'n/a'))}/10</span> Social momentum${scores?.social_momentum?.confidence_label ? ` [${escapeHtml(scores.social_momentum.confidence_label)}]` : ''} — ${escapeHtml(scores?.social_momentum?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.development)};font-weight:700;">${escapeHtml(String(scores?.development?.score ?? 'n/a'))}/10</span> Development${scores?.development?.confidence_label ? ` [${escapeHtml(scores.development.confidence_label)}]` : ''} — ${escapeHtml(scores?.development?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.tokenomics_health)};font-weight:700;">${escapeHtml(String(scores?.tokenomics_health?.score ?? 'n/a'))}/10</span> Tokenomics health${scores?.tokenomics_health?.confidence_label ? ` [${escapeHtml(scores.tokenomics_health.confidence_label)}]` : ''} — ${escapeHtml(scores?.tokenomics_health?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.distribution)};font-weight:700;">${escapeHtml(String(scores?.distribution?.score ?? 'n/a'))}/10</span> Distribution${scores?.distribution?.confidence_label ? ` [${escapeHtml(scores.distribution.confidence_label)}]` : ''} — ${escapeHtml(scores?.distribution?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.risk)};font-weight:700;">${escapeHtml(String(scores?.risk?.score ?? 'n/a'))}/10</span> Risk${scores?.risk?.confidence_label ? ` [${escapeHtml(scores.risk.confidence_label)}]` : ''} — ${escapeHtml(scores?.risk?.reasoning || 'n/a')}</li>
-          <li><span style="color:${scoreColor(scores?.overall)};font-weight:700;">${escapeHtml(String(scores?.overall?.score ?? 'n/a'))}/10</span> Overall${scores?.overall?.confidence_label ? ` [${escapeHtml(scores.overall.confidence_label)}]` : ''} — ${escapeHtml(scores?.overall?.reasoning || 'n/a')}</li>
-        </ul>
+        <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 12px;color:#b5c7d3;">📊 Scores</h2>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${[
+            ['Market strength', scores?.market_strength],
+            ['Onchain health', scores?.onchain_health],
+            ['Social momentum', scores?.social_momentum],
+            ['Development', scores?.development],
+            ['Tokenomics', scores?.tokenomics_health],
+            ['Distribution', scores?.distribution],
+            ['Risk', scores?.risk],
+            ['Overall', scores?.overall],
+          ].map(([label, payload]) => {
+            const s = payload?.score;
+            const pct = s != null ? Math.max(0, Math.min(100, (s / 10) * 100)) : 0;
+            const col = scoreColor(payload);
+            const scoreTxt = s != null ? `${Number(s).toFixed(1)}/10` : 'n/a';
+            const conf = payload?.confidence_label ?? null;
+            const reasoning = payload?.reasoning || '';
+            return `<div style="display:grid;grid-template-columns:130px 60px 1fr;align-items:center;gap:8px;">
+              <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.06em;">${label}</span>
+              <span style="font-weight:700;color:${col};font-size:13px;">${scoreTxt}${conf ? ` <span style="color:#666;font-size:10px;">[${escapeHtml(conf)}]</span>` : ''}</span>
+              <div style="position:relative;background:rgba(255,255,255,0.06);border-radius:4px;height:6px;overflow:hidden;">
+                <div style="position:absolute;top:0;left:0;height:100%;width:${pct}%;background:${col};border-radius:4px;"></div>
+              </div>
+            </div>
+            ${reasoning ? `<div style="grid-column:2/-1;color:#666;font-size:11px;margin-top:-4px;margin-left:190px;line-height:1.4;">${escapeHtml(reasoning)}</div>` : ''}`;
+          }).join('')}
+        </div>
       </section>
 
       ${json.red_flags_summary.total > 0 ? `
       <section style="margin-bottom:20px;padding:16px;background:rgba(255,100,100,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:18px;">
         <h2 style="font-family:'Caveat',cursive;font-size:30px;margin:0 0 8px;color:#ef4444;">🚨 Risk Summary</h2>
-        <p style="margin:0;color:#f87171;">Risk level: <strong>${json.red_flags_summary.risk_level}</strong> — ${json.red_flags_summary.total} flag(s): ${json.red_flags_summary.critical} critical, ${json.red_flags_summary.warnings} warnings</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;">
+          <span style="color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;font-size:12px;">${escapeHtml(json.red_flags_summary.risk_level)}</span>
+          <span style="color:#888;font-size:12px;">${json.red_flags_summary.total} flag(s) · ${json.red_flags_summary.critical} critical · ${json.red_flags_summary.warnings} warnings</span>
+          ${rawData?.volatility?.regime && rawData.volatility.regime !== 'calm' ? `<span style="background:rgba(249,115,22,0.2);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;">⚡ ${escapeHtml(rawData.volatility.regime)}</span>` : ''}
+          ${rawData?.supply_unlock_risk?.risk_level && rawData.supply_unlock_risk.risk_level !== 'low' && rawData.supply_unlock_risk.risk_level !== 'unknown' ? `<span style="background:rgba(251,191,36,0.15);color:#fbbf24;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;">🔓 UNLOCK ${escapeHtml(rawData.supply_unlock_risk.risk_level)}</span>` : ''}
+        </div>
         ${json.red_flags_summary.worst_flag ? `<p style="margin:4px 0 0;color:#888;font-size:12px;">Worst: ${escapeHtml(json.red_flags_summary.worst_flag.flag)} [${json.red_flags_summary.worst_flag.severity}]</p>` : ''}
       </section>` : ''}
 
@@ -625,6 +661,23 @@ const json = {
     wash_trading_risk: keyMetrics.wash_trading_risk ?? null,
   };
 
+  // Round 413 (AutoResearch): opportunity_snapshot — 5-field decision helper for agents
+  json.opportunity_snapshot = {
+    verdict: json.verdict,
+    score: scores?.overall?.score != null ? parseFloat(Number(scores.overall.score).toFixed(1)) : null,
+    alpha_index: json.composite_alpha_index ?? null,
+    risk_level: json.red_flags_summary.risk_level,
+    action_bias: (() => {
+      const v = (json.verdict ?? '').toUpperCase();
+      if (v === 'STRONG BUY') return 'enter_large';
+      if (v === 'BUY') return 'enter_moderate';
+      if (v === 'HOLD') return 'watch';
+      if (v === 'AVOID') return 'stay_out';
+      if (v === 'STRONG AVOID') return 'exit_if_held';
+      return 'watch';
+    })(),
+  };
+
   // Round 402 (AutoResearch): add tl_dr field — one-sentence summary for quick agent consumption
   json.tl_dr = (() => {
     const verdict = json.verdict;
@@ -648,14 +701,31 @@ export function formatMarkdown(projectName, rawData, scores, llmAnalysis) {
   const crossDim = rawData?.cross_dimensional;
   const riskMatrix = rawData?.risk_matrix;
 
+  // Round 411 (AutoResearch): markdown header — add alpha index + risk level + tl_dr
+  const collectorMetaMd = rawData?.metadata?.collectors ?? {};
+  const totalCollectorsMd = Object.keys(collectorMetaMd).length;
+  const okCollectorsMd = Object.values(collectorMetaMd).filter((c) => c?.ok !== false && !c?.error).length;
+  const alphaIndexMd = (() => {
+    const overallScore = scores?.overall?.score ?? 5;
+    const alphaSignalCount = Math.min(Array.isArray(rawData?.alpha_signals) ? rawData.alpha_signals.length : 0, 5);
+    const qualityBonus = totalCollectorsMd > 0 && okCollectorsMd / totalCollectorsMd >= 0.8 ? 20 : 10;
+    const convictionScore = rawData?.thesis?.conviction_score ?? 50;
+    return Math.round((overallScore / 10) * 50 + alphaSignalCount * 3 + qualityBonus + (convictionScore / 100) * 15);
+  })();
+  const redFlagsMd = Array.isArray(rawData?.red_flags) ? rawData.red_flags : [];
+  const riskLevelMd = (() => {
+    const crit = redFlagsMd.filter(f => f.severity === 'critical').length;
+    const warns = redFlagsMd.filter(f => f.severity === 'warning').length;
+    return crit >= 2 ? 'critical' : crit >= 1 ? 'high' : warns >= 3 ? 'elevated' : warns >= 1 ? 'moderate' : 'low';
+  })();
+
   const lines = [
     `# 🧠 Alpha Scanner — ${projectName}`,
     '',
-    `**Verdict:** ${llmAnalysis?.verdict || 'HOLD'}`,
-    `**Overall Score:** ${keyMetrics.overall_score_fmt}`,
+    `**Verdict:** ${llmAnalysis?.verdict || 'HOLD'} | **Score:** ${keyMetrics.overall_score_fmt} | **Alpha Index:** ${alphaIndexMd}/100 | **Risk:** ${riskLevelMd}`,
     `**Generated:** ${new Date().toISOString()}`,
-    ...(rawData?.elevator_pitch ? [`**Elevator Pitch:** ${rawData.elevator_pitch}`] : []),
-    ...(conviction ? [`**Conviction:** ${conviction.score}/100 (${conviction.label})`] : []),
+    ...(rawData?.elevator_pitch ? [`\n> ${rawData.elevator_pitch}`] : []),
+    ...(conviction ? [`\n**Conviction:** ${conviction.score}/100 (${conviction.label})`] : []),
     '',
     '## 💎 Key Metrics',
     '',
@@ -701,6 +771,13 @@ export function formatMarkdown(projectName, rawData, scores, llmAnalysis) {
       `**Overall Risk:** ${riskMatrix.risk_level} (${riskMatrix.overall_risk_score}/10)`,
       '',
       ...riskMatrix.heatmap.filter(h => h.flag_count > 0).map(h => `- **${h.label}**: ${h.flag_count} flag(s), impact ${(h.impact * 100).toFixed(0)}%`),
+      '',
+    ] : []),
+    // Round 412 (AutoResearch): alpha signals section in markdown
+    ...(Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length > 0 ? [
+      '## 🔍 Alpha Signals',
+      '',
+      ...rawData.alpha_signals.slice(0, 6).map(s => `- **[${(s.strength || '?').toUpperCase()}]** ${s.signal}${s.detail ? ` — ${s.detail}` : ''}`),
       '',
     ] : []),
     '## 📝 Analysis',
@@ -890,6 +967,26 @@ export function formatAgentJSON(projectName, rawData, scores, llmAnalysis) {
     risks: llmAnalysis?.risks ?? [],
     catalysts: llmAnalysis?.catalysts ?? [],
     key_findings: llmAnalysis?.key_findings ?? [],
+    // Round 414 (AutoResearch): opportunity_snapshot + top alpha signals for quick agent reads
+    opportunity_snapshot: {
+      verdict: llmAnalysis?.verdict || 'HOLD',
+      score: scores?.overall?.score != null ? parseFloat(Number(scores.overall.score).toFixed(1)) : null,
+      alpha_index: compositeAlphaIndex,
+      risk_level: redFlagsSummary.risk_level,
+      action_bias: (() => {
+        const v = (llmAnalysis?.verdict ?? '').toUpperCase();
+        if (v === 'STRONG BUY') return 'enter_large';
+        if (v === 'BUY') return 'enter_moderate';
+        if (v === 'HOLD') return 'watch';
+        if (v === 'AVOID') return 'stay_out';
+        if (v === 'STRONG AVOID') return 'exit_if_held';
+        return 'watch';
+      })(),
+    },
+    alpha_signals_top3: (rawData?.alpha_signals ?? [])
+      .filter(s => s.strength === 'strong' || s.strength === 'moderate')
+      .slice(0, 3)
+      .map(s => ({ signal: s.signal, strength: s.strength, detail: s.detail ?? null })),
   };
 }
 

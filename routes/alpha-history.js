@@ -178,6 +178,30 @@ export function createHistoryRouter({ signalsService, cache, getOrCreateReport, 
         score: report.raw_data.narrative_strength.score,
         detail: report.raw_data.narrative_strength.detail,
       } : null,
+      // Round 415 (AutoResearch): opportunity_snapshot + alpha_signals_top3 in export
+      opportunity_snapshot: {
+        verdict: report?.verdict ?? 'HOLD',
+        score: (() => { const s = report?.scores?.overall?.score; return s != null ? parseFloat(Number(s).toFixed(1)) : null; })(),
+        alpha_index: report?.composite_alpha_index ?? null,
+        risk_level: (() => {
+          const crit = (report?.red_flags ?? []).filter(f => f.severity === 'critical').length;
+          const warns = (report?.red_flags ?? []).filter(f => f.severity === 'warning').length;
+          return crit >= 2 ? 'critical' : crit >= 1 ? 'high' : warns >= 3 ? 'elevated' : warns >= 1 ? 'moderate' : 'low';
+        })(),
+        action_bias: (() => {
+          const v = (report?.verdict ?? '').toUpperCase();
+          if (v === 'STRONG BUY') return 'enter_large';
+          if (v === 'BUY') return 'enter_moderate';
+          if (v === 'HOLD') return 'watch';
+          if (v === 'AVOID') return 'stay_out';
+          if (v === 'STRONG AVOID') return 'exit_if_held';
+          return 'watch';
+        })(),
+      },
+      alpha_signals_top3: (report?.alpha_signals ?? [])
+        .filter(s => s.strength === 'strong' || s.strength === 'moderate')
+        .slice(0, 3)
+        .map(s => ({ signal: s.signal, strength: s.strength, detail: s.detail ?? null })),
     };
 
     res.set('Content-Type', 'application/json');
