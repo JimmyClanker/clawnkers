@@ -21,7 +21,8 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // ── CRITICAL BREAKERS: Cap a 4.0 (max AVOID) ─────────────────────────────
 
   // Whale concentration > 70%
-  const whaleConc = holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_concentration_pct ?? 0;
+  // Round 345 (AutoResearch): include collector field name 'top10_holder_concentration_pct' in fallback chain
+  const whaleConc = holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_concentration_pct ?? holders.top10_holder_concentration_pct ?? 0;
   if (whaleConc > 70) {
     breakers.push({
       cap: 4.0,
@@ -83,9 +84,11 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   }
 
   // FDV/MCap > 10x
+  // Round 346 (AutoResearch): added $1M minimum mcap — micro-cap tokens with high FDV ratio are
+  // a different risk profile that's already captured by the low_market_cap red flag
   const fdv = market.fully_diluted_valuation ?? market.fdv ?? 0;
   const mcap = market.market_cap ?? 0;
-  if (fdv > 0 && mcap > 0 && fdv / mcap > 10) {
+  if (fdv > 0 && mcap > 1_000_000 && fdv / mcap > 10) {
     breakers.push({
       cap: 6.5,
       reason: `FDV/MCap ${(fdv / mcap).toFixed(1)}x — massive unlock overhang`,

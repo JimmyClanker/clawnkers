@@ -166,6 +166,22 @@ export const CATEGORY_MAP = {
   'insurance': 'defi_lending',    // DeFi insurance is onchain-risk heavy
   'fan-token': 'meme_token',      // fan tokens behave like memes: social-driven
   'sports': 'meme_token',
+  // Round 344 (AutoResearch): Additional category slug mappings
+  'staking': 'liquid_staking',          // generic 'staking' → liquid_staking weights (dev + onchain focused)
+  'staking-pool': 'liquid_staking',
+  'eth-staking': 'liquid_staking',
+  'sol-staking': 'liquid_staking',
+  'governance': 'layer_1',              // governance tokens behave like L1: dev + onchain heavy
+  'governance-token': 'layer_1',
+  'dao': 'layer_1',
+  'decentralized-autonomous-organization': 'layer_1',
+  'launchpad': 'consumer_crypto',       // launchpads are community/social driven
+  'ido-platform': 'consumer_crypto',
+  'asset-management': 'defi_lending',   // asset management is onchain TVL-driven
+  'portfolio-management': 'defi_lending',
+  'aggregator': 'defi_dex',             // DEX aggregators → defi_dex weights
+  'dex-aggregator': 'defi_dex',
+  'swap-aggregator': 'defi_dex',
   // Round 232: consumer crypto & infra
   'social-fi': 'consumer_crypto',
   socialfi: 'consumer_crypto',

@@ -57,7 +57,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // 4. Whale concentration > 30%
   const holders = rawData.holders ?? rawData.holderData ?? {};
-  const whaleConcentration = safeN(holders.top10_concentration ?? holders.concentration_pct);
+  // Round 345 (AutoResearch): include collector field name in fallback chain
+  const whaleConcentration = safeN(holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_holder_concentration_pct);
   if (whaleConcentration > 30) {
     flags.push({
       flag: 'whale_concentration',
@@ -333,9 +334,10 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // Round 128 (AutoResearch): Suspicious volume spike — 24h vol > 5x typical (7d avg)
   // Sudden volume spikes without corresponding price context = possible wash trading or exit pump
+  // Round 347 (AutoResearch): added $500K minimum — small absolute spikes are noise not signal
   const vol24h = safeN(market.total_volume ?? 0);
   const vol7dAvg = safeN(market.volume_7d_avg ?? 0);
-  if (vol7dAvg > 0 && vol24h > 0 && vol24h > vol7dAvg * 5) {
+  if (vol7dAvg > 0 && vol24h > 500_000 && vol24h > vol7dAvg * 5) {
     flags.push({
       flag: 'suspicious_volume_spike',
       severity: 'warning',

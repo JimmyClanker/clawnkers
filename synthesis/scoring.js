@@ -106,13 +106,18 @@ export function calculateConfidence(rawData = {}) {
   }
 
   // Round 123 (AutoResearch): Holder data confidence
+  // Round 349 (AutoResearch): tighter fallback — only give 30 if there are actual non-null data fields
+  // An object with only { error: null } is effectively empty, not partial data
   const holders = rawData.holders ?? rawData.holderData ?? {};
   let holderConf;
   if (holders.error) holderConf = 0;
-  else if (holders.top10_concentration != null && holders.holder_count != null) holderConf = 100;
-  else if (holders.top10_concentration != null || holders.concentration_pct != null) holderConf = 60;
-  else if (Object.keys(holders).length > 0) holderConf = 30;
-  else holderConf = 0;
+  else if ((holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_holder_concentration_pct) != null && holders.holder_count != null) holderConf = 100;
+  else if ((holders.top10_concentration ?? holders.concentration_pct ?? holders.top10_holder_concentration_pct) != null) holderConf = 60;
+  else {
+    // Only give partial confidence if there are meaningful non-error, non-null data fields
+    const meaningfulFields = Object.entries(holders).filter(([k, v]) => k !== 'error' && v != null && v !== false).length;
+    holderConf = meaningfulFields > 0 ? 30 : 0;
+  }
 
   // Round 123 (AutoResearch): DEX data confidence
   const dex = rawData.dex ?? rawData.dexData ?? {};
@@ -155,7 +160,8 @@ export function computePTVLAdjustment(mcap, tvl) {
   const ptvl = mcap / tvl;
   let adjustment = 0;
   let label;
-  if (ptvl < 0.5) { adjustment = 0.6; label: 'deep_value'; label = 'deep_value'; }
+  // Round 350 (AutoResearch): fix dead label statement (label: 'deep_value' was a no-op JS label)
+  if (ptvl < 0.5) { adjustment = 0.6; label = 'deep_value'; }
   else if (ptvl < 1.0) { adjustment = 0.3; label = 'undervalued'; }
   else if (ptvl < 2.0) { adjustment = 0; label = 'fair_value'; }
   else if (ptvl < 5.0) { adjustment = -0.2; label = 'premium'; }
@@ -338,10 +344,16 @@ function scoreMarketStrength(market = {}) {
   else if (marketCapRank > 0 && marketCapRank <= 100) raw += 0.2;
 
   // Round 58: Exchange count — more CEX listings = legitimacy + liquidity
+  // Round 348 (AutoResearch): penalize zero CEX listings for tokens that have been out >6 months
   const exchangeCount = safeNumber(market.exchange_count ?? 0);
   if (exchangeCount >= 20) raw += 0.4;
   else if (exchangeCount >= 10) raw += 0.2;
   else if (exchangeCount >= 5) raw += 0.1;
+  else if (exchangeCount === 0 && market.exchange_count != null) {
+    // Known to have 0 exchanges (not just missing data) — apply mild penalty for established tokens
+    const ageMo = age_months ?? 0;
+    if (ageMo > 6) raw -= 0.3; // >6 months with zero CEX = isolation risk
+  }
 
   // Round 236 (AutoResearch): 52-week range position bonus
   // Near 52w high = price discovery, institutional attention; near 52w low = structural weakness
@@ -889,6 +901,11 @@ function scoreTokenomicsRisk(tokenomics = {}) {
   }
 
   raw -= Math.min(Math.max(inflation, 0) / 10, 3);
+  // Round 341 (AutoResearch): deflationary bonus — token burns reduce supply, net positive for holders
+  // Cap bonus at 0.5 to avoid over-rewarding aggressive burn programs that may not be sustainable
+  if (inflation < 0) {
+    raw += Math.min(Math.abs(inflation) / 20, 0.5); // -10% inflation → +0.5 max bonus
+  }
   raw += hasDistribution ? 0.5 : -0.5;
   raw += hasRoiData ? 0.3 : 0;
 
@@ -946,6 +963,11 @@ function scoreDistribution(tokenomics = {}, market = {}) {
     else if (fdvRatio <= 2) { raw += 1; parts.push(`FDV/MCap ${fdvRatio.toFixed(2)} (good)`); }
     else if (fdvRatio <= 5) { raw -= 0.5; parts.push(`FDV/MCap ${fdvRatio.toFixed(2)} (moderate dilution risk)`); }
     else { raw -= 1.5; parts.push(`FDV/MCap ${fdvRatio.toFixed(2)} (high dilution risk)`); }
+  } else if (mcap > 0 && pctCirculating > 0 && pctCirculating < 50) {
+    // Round 342 (AutoResearch): FDV unknown but circulating supply is low — infer dilution risk
+    // When FDV is unavailable but only <50% of tokens are circulating, apply mild unlock warning
+    raw -= 0.5;
+    parts.push(`FDV n/a, ${pctCirculating.toFixed(0)}% circulating — inferred dilution risk (FDV data unavailable)`);
   } else {
     parts.push('FDV/MCap n/a');
   }
@@ -1000,13 +1022,22 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
   let raw = 6; // Start slightly above midpoint (assume moderate risk by default)
 
   // 1. Volatility risk: large price swings = higher risk
-  const change24h = Math.abs(safeNumber(market.price_change_pct_24h));
-  const change7d  = Math.abs(safeNumber(market.price_change_pct_7d));
+  // Round 343 (AutoResearch): normalize across available timeframes — don't assume 0 when data is missing
+  const raw24h = market.price_change_pct_24h != null ? Math.min(Math.abs(safeNumber(market.price_change_pct_24h)), 200) : null;
+  const raw7d  = market.price_change_pct_7d  != null ? Math.min(Math.abs(safeNumber(market.price_change_pct_7d)),  200) : null;
   // Round 147 (AutoResearch): cap inputs at 200% to prevent astronomical volatility
-  // from dominating the entire risk score (e.g. +10000% pump doesn't need extra scoring)
-  const cappedChange24h = Math.min(change24h, 200);
-  const cappedChange7d = Math.min(change7d, 200);
-  const volatility = (cappedChange24h * 0.6) + (cappedChange7d * 0.4);
+  const cappedChange24h = raw24h ?? 0; // keep for backward-compat usage below
+  const cappedChange7d  = raw7d  ?? 0;
+  let volatility;
+  if (raw24h != null && raw7d != null) {
+    volatility = raw24h * 0.6 + raw7d * 0.4;
+  } else if (raw24h != null) {
+    volatility = raw24h; // only 24h available — use as-is (no artificial downscale)
+  } else if (raw7d != null) {
+    volatility = raw7d;
+  } else {
+    volatility = 0; // no data → neutral
+  }
   if (volatility > 100) raw -= 3.0; // extreme: likely exploit or severe pump/dump
   else if (volatility > 30) raw -= 2.5;
   else if (volatility > 15) raw -= 1.5;
@@ -1045,7 +1076,7 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
 
   // 3. Concentration risk: whale concentration = higher risk (lower score)
   const topConcentration = safeNumber(
-    holderData.top10_concentration ?? holderData.concentration_pct ?? 0
+    holderData.top10_concentration ?? holderData.concentration_pct ?? holderData.top10_holder_concentration_pct ?? 0
   );
   if (topConcentration > 60) raw -= 2;
   else if (topConcentration > 40) raw -= 1;
