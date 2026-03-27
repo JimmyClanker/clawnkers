@@ -146,12 +146,51 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Conservative gate: low overall data confidence should cap conviction even if score looks good.
+  const overallConfidence = safeNum(scores?.overall?.overall_confidence ?? scores?.overall?.confidence ?? 100);
+  if (overallConfidence < 30) {
+    breakers.push({
+      cap: 5.0,
+      reason: `Overall data confidence only ${overallConfidence}% — too much uncertainty for a high-conviction rating`,
+      severity: 'warning',
+    });
+  } else if (overallConfidence < 45) {
+    breakers.push({
+      cap: 6.0,
+      reason: `Overall data confidence only ${overallConfidence}% — conviction should stay capped until collectors agree`,
+      severity: 'warning',
+    });
+  }
+
   // 3+ critical red flags
   const criticalFlags = (redFlags || []).filter((f) => f.severity === 'critical');
   if (criticalFlags.length >= 3) {
     breakers.push({
       cap: 5.0,
       reason: `${criticalFlags.length} critical red flags — structural risk`,
+      severity: 'warning',
+    });
+  }
+
+  // Category uncertainty: if we are not sure what the thing is, we should not issue a high-conviction call.
+  const categoryConfidence = safeNum(scores?.overall?.category_confidence ?? 100);
+  if (categoryConfidence < 45 && overallScore > 6.5) {
+    breakers.push({
+      cap: 6.5,
+      reason: `Category confidence only ${categoryConfidence}% — project classification is too uncertain for a strong BUY/STRONG BUY call`,
+      severity: 'warning',
+    });
+  }
+
+  // No-dev + opaque tokenomics + loud social = classic false-positive cocktail.
+  const mentionsForHype = safeNum(rawData?.social?.filtered_mentions ?? rawData?.social?.mentions ?? 0);
+  const commits90d = safeNum(rawData?.github?.commits_90d ?? 0);
+  const pctCirc = rawData?.tokenomics?.pct_circulating;
+  const tokenomicsOpaque = pctCirc == null && rawData?.tokenomics?.error == null;
+  if (mentionsForHype >= 20 && commits90d === 0 && tokenomicsOpaque) {
+    breakers.push({
+      cap: 5.5,
+      reason: `High social noise (${mentionsForHype} mentions) with zero development activity and opaque circulating supply — hype without verification`,
       severity: 'warning',
     });
   }
