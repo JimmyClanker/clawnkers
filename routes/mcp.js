@@ -169,10 +169,16 @@ export function createMcpRouter({ config, exaService, signalsService }) {
           const analysis = await generateReport(project, rawData, scores);
           const formatted = formatReport(project, rawData, scores, analysis);
           const agentJson = formatAgentJSON(project, rawData, scores, analysis);
+          // Round 407 (AutoResearch): richer MCP response with tl_dr, risk_profile, and data quality
+          const scoreFmt = scores?.overall?.score != null ? `${Number(scores.overall.score).toFixed(1)}/10` : 'n/a';
+          const alphaLabel = agentJson.alpha_index_label ? ` (${agentJson.alpha_index_label})` : '';
           const preamble = [
             `## Alpha Research: ${project}`,
-            `**Verdict:** ${analysis?.verdict || 'HOLD'} | **Score:** ${scores?.overall?.score != null ? Number(scores.overall.score).toFixed(1) : 'n/a'}/10 | **Alpha Index:** ${agentJson.composite_alpha_index ?? 'n/a'}/100`,
+            `**TL;DR:** ${agentJson.tl_dr ?? `${project}: ${analysis?.verdict || 'HOLD'} (${scoreFmt})`}`,
+            `**Score:** ${scoreFmt} | **Alpha Index:** ${agentJson.composite_alpha_index ?? 'n/a'}/100${alphaLabel}`,
             agentJson.conviction ? `**Conviction:** ${agentJson.conviction.score}/100 (${agentJson.conviction.label})` : null,
+            agentJson.risk_profile ? `**Risk:** ${agentJson.risk_profile.risk_level?.toUpperCase()} | Volatility: ${agentJson.risk_profile.volatility_regime} | Flags: ${agentJson.risk_profile.critical_flags} critical` : null,
+            agentJson.data_quality ? `**Data Quality:** ${agentJson.data_quality.quality_tier} (${agentJson.data_quality.coverage_pct ?? 'n/a'}% coverage)` : null,
             '',
           ].filter(l => l != null).join('\n');
           return {
@@ -199,18 +205,27 @@ export function createMcpRouter({ config, exaService, signalsService }) {
         if (data.error) {
           return { content: [{ type: 'text', text: `X sentiment unavailable: ${data.error}` }] };
         }
+        // Round 409 (AutoResearch): emoji sentiment score bar + structured sections
+        const sentimentEmoji = { bullish: '🟢', bearish: '🔴', neutral: '🟡', mixed: '🟠' };
+        const sentimentIcon = sentimentEmoji[data.sentiment?.toLowerCase()] ?? '⚪';
+        const scoreBar = (() => {
+          const s = Number(data.sentiment_score);
+          if (!Number.isFinite(s)) return '';
+          const normalized = Math.max(0, Math.min(10, s));
+          const filled = Math.round(normalized);
+          return ' [' + '█'.repeat(filled) + '░'.repeat(10 - filled) + ']';
+        })();
         const lines = [
-          `## X/Twitter Sentiment: ${project}`,
-          `**Sentiment:** ${data.sentiment ?? 'n/a'} (score: ${data.sentiment_score ?? 'n/a'})`,
-          `**Mention volume:** ${data.mention_volume ?? 'n/a'}`,
-          `**KOL sentiment:** ${data.kol_sentiment ?? 'n/a'}`,
-          data.key_narratives?.length ? `**Key narratives:** ${data.key_narratives.join(', ')}` : null,
-          data.notable_accounts?.length ? `**Notable accounts:** ${data.notable_accounts.map((a) => `@${a}`).join(', ')}` : null,
-          data.trending_topics?.length ? `**Trending topics:** ${data.trending_topics.join(', ')}` : null,
-          data.engagement_level ? `**Engagement:** ${data.engagement_level}` : null,
-          data.fear_greed_signal ? `**Fear/Greed signal:** ${data.fear_greed_signal}` : null,
-          data.summary ? `\n**Summary:** ${data.summary}` : null,
-        ].filter(l => l != null && l !== '').join('\n');
+          `## 🐦 X/Twitter Sentiment: ${project}`,
+          `${sentimentIcon} **${data.sentiment?.toUpperCase() ?? 'N/A'}** (score: ${data.sentiment_score ?? 'n/a'}/10)${scoreBar}`,
+          `📊 Mentions: ${data.mention_volume ?? 'n/a'} | KOL: ${data.kol_sentiment ?? 'n/a'} | Engagement: ${data.engagement_level ?? 'n/a'}`,
+          data.fear_greed_signal ? `⚡ Fear/Greed: ${data.fear_greed_signal}` : null,
+          '',
+          data.key_narratives?.length ? `**Key Narratives:** ${data.key_narratives.slice(0, 4).join(' · ')}` : null,
+          data.notable_accounts?.length ? `**Notable Accounts:** ${data.notable_accounts.slice(0, 5).map((a) => `@${a}`).join(', ')}` : null,
+          data.trending_topics?.length ? `**Trending:** ${data.trending_topics.slice(0, 4).join(', ')}` : null,
+          data.summary ? `\n> ${data.summary}` : null,
+        ].filter(l => l != null).join('\n');
         return { content: [{ type: 'text', text: lines }] };
       }
     );
@@ -225,13 +240,28 @@ export function createMcpRouter({ config, exaService, signalsService }) {
       },
       async ({ type, severity, limit }) => {
         const signals = getSignals({ type, severity, limit: limit || 20, activeOnly: true });
-        if (!signals.length) return { content: [{ type: 'text', text: 'No active signals at this time.' }] };
+        if (!signals.length) return { content: [{ type: 'text', text: 'No active Oracle signals at this time.' }] };
 
-        const formatted = signals.map(s =>
-          `[${s.severity?.toUpperCase()}] ${s.signal_type}: ${s.title}\n${s.detail}`
-        ).join('\n\n');
-
-        return { content: [{ type: 'text', text: formatted }] };
+        // Round 408 (AutoResearch): severity emoji + structured grouping for better readability
+        const severityEmoji = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' };
+        const grouped = {};
+        for (const s of signals) {
+          const g = s.severity ?? 'low';
+          if (!grouped[g]) grouped[g] = [];
+          grouped[g].push(s);
+        }
+        const order = ['critical', 'high', 'medium', 'low'];
+        const sections = [];
+        for (const sev of order) {
+          if (!grouped[sev]?.length) continue;
+          sections.push(`### ${severityEmoji[sev] ?? '⚪'} ${sev.toUpperCase()} (${grouped[sev].length})`);
+          for (const s of grouped[sev]) {
+            sections.push(`**${s.signal_type}**: ${s.title}`);
+            if (s.detail) sections.push(`  ${s.detail}`);
+          }
+        }
+        const header = `## Oracle Signals (${signals.length} active)\n`;
+        return { content: [{ type: 'text', text: header + sections.join('\n') }] };
       }
     );
 

@@ -154,6 +154,30 @@ export function createHistoryRouter({ signalsService, cache, getOrCreateReport, 
         if (pitch) parts.push(pitch);
         return parts.join(' · ');
       })(),
+      // Round 406 (AutoResearch): tl_dr + risk_profile + narrative_strength in export
+      tl_dr: (() => {
+        const score = dimensionScores.overall;
+        const verdict = report?.verdict ?? 'HOLD';
+        const pitch = report?.elevator_pitch ?? report?.thesis?.one_liner ?? null;
+        const base = `${projectName}: ${verdict} (${score?.toFixed(1) ?? '?'}/10)`;
+        return pitch ? `${base} — ${pitch}` : base;
+      })(),
+      risk_profile: {
+        risk_level: report?.red_flags_summary?.risk_level ?? (() => {
+          const critical = (report?.red_flags ?? []).filter(f => f.severity === 'critical').length;
+          const warnings = (report?.red_flags ?? []).filter(f => f.severity === 'warning').length;
+          return critical >= 2 ? 'critical' : critical >= 1 ? 'high' : warnings >= 3 ? 'elevated' : warnings >= 1 ? 'moderate' : 'low';
+        })(),
+        critical_flags: (report?.red_flags ?? []).filter(f => f.severity === 'critical').length,
+        circuit_breakers_active: report?.scores?.overall?.circuit_breakers?.capped ?? false,
+        volatility_regime: report?.raw_data?.volatility?.regime ?? 'calm',
+        supply_unlock_risk: report?.raw_data?.supply_unlock_risk?.risk_level ?? 'unknown',
+      },
+      narrative_strength: report?.raw_data?.narrative_strength ? {
+        strength: report.raw_data.narrative_strength.strength,
+        score: report.raw_data.narrative_strength.score,
+        detail: report.raw_data.narrative_strength.detail,
+      } : null,
     };
 
     res.set('Content-Type', 'application/json');

@@ -13,11 +13,13 @@ function renderList(items = []) {
 }
 
 function renderScoreLine(label, payload) {
-  const score = payload?.score ?? 'n/a';
+  // Round 391 (AutoResearch): score always 1 decimal for consistency; show confidence label
+  const rawScore = payload?.score;
+  const scoreFmt = rawScore != null ? `${Number(rawScore).toFixed(1)}/10` : 'n/a';
   const reasoning = payload?.reasoning || 'n/a';
   const conf = payload?.confidence_label ?? (payload?.confidence != null ? `${payload.confidence}%` : null);
   const confStr = conf != null ? ` [${conf}]` : '';
-  return `${label}: ${score}/10${confStr} — ${reasoning}`;
+  return `${label}: ${scoreFmt}${confStr} — ${reasoning}`;
 }
 
 function fmtNumber(value, decimals = 2) {
@@ -33,6 +35,16 @@ function fmtPct(value, decimals = 1) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 'n/a';
   return `${n > 0 ? '+' : ''}${n.toFixed(decimals)}%`;
+}
+
+// Round 392 (AutoResearch): fmtPlain — format plain numbers (no $ prefix) for counts, ratios, commits
+function fmtPlain(value, decimals = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return 'n/a';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(decimals)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(decimals)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toFixed(decimals);
 }
 
 // Round 26: format trade setup for text reports
@@ -287,15 +299,16 @@ const json = {
     raw_data: rawData,
   };
 
+  // Round 393 (AutoResearch): headline + project_summary in header; alpha index + conviction side-by-side
+  const convictionStr = rawData?.conviction ? ` | Conviction: ${rawData.conviction.score}/100 (${rawData.conviction.label})` : '';
+  const alphaIndexStr = json.composite_alpha_index != null ? ` | Alpha Index: ${json.composite_alpha_index}/100` : '';
   const text = [
     `🧠 Alpha Scanner Report — ${projectName}`,
-    `📌 Verdict: ${json.verdict}`,
-    `🕒 Generated at: ${json.generated_at}`,
-    `🧩 Data completeness: ${scores?.overall?.completeness ?? 'n/a'}%`,
-    `🧪 Collector failures: ${failedCollectors.length ? failedCollectors.join(' | ') : 'none'}`,
-    `📡 Data quality: ${json.data_quality.quality_tier} (${json.data_quality.coverage_pct ?? 'n/a'}% coverage, ${json.data_quality.completeness_pct ?? 'n/a'}% completeness)`,
-    ...(llmAnalysis?.headline ? [`📰 Headline: ${llmAnalysis.headline}`] : []),
-    ...(json.composite_alpha_index != null ? [`⚡ Alpha Index: ${json.composite_alpha_index}/100`] : []),
+    `📌 Verdict: ${json.verdict}${alphaIndexStr}${convictionStr}`,
+    ...(llmAnalysis?.headline ? [`📰 ${llmAnalysis.headline}`] : []),
+    ...(json.project_summary ? [`💬 ${json.project_summary}`] : []),
+    `🕒 Generated: ${json.generated_at}`,
+    `📡 Data: ${json.data_quality.quality_tier} quality | ${json.data_quality.coverage_pct ?? 'n/a'}% coverage | ${json.data_quality.completeness_pct ?? 'n/a'}% completeness${failedCollectors.length ? ` | ⚠️ ${failedCollectors.length} collector(s) failed` : ''}`,
     '',
     '💎 Key Metrics',
     `- Price: ${keyMetrics.price_fmt}`,
@@ -305,7 +318,7 @@ const json = {
     `- TVL: ${keyMetrics.tvl_fmt}`,
     `- 24h Volume: ${keyMetrics.volume_24h_fmt}`,
     `- Overall Score: ${keyMetrics.overall_score_fmt}`,
-    ...(rawData?.conviction ? [`- Conviction: ${rawData.conviction.score}/100 (${rawData.conviction.label})`] : []),
+    // conviction shown in header line (R393); skip redundant line here
     ...(keyMetrics.dex_pressure ? [`- DEX Pressure: ${keyMetrics.dex_pressure} (ratio: ${keyMetrics.dex_buy_sell_ratio ?? 'n/a'})`] : []),
     ...(rawData?.dex?.sell_wall_risk && rawData.dex.sell_wall_risk !== 'low' ? [`- ⚠️ Sell Wall Risk: ${rawData.dex.sell_wall_risk.toUpperCase()}`] : []),
     ...(rawData?.market?.holder_engagement_score != null ? [`- Holder Engagement: ${rawData.market.holder_engagement_score}/100`] : []),
@@ -317,6 +330,10 @@ const json = {
     ...(rawData?.dex?.dex_price_change_m5 != null ? [`- DEX 5m Price Change: ${rawData.dex.dex_price_change_m5 > 0 ? '+' : ''}${rawData.dex.dex_price_change_m5.toFixed(2)}%`] : []),
     ...(rawData?.social?.airdrop_mentions > 0 ? [`- 🪂 Airdrop Mentions: ${rawData.social.airdrop_mentions} articles`] : []),
     ...(rawData?.social?.hack_exploit_mentions > 0 ? [`- 🚨 Hack/Exploit Mentions: ${rawData.social.hack_exploit_mentions} ⚠️`] : []),
+    // Round 394 (AutoResearch): FDV/mcap ratio + circulating supply % in key metrics text
+    ...(keyMetrics.fdv_mcap_ratio != null && keyMetrics.fdv_mcap_ratio > 1 ? [`- FDV/MCap: ${keyMetrics.fdv_mcap_ratio.toFixed(2)}x (FDV: ${keyMetrics.fdv_fmt})`] : []),
+    ...(keyMetrics.pct_circulating != null ? [`- Circulating Supply: ${keyMetrics.pct_circulating_fmt}`] : []),
+    ...(keyMetrics.ath_distance_fmt !== 'n/a' ? [`- ATH: ${keyMetrics.ath_distance_fmt}${keyMetrics.days_since_ath_fmt !== 'n/a' ? ` — ${keyMetrics.days_since_ath_fmt}` : ''}`] : []),
     '',
     '📊 Scores',
     `- ${renderScoreLine('Market strength', scores?.market_strength)}`,
@@ -377,9 +394,14 @@ const json = {
     ...(rawData?.thesis
       ? [
           '📈 Investment Thesis',
+          // Round 395 (AutoResearch): thesis one_liner + time horizons + conviction score in text
+          ...(rawData.thesis.one_liner ? [`💡 ${rawData.thesis.one_liner}`] : []),
+          ...(rawData.thesis.conviction_score != null ? [`📊 Conviction: ${rawData.thesis.conviction_score}/100`] : []),
           `🐂 Bull: ${rawData.thesis.bull_case || 'n/a'}`,
           `🐻 Bear: ${rawData.thesis.bear_case || 'n/a'}`,
           `🔄 Neutral: ${rawData.thesis.neutral_case || 'n/a'}`,
+          ...(rawData.thesis.time_horizon_short ? [`📅 Short: ${rawData.thesis.time_horizon_short}`] : []),
+          ...(rawData.thesis.time_horizon_medium ? [`📅 Medium: ${rawData.thesis.time_horizon_medium}`] : []),
         ]
       : []),
     ...(rawData?.trade_setup?.entry_zone ? [
@@ -405,6 +427,12 @@ const json = {
         </div>
       </header>
 
+      ${(llmAnalysis?.headline || json.project_summary) ? `
+      <section style="margin-bottom:20px;padding:16px;background:linear-gradient(135deg,rgba(255,211,182,0.06),rgba(181,199,211,0.06));border:1px dashed rgba(181,199,211,0.28);border-radius:18px;">
+        ${llmAnalysis?.headline ? `<p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#ffd3b6;letter-spacing:0.03em;">${escapeHtml(llmAnalysis.headline)}</p>` : ''}
+        ${json.project_summary ? `<p style="margin:0;line-height:1.7;color:#d1d5db;font-size:13px;">${escapeHtml(json.project_summary)}</p>` : ''}
+      </section>` : ''}
+
       <section style="margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.03);border:1px dashed rgba(181,199,211,0.28);border-radius:18px;">
         <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 12px;color:#ffd3b6;">💎 Key Metrics</h2>
         <div style="display:flex;flex-wrap:wrap;gap:12px;">
@@ -416,6 +444,17 @@ const json = {
           <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
             <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">24h Change</div>
             <div style="font-size:18px;font-weight:700;color:${keyMetrics.price_change_24h >= 0 ? '#22c55e' : '#ef4444'};">${escapeHtml(keyMetrics.price_change_24h_fmt)}</div>
+          </div>` : ''}
+          ${keyMetrics.price_change_7d != null ? `
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">7d Change</div>
+            <div style="font-size:18px;font-weight:700;color:${keyMetrics.price_change_7d >= 0 ? '#22c55e' : '#ef4444'};">${escapeHtml(keyMetrics.price_change_7d_fmt)}</div>
+          </div>` : ''}
+          ${keyMetrics.fdv_mcap_ratio != null && keyMetrics.fdv_mcap_ratio > 1 ? `
+          <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
+            <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">FDV/MCap</div>
+            <div style="font-size:18px;font-weight:700;color:${keyMetrics.fdv_mcap_ratio > 5 ? '#ef4444' : keyMetrics.fdv_mcap_ratio > 2 ? '#fbbf24' : '#a8e6cf'};">${keyMetrics.fdv_mcap_ratio.toFixed(2)}x</div>
+            <div style="color:#888;font-size:10px;margin-top:2px;">FDV: ${escapeHtml(keyMetrics.fdv_fmt)}</div>
           </div>` : ''}
           <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:10px 16px;min-width:120px;text-align:center;">
             <div style="color:#888;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Market Cap</div>
@@ -510,21 +549,59 @@ const json = {
         <ul style="margin:0;padding-left:18px;line-height:1.8;">${renderList(llmAnalysis?.key_findings)}</ul>
       </section>
 
+      ${Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length > 0 ? `
+      <section style="margin-bottom:20px;padding:16px;background:rgba(34,197,94,0.04);border:1px dashed rgba(34,197,94,0.28);border-radius:18px;">
+        <h2 style="font-family:'Caveat',cursive;font-size:30px;margin:0 0 10px;color:#22c55e;">🔍 Alpha Signals (${rawData.alpha_signals.length})</h2>
+        <ul style="margin:0;padding-left:18px;line-height:2;">
+          ${rawData.alpha_signals.slice(0, 6).map(s => {
+            const color = s.strength === 'strong' ? '#22c55e' : s.strength === 'moderate' ? '#fbbf24' : '#888';
+            return `<li><span style="color:${color};font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">[${escapeHtml(s.strength || '?')}]</span> <strong>${escapeHtml(s.signal)}</strong>${s.detail ? ` — <span style="color:#aaa;">${escapeHtml(s.detail)}</span>` : ''}</li>`;
+          }).join('')}
+        </ul>
+      </section>` : ''}
+
+      ${rawData?.narrative_strength && rawData.narrative_strength.score > 0 ? `
+      <section style="margin-bottom:20px;padding:14px;background:rgba(255,255,255,0.02);border:1px dashed rgba(181,199,211,0.2);border-radius:16px;">
+        <h2 style="font-family:'Caveat',cursive;font-size:28px;margin:0 0 6px;color:#b5c7d3;">🌊 Narrative Strength</h2>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <span style="font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.1em;color:${rawData.narrative_strength.strength === 'strong' || rawData.narrative_strength.strength === 'very_strong' ? '#22c55e' : rawData.narrative_strength.strength === 'moderate' ? '#fbbf24' : '#888'};">${escapeHtml(rawData.narrative_strength.strength?.toUpperCase() ?? 'UNKNOWN')}</span>
+          <span style="color:#888;font-size:12px;">${rawData.narrative_strength.score}/100</span>
+        </div>
+        ${rawData.narrative_strength.detail ? `<p style="margin:0;color:#aaa;font-size:12px;line-height:1.6;">${escapeHtml(rawData.narrative_strength.detail)}</p>` : ''}
+      </section>` : ''}
+
       ${rawData?.elevator_pitch ? `
       <section style="margin-bottom:20px;padding:16px;background:linear-gradient(135deg,rgba(255,211,182,0.08),rgba(168,230,207,0.08));border:1px dashed rgba(255,211,182,0.3);border-radius:18px;">
         <h2 style="font-family:'Caveat',cursive;font-size:28px;margin:0 0 8px;color:#ffd3b6;">💡 Elevator Pitch</h2>
         <p style="margin:0;line-height:1.7;font-size:15px;color:#e8e8e8;">${escapeHtml(rawData.elevator_pitch)}</p>
       </section>` : ''}
 
-      <section>
+      <section style="margin-bottom:20px;">
         <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 8px;color:#b5c7d3;">📝 Analysis</h2>
         <p style="margin:0;line-height:1.9;white-space:pre-wrap;">${escapeHtml(llmAnalysis?.analysis_text || 'n/a')}</p>
       </section>
 
+      <footer style="border-top:1px dashed rgba(232,232,232,0.12);padding-top:14px;margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+        <div style="color:#555;font-size:11px;letter-spacing:0.08em;">
+          Engine: <span style="color:#888;">${escapeHtml(json.engine_version ?? 'unknown')}</span>
+          &nbsp;·&nbsp; Quality: <span style="color:${json.data_quality.quality_tier === 'high' ? '#22c55e' : json.data_quality.quality_tier === 'medium' ? '#fbbf24' : '#f87171'};font-weight:700;">${escapeHtml(json.data_quality.quality_tier?.toUpperCase() ?? 'N/A')}</span>
+          &nbsp;·&nbsp; Coverage: <span style="color:#888;">${escapeHtml(String(json.data_quality.coverage_pct ?? 'n/a'))}%</span>
+          &nbsp;·&nbsp; Completeness: <span style="color:#888;">${escapeHtml(String(json.data_quality.completeness_pct ?? 'n/a'))}%</span>
+        </div>
+        <div style="color:#444;font-size:11px;">${escapeHtml(json.generated_at)}</div>
+      </footer>
+
       ${rawData?.trade_setup?.entry_zone ? `
       <section style="margin-top:20px;padding:16px;background:rgba(255,255,255,0.03);border:1px dashed rgba(181,199,211,0.28);border-radius:18px;">
-        <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 8px;color:#ffd3b6;">📐 Trade Setup</h2>
-        <p style="margin:0;line-height:1.7;color:#d1d5db;">${escapeHtml(renderTradeSetup(rawData.trade_setup) || 'n/a')}</p>
+        <h2 style="font-family:'Caveat',cursive;font-size:32px;margin:0 0 12px;color:#ffd3b6;">📐 Trade Setup</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          ${rawData.trade_setup.entry_zone ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Entry Zone</div><div style="font-weight:700;color:#e8e8e8;">$${rawData.trade_setup.entry_zone.low} – $${rawData.trade_setup.entry_zone.high}</div></div>` : ''}
+          ${rawData.trade_setup.stop_loss ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Stop Loss</div><div style="font-weight:700;color:#ef4444;">$${rawData.trade_setup.stop_loss}</div></div>` : ''}
+          ${rawData.trade_setup.take_profit_targets?.[0] ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">TP1</div><div style="font-weight:700;color:#22c55e;">$${rawData.trade_setup.take_profit_targets[0].price} <span style="color:#888;font-size:11px;">(+${rawData.trade_setup.take_profit_targets[0].pct_gain}%)</span></div></div>` : ''}
+          ${rawData.trade_setup.take_profit_targets?.[1] ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">TP2</div><div style="font-weight:700;color:#22c55e;">$${rawData.trade_setup.take_profit_targets[1].price} <span style="color:#888;font-size:11px;">(+${rawData.trade_setup.take_profit_targets[1].pct_gain}%)</span></div></div>` : ''}
+          ${rawData.trade_setup.risk_reward_ratio ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">R/R</div><div style="font-weight:700;color:#ffd3b6;">${rawData.trade_setup.risk_reward_ratio}</div></div>` : ''}
+          ${rawData.trade_setup.setup_quality ? `<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:8px 14px;"><div style="color:#888;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Quality</div><div style="font-weight:700;color:#b5c7d3;">${escapeHtml(rawData.trade_setup.setup_quality)}</div></div>` : ''}
+        </div>
       </section>` : ''}
     </article>
   `;
@@ -533,6 +610,30 @@ const json = {
   if (rawData?.thesis && typeof rawData.thesis === 'object') {
     json.thesis = rawData.thesis;
   }
+
+  // Round 403 (AutoResearch): risk_profile — consolidated risk signals for agent decision-making
+  json.risk_profile = {
+    risk_score: scores?.risk?.score ?? null,
+    risk_level: json.red_flags_summary.risk_level,
+    critical_flags: json.red_flags_summary.critical,
+    total_flags: json.red_flags_summary.total,
+    circuit_breakers_active: scores?.overall?.circuit_breakers?.capped ?? false,
+    volatility_regime: rawData?.volatility?.regime ?? 'calm',
+    volatility_pct_24h: rawData?.volatility?.volatility_pct_24h ?? null,
+    supply_unlock_risk: rawData?.supply_unlock_risk?.risk_level ?? 'unknown',
+    fdv_overhang: keyMetrics.fdv_mcap_ratio != null && keyMetrics.fdv_mcap_ratio > 2 ? 'high' : keyMetrics.fdv_mcap_ratio != null && keyMetrics.fdv_mcap_ratio > 1.5 ? 'moderate' : 'low',
+    wash_trading_risk: keyMetrics.wash_trading_risk ?? null,
+  };
+
+  // Round 402 (AutoResearch): add tl_dr field — one-sentence summary for quick agent consumption
+  json.tl_dr = (() => {
+    const verdict = json.verdict;
+    const score = scores?.overall?.score;
+    const scoreFmt = score != null ? `${Number(score).toFixed(1)}/10` : 'n/a';
+    const pitch = rawData?.elevator_pitch ?? rawData?.thesis?.one_liner ?? null;
+    const base = `${projectName}: ${verdict} (${scoreFmt})`;
+    return pitch ? `${base} — ${pitch}` : base;
+  })();
 
   return { json, text, html };
 }
@@ -623,8 +724,24 @@ export function formatPlainText(projectName, rawData, scores, llmAnalysis) {
   const conviction = rawData?.conviction;
   const riskMatrix = rawData?.risk_matrix;
 
+  // Round 410 (AutoResearch): add alpha index + risk level + conviction in plain text header
+  const collectorMetaPlain = rawData?.metadata?.collectors ?? {};
+  const totalCollectorsPlain = Object.keys(collectorMetaPlain).length;
+  const okCollectorsPlain = Object.values(collectorMetaPlain).filter((c) => c?.ok !== false && !c?.error).length;
+  const alphaIndexPlain = (() => {
+    const overallScore = scores?.overall?.score ?? 5;
+    const alphaSignalCount = Math.min(Array.isArray(rawData?.alpha_signals) ? rawData.alpha_signals.length : 0, 5);
+    const qualityTier = totalCollectorsPlain > 0 ? (okCollectorsPlain / totalCollectorsPlain >= 0.8 ? 'high' : 'medium') : 'low';
+    const qualityBonus = qualityTier === 'high' ? 20 : 10;
+    const convictionScore = rawData?.thesis?.conviction_score ?? 50;
+    return Math.round((overallScore / 10) * 50 + alphaSignalCount * 3 + qualityBonus + (convictionScore / 100) * 15);
+  })();
+  const redFlagsPlain = Array.isArray(rawData?.red_flags) ? rawData.red_flags : [];
+  const criticalFlagsPlain = redFlagsPlain.filter(f => f.severity === 'critical').length;
+  const riskLevelPlain = criticalFlagsPlain >= 2 ? 'critical' : criticalFlagsPlain >= 1 ? 'high' : redFlagsPlain.filter(f => f.severity === 'warning').length >= 3 ? 'elevated' : 'moderate';
+
   const parts = [
-    `🧠 ${projectName} — ${llmAnalysis?.verdict || 'HOLD'} (${keyMetrics.overall_score_fmt})`,
+    `🧠 ${projectName} — ${llmAnalysis?.verdict || 'HOLD'} (${keyMetrics.overall_score_fmt}) ⚡${alphaIndexPlain}/100 🛡️${riskLevelPlain}`,
   ];
 
   if (conviction) {
@@ -711,6 +828,21 @@ export function formatAgentJSON(projectName, rawData, scores, llmAnalysis) {
     overall_score: scores?.overall?.score ?? null,
     conviction: rawData?.conviction ?? null,
     composite_alpha_index: compositeAlphaIndex,
+    // Round 404 (AutoResearch): alpha_index_label for quick agent interpretation
+    alpha_index_label: (() => {
+      if (compositeAlphaIndex >= 80) return 'exceptional';
+      if (compositeAlphaIndex >= 65) return 'strong';
+      if (compositeAlphaIndex >= 50) return 'moderate';
+      if (compositeAlphaIndex >= 35) return 'weak';
+      return 'poor';
+    })(),
+    // Round 404 (AutoResearch): tl_dr — one-sentence agent-friendly summary
+    tl_dr: (() => {
+      const scoreFmt = scores?.overall?.score != null ? `${Number(scores.overall.score).toFixed(1)}/10` : 'n/a';
+      const pitch = rawData?.elevator_pitch ?? rawData?.thesis?.one_liner ?? null;
+      const base = `${projectName}: ${llmAnalysis?.verdict || 'HOLD'} (${scoreFmt})`;
+      return pitch ? `${base} — ${pitch}` : base;
+    })(),
     elevator_pitch: rawData?.elevator_pitch ?? null,
     red_flags_summary: redFlagsSummary,
     key_metrics: keyMetrics,
@@ -724,6 +856,23 @@ export function formatAgentJSON(projectName, rawData, scores, llmAnalysis) {
         },
       ])
     ),
+    // Round 405 (AutoResearch): risk_profile — consolidated risk for agent consumption
+    risk_profile: {
+      risk_score: scores?.risk?.score ?? null,
+      risk_level: redFlagsSummary.risk_level,
+      critical_flags: redFlagsSummary.critical,
+      circuit_breakers_active: scores?.overall?.circuit_breakers?.capped ?? false,
+      volatility_regime: rawData?.volatility?.regime ?? 'calm',
+      supply_unlock_risk: rawData?.supply_unlock_risk?.risk_level ?? 'unknown',
+      fdv_overhang: (() => {
+        const ratio = keyMetrics.fdv_mcap_ratio;
+        if (ratio == null) return 'unknown';
+        if (ratio > 2) return 'high';
+        if (ratio > 1.5) return 'moderate';
+        return 'low';
+      })(),
+      wash_trading_risk: keyMetrics.wash_trading_risk ?? null,
+    },
     cross_dimensional: rawData?.cross_dimensional ?? null,
     risk_matrix: rawData?.risk_matrix ? {
       overall_risk_score: rawData.risk_matrix.overall_risk_score,
