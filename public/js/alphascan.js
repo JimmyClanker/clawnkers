@@ -1586,8 +1586,9 @@
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ txHash, project: safeProject })
           });
-          if (!response.ok) { const e = await response.json(); throw new Error(e.error||'Payment verification failed'); }
-          const result = await response.json();
+          const payload = await readJsonResponse(response);
+          if (!response.ok) { throw new Error(payload?.error||'Payment verification failed'); }
+          const result = payload;
           removePaymentModal();
           onSuccess(result);
         } catch(e) {
@@ -1626,6 +1627,21 @@
       }
     }
 
+    async function readJsonResponse(res) {
+      const text = await res.text();
+      const contentType = String(res.headers.get('content-type') || '');
+      if (!contentType.includes('application/json')) {
+        const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+        throw new Error(snippet ? `Server returned non-JSON response (${res.status}): ${snippet}` : `Server returned non-JSON response (${res.status})`);
+      }
+      try {
+        return text ? JSON.parse(text) : {};
+      } catch {
+        const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+        throw new Error(snippet ? `Invalid JSON from server (${res.status}): ${snippet}` : `Invalid JSON from server (${res.status})`);
+      }
+    }
+
     async function runScan(mode = 'full') {
       clearError();
       reportBox.classList.add('hidden');
@@ -1651,7 +1667,7 @@
           } finally {
             clearTimeout(timeoutId);
           }
-          const payload = await res.json();
+          const payload = await readJsonResponse(res);
           if (!res.ok) throw new Error(payload?.error || `Server error (${res.status})`);
           renderReport(payload);
           history.replaceState({}, '', `${location.pathname}?project=${encodeURIComponent(project)}&mode=quick${_persistedKey ? '&key=' + encodeURIComponent(_persistedKey) : ''}`);
@@ -1675,7 +1691,7 @@
             try {
               res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey) + '&force_refresh=true', { signal: controller2.signal });
             } finally { clearTimeout(tid2); }
-            var payload2 = await res2.json();
+            var payload2 = await readJsonResponse(res2);
             if (!res2.ok) throw new Error(payload2?.error || 'Server error (' + res2.status + ')');
             renderReport(payload2);
           } catch(err2) {
