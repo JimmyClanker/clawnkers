@@ -94,9 +94,33 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
     }
 
     const forceRefresh = req.query.force_refresh === 'true' || req.query.force_refresh === '1';
+    const asyncRefresh = req.query.async_refresh === 'true' || req.query.async_refresh === '1';
     // Round 73: force_refresh bypasses cache by using 0ms TTL (effectively cache-miss always)
     const ttlMs = forceRefresh ? 0 : (mode === 'quick' ? QUICK_TTL_MS : FULL_TTL_MS);
     const cacheKey = buildCacheKey(projectName, mode);
+
+    // For full scans behind Cloudflare/tunnel, async refresh avoids 502 timeout:
+    // return cached result immediately, trigger recomputation in background, then client can poll.
+    if (mode === 'full' && forceRefresh && asyncRefresh) {
+      const cached = cache.read(cacheKey, FULL_TTL_MS);
+      if (cached) {
+        if (!inFlight.has(cacheKey)) {
+          void getOrCreateReport({ cacheKey, ttlMs: 0, projectName, exaService, mode }).catch((err) => {
+            console.error(`[alpha:${mode}] async refresh failed for ${projectName}:`, err?.message || err);
+          });
+        }
+        res.set('X-Refresh-Mode', 'async');
+        res.set('X-Refresh-Started', 'true');
+        return res.status(202).json({
+          ...cached,
+          refresh: {
+            mode: 'async',
+            started: true,
+            cache_served: true,
+          },
+        });
+      }
+    }
 
     try {
       const response = await getOrCreateReport({ cacheKey, ttlMs, projectName, exaService, mode });
@@ -182,7 +206,9 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
       return res.status(400).json({ error: 'Maximum 5 projects per batch request' });
     }
 
-    const normalized = projects.map(normalizeProject).filter(Boolean);
+    const normalizedRaw = projects.map(normalizeProject);
+    const invalidCount = normalizedRaw.filter((p) => !p).length;
+    const normalized = [...new Set(normalizedRaw.filter(Boolean).map((p) => p.trim()))];
     if (normalized.length === 0) {
       return res.status(400).json({ error: 'No valid project names provided' });
     }
@@ -234,6 +260,9 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
     return res.json({
       batch,
       count: batch.length,
+      unique_projects: normalized.length,
+      duplicates_removed: projects.length - invalidCount - normalized.length,
+      invalid_projects: invalidCount,
       generated_at: new Date().toISOString(),
     });
   });

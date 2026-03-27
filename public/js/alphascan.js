@@ -1689,13 +1689,22 @@
             var tid2 = setTimeout(function() { controller2.abort(); }, 90000);
             var res2;
             try {
-              // Do not force refresh full scans by default: live full generation can exceed Cloudflare/tunnel limits.
-              // Cached full scans are still valuable and much more reliable. A manual refresh path can be added later.
-              res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey), { signal: controller2.signal });
+              // Full scans use async refresh to avoid Cloudflare/tunnel 502s on long live generations.
+              // Server may return cached data immediately (202) while recomputing in background.
+              res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey) + '&force_refresh=true&async_refresh=true', { signal: controller2.signal });
             } finally { clearTimeout(tid2); }
             var payload2 = await readJsonResponse(res2);
-            if (!res2.ok) throw new Error(payload2?.error || 'Server error (' + res2.status + ')');
+            if (!res2.ok && res2.status !== 202) throw new Error(payload2?.error || 'Server error (' + res2.status + ')');
             renderReport(payload2);
+            if (res2.status === 202 && payload2?.refresh?.started) {
+              setTimeout(async function () {
+                try {
+                  var pollRes = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey), { cache: 'no-store' });
+                  var pollPayload = await readJsonResponse(pollRes);
+                  if (pollRes.ok) renderReport(pollPayload);
+                } catch (_) { /* ignore background poll failure */ }
+              }, 8000);
+            }
           } catch(err2) {
             var pair2 = err2.name === 'AbortError' ? ['Request timed out', 'Full scan took too long.'] : userFriendlyError(err2);
             showError(pair2[0], pair2[1]);
