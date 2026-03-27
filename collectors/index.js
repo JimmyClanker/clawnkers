@@ -148,7 +148,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
         data,
         error,
         ok: !error,
-        source: fromCache ? (stale ? 'stale-cache' : 'cache') : 'fresh',
+        source: cacheResult?.lastResort ? 'last-resort-cache' : (fromCache ? (stale ? 'stale-cache' : 'cache') : 'fresh'),
         age_ms: cacheResult?.age_ms ?? null,
       };
     }
@@ -179,7 +179,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const dexData = dex.data || {};
 
   // CoinGecko platforms data for contract verification
-  const platforms = marketData?.platforms || null;
+  const platforms = marketData?.platforms || marketData?.contract_addresses || null;
   // Contract address — from market platforms or existing field
   const contractAddress = marketData?.contract_address || null;
 
@@ -256,6 +256,33 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   if (social.data && market.data?.community_score != null && social.data.community_score == null) {
     social.data = { ...social.data, community_score: market.data.community_score };
   }
+
+  // Round 565 (AutoResearch): enrich crossCollectorSignals with social follower data from x_social
+  // x_social has mention_volume signal; market has twitter_followers — merge for richer social context
+  // Also surface a combined "social_signal_strength" for scoring shortcuts
+  const socialSignalStrength = (() => {
+    const twitterFollowers = market.data?.twitter_followers ?? 0;
+    const telegramUsers = market.data?.telegram_channel_user_count ?? 0;
+    const xMentionVolume = xSocial.ok && xSocial.data?.mention_volume;
+    const redditPostCount = reddit.data?.post_count ?? 0;
+    let score = 0;
+    if (twitterFollowers > 1_000_000) score += 3;
+    else if (twitterFollowers > 100_000) score += 2;
+    else if (twitterFollowers > 10_000) score += 1;
+    if (telegramUsers > 100_000) score += 2;
+    else if (telegramUsers > 10_000) score += 1;
+    if (xMentionVolume === 'high') score += 2;
+    else if (xMentionVolume === 'medium') score += 1;
+    if (redditPostCount > 20) score += 1;
+    return score >= 6 ? 'very_high' : score >= 4 ? 'high' : score >= 2 ? 'medium' : 'low';
+  })();
+  crossCollectorSignals.social_signal_strength = socialSignalStrength;
+  crossCollectorSignals.social_signal_components = {
+    twitter_followers: market.data?.twitter_followers ?? null,
+    telegram_users: market.data?.telegram_channel_user_count ?? null,
+    x_mention_volume: xSocial.ok ? xSocial.data?.mention_volume ?? null : null,
+    reddit_post_count: reddit.data?.post_count ?? null,
+  };
 
   // Round 547 (AutoResearch): bridge contract_addresses from market to contract/holders collectors
   // When market has platforms data but contract.data is empty/errored, surface addresses

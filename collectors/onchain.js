@@ -5,6 +5,23 @@ const LLAMA_PROTOCOL_URL = 'https://api.llama.fi/protocol';
 const LLAMA_FEES_URL = 'https://api.llama.fi/summary/fees';
 const LLAMA_CHAINS_URL = 'https://api.llama.fi/v2/chains';
 const LLAMA_CHAIN_TVL_URL = 'https://api.llama.fi/v2/historicalChainTvl';
+const ONCHAIN_TIMEOUT_MS = 20000;
+
+function sanitizeNonNegative(value, decimals = null) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return typeof decimals === 'number' ? parseFloat(num.toFixed(decimals)) : num;
+}
+
+function normalizeUsdAmount(value) {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,\s]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+  return sanitizeNonNegative(value);
+}
 
 function createEmptyOnchainResult(projectName) {
   return {
@@ -24,6 +41,10 @@ function createEmptyOnchainResult(projectName) {
     chain_tvl: {},
     // Round 11: active users (if available from DeFiLlama)
     active_users_24h: null,
+    active_users_7d: null,
+    active_users_30d: null,
+    fee_data_days_covered: null,
+    revenue_data_days_covered: null,
     // Round 21: revenue efficiency (fees_7d per $1M TVL)
     revenue_efficiency: null,
     // Round 6: TVL stickiness ('sticky' | 'moderate' | 'fleeing' | null)
@@ -82,10 +103,23 @@ function getClosestHistoricalTvl(tvlHistory, daysBack) {
   let smallestDistance = Number.POSITIVE_INFINITY;
 
   for (const point of tvlHistory) {
-    const ts = (point?.date || 0) * 1000;
+    // Round 555 (AutoResearch): handle both DeFiLlama TVL history shapes:
+    // shape A: { date: unixSec, totalLiquidityUSD: number } (protocol endpoint)
+    // shape B: { date: unixSec, tvl: number } (chain TVL endpoint)
+    // shape C: [unixMs, number] (array tuple format — rare but seen in some endpoints)
+    let ts, tvlValue;
+    if (Array.isArray(point)) {
+      [ts, tvlValue] = [Number(point[0] || 0) * 1000, Number(point[1] || 0)];
+      if (ts < 1e10) ts *= 1000; // handle both sec and ms timestamps
+    } else {
+      ts = (point?.date || 0) * 1000;
+      tvlValue = point?.totalLiquidityUSD ?? point?.tvl ?? null;
+    }
+    const numVal = Number(tvlValue);
+    if (!Number.isFinite(numVal) || numVal < 0) continue;
     const distance = Math.abs(ts - targetTs);
-    if (Number.isFinite(point?.totalLiquidityUSD) && distance < smallestDistance) {
-      closest = point.totalLiquidityUSD;
+    if (distance < smallestDistance) {
+      closest = numVal;
       smallestDistance = distance;
     }
   }
@@ -97,8 +131,24 @@ function getClosestHistoricalTvl(tvlHistory, daysBack) {
 // e.g. sumLastNDays(data, 14, 7) → days 8–14 ago (prior week)
 function sumLastNDays(values, days, startOffset = 0) {
   if (!Array.isArray(values) || values.length === 0) return null;
+  // Round 557 (AutoResearch): DeFiLlama fee arrays have varied field names and shapes
+  // Handle both { timestamp, dailyFees, dailyRevenue } and { date, fees, revenue } shapes
+  // Also guard NaN/Infinity and negative values (negative fees = refund events, treat as 0)
   const sorted = [...values]
-    .filter((item) => Number.isFinite(item?.dailyFees) || Number.isFinite(item?.dailyRevenue))
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const dailyFees = (() => {
+        const v = Number(item?.dailyFees ?? item?.fees ?? item?.total ?? 0);
+        return Number.isFinite(v) && v >= 0 ? v : 0;
+      })();
+      const dailyRevenue = (() => {
+        const v = Number(item?.dailyRevenue ?? item?.revenue ?? 0);
+        return Number.isFinite(v) && v >= 0 ? v : 0;
+      })();
+      const ts = item?.timestamp ?? item?.date ?? 0;
+      return { timestamp: ts, dailyFees, dailyRevenue };
+    })
+    .filter(item => item !== null && (item.dailyFees > 0 || item.dailyRevenue > 0))
     .sort((a, b) => (a?.timestamp || 0) - (b?.timestamp || 0));
 
   if (!sorted.length) return null;
@@ -183,7 +233,14 @@ export async function collectOnchain(projectName) {
       fetchJson(LLAMA_PROTOCOLS_URL),
     ]);
 
-    const match = [...(protocols || [])]
+    if (!Array.isArray(protocols)) {
+      return {
+        ...fallback,
+        error: 'DeFiLlama protocols list unavailable or malformed',
+      };
+    }
+
+    const match = [...protocols]
       .map((protocol) => ({ protocol, score: similarityScore(projectName, protocol) }))
       .sort((a, b) => b.score - a.score)[0];
 
@@ -235,8 +292,10 @@ export async function collectOnchain(projectName) {
     if (!match?.protocol?.slug || match.score < 45) {
       // Round 194 (AutoResearch): include best-candidate info for debug
       const bestName = match?.protocol?.name || 'none';
+      const bestSlug = match?.protocol?.slug || 'none';
+      const bestSymbol = match?.protocol?.symbol || 'n/a';
       const bestScore = match?.score ?? 0;
-      return { ...fallback, error: `DeFiLlama protocol not found (best match: "${bestName}" score=${bestScore})` };
+      return { ...fallback, error: `DeFiLlama protocol not found for "${projectName}" (best match: "${bestName}" slug=${bestSlug} symbol=${bestSymbol} score=${bestScore})` };
     }
 
     const slug = match.protocol.slug;
@@ -248,32 +307,64 @@ export async function collectOnchain(projectName) {
     const protocol = protocolData.status === 'fulfilled' ? protocolData.value : null;
     const fees = feesData.status === 'fulfilled' ? feesData.value : null;
 
+    if (!protocol && !fees) {
+      return {
+        ...fallback,
+        slug,
+        error: `DeFiLlama protocol and fees payloads unavailable for slug "${slug}"`,
+      };
+    }
+
     // currentChainTvls can include "borrowed", "staking" etc — filter to real chain names only
+    // Round 552 (AutoResearch): distinguish TVL=0 (legitimate zero) from TVL=null (data missing)
+    // A protocol with $0 TVL is a real signal (unused/deprecated) — don't silently null it
     let currentTvl = null;
     if (protocol?.currentChainTvls) {
       const validChains = new Set((protocol.chains || []).map((c) => c));
-      currentTvl = Object.entries(protocol.currentChainTvls)
+      const chainSum = Object.entries(protocol.currentChainTvls)
         .filter(([key]) => validChains.has(key))
-        .reduce((sum, [, value]) => sum + Number(value || 0), 0);
-      if (currentTvl === 0) currentTvl = null;
+        .reduce((sum, [, value]) => {
+          const v = Number(value || 0);
+          return sum + (Number.isFinite(v) ? v : 0);
+        }, 0);
+      // Only use 0 if we had actual chain data to aggregate (not just an empty filter result)
+      currentTvl = validChains.size > 0 ? chainSum : null;
+      if (currentTvl === 0 && validChains.size === 0) currentTvl = null;
     }
-    if (!currentTvl) {
-      currentTvl = Number(protocol?.tvl ?? match.protocol?.tvl ?? 0) || null;
+    if (currentTvl == null) {
+      const rawTvl = protocol?.tvl ?? match.protocol?.tvl;
+      const numTvl = Number(rawTvl ?? 0);
+      currentTvl = Number.isFinite(numTvl) && numTvl >= 0 ? numTvl : null;
     }
 
     const tvlHistory = Array.isArray(protocol?.tvl) ? protocol.tvl : [];
     const tvl7dAgo = getClosestHistoricalTvl(tvlHistory, 7);
     const tvl30dAgo = getClosestHistoricalTvl(tvlHistory, 30);
     const feeDataArr = fees?.totalDataChart || fees?.totalDataChartBreakdown || fees?.data || [];
+    const feeDataCoverage = Array.isArray(feeDataArr)
+      ? feeDataArr
+          .map((item) => ({
+            fees: sanitizeNonNegative(item?.dailyFees ?? item?.fees ?? item?.total),
+            revenue: sanitizeNonNegative(item?.dailyRevenue ?? item?.revenue),
+          }))
+          .reduce((acc, item) => {
+            if (item.fees != null) acc.feeDays += 1;
+            if (item.revenue != null) acc.revenueDays += 1;
+            return acc;
+          }, { feeDays: 0, revenueDays: 0 })
+      : { feeDays: 0, revenueDays: 0 };
     const feeTotals = sumLastNDays(feeDataArr, 7);
     // Round 153 (AutoResearch): also compute fees for prior 7d window (days 8-14) to detect trend
     const feeTotalsPrev = sumLastNDays(feeDataArr, 14, 7);
     // Round 229 (AutoResearch): fees_30d_actual from actual 30-day sum (more accurate than 7d × 4.3)
     const feeTotals30d = sumLastNDays(feeDataArr, 30);
 
-    const fees7d = feeTotals?.fees ?? (fees?.total24h ? Number(fees.total24h) * 7 : null);
-    const revenue7d = feeTotals?.revenue ?? null;
-    const revenue7dPrev = feeTotalsPrev?.revenue ?? null;
+    const fees7d = sanitizeNonNegative(feeTotals?.fees)
+      ?? (sanitizeNonNegative(fees?.total7d) ?? (sanitizeNonNegative(fees?.total24h) != null ? sanitizeNonNegative(fees?.total24h) * 7 : null));
+    const revenue7d = sanitizeNonNegative(feeTotals?.revenue)
+      ?? sanitizeNonNegative(fees?.totalRevenue7d)
+      ?? sanitizeNonNegative(fees?.protocolRevenue7d);
+    const revenue7dPrev = sanitizeNonNegative(feeTotalsPrev?.revenue);
     const revenueToFeesRatio = (revenue7d != null && fees7d != null && fees7d > 0)
       ? revenue7d / fees7d
       : null;
@@ -299,16 +390,19 @@ export async function collectOnchain(projectName) {
     if (protocol?.currentChainTvls) {
       const validChains = new Set((protocol.chains || []).map((c) => c));
       for (const [chain, val] of Object.entries(protocol.currentChainTvls)) {
-        if (validChains.has(chain) && Number.isFinite(Number(val))) {
-          chainTvl[chain] = Number(val);
+        const sanitized = sanitizeNonNegative(val);
+        if (validChains.has(chain) && sanitized != null) {
+          chainTvl[chain] = sanitized;
         }
       }
     }
 
+    const protocolChains = [...new Set([...(protocol?.chains || []), ...(match.protocol?.chains || [])].filter(Boolean))];
+
     // Round 11: active users from DeFiLlama if available
-    const activeUsers24h = Number.isFinite(Number(protocol?.activeUsers))
-      ? Number(protocol.activeUsers)
-      : null;
+    const activeUsers24h = sanitizeNonNegative(protocol?.activeUsers ?? protocol?.activeUsers24h);
+    const activeUsers7d = sanitizeNonNegative(protocol?.activeUsers7d);
+    const activeUsers30d = sanitizeNonNegative(protocol?.activeUsers30d);
 
     // Round 21: revenue efficiency = weekly fees per $1M TVL
     const revenueEfficiency = (fees7d != null && currentTvl != null && currentTvl > 0)
@@ -378,7 +472,7 @@ export async function collectOnchain(projectName) {
       tvl: currentTvl,
       tvl_change_7d: tvl7dChange,
       tvl_change_30d: tvl30dChange,
-      chains: protocol?.chains || match.protocol?.chains || [],
+      chains: protocolChains,
       category: protocol?.category || match.protocol?.category || null,
       fees_7d: fees7d,
       // Round 238 (AutoResearch): fees_7d_prev for revenue trend detection in circuit breakers
@@ -392,8 +486,30 @@ export async function collectOnchain(projectName) {
       treasury_balance: treasuryBalance,
       chain_tvl: chainTvl,
       active_users_24h: activeUsers24h,
+      active_users_7d: activeUsers7d,
+      active_users_30d: activeUsers30d,
+      fee_data_days_covered: feeDataCoverage.feeDays || null,
+      revenue_data_days_covered: feeDataCoverage.revenueDays || null,
       revenue_efficiency: revenueEfficiency != null ? Math.round(revenueEfficiency * 100) / 100 : null,
       fees_per_tvl_7d: feesPerTvl7d,
+      // Round 571 (AutoResearch): annualized fee rate as % of TVL
+      fee_to_tvl_annualized: (() => {
+        if (fees7d == null || currentTvl == null || currentTvl <= 0) return null;
+        const annualized = (fees7d * (365 / 7) / currentTvl) * 100;
+        return Number.isFinite(annualized) ? parseFloat(annualized.toFixed(3)) : null;
+      })(),
+      // Round 572 (AutoResearch): annualized revenue rate as % of TVL
+      revenue_to_tvl_annualized: (() => {
+        if (revenue7d == null || currentTvl == null || currentTvl <= 0) return null;
+        const annualized = (revenue7d * (365 / 7) / currentTvl) * 100;
+        return Number.isFinite(annualized) ? parseFloat(annualized.toFixed(3)) : null;
+      })(),
+      // Round 573 (AutoResearch): protocol fee capture — how much of gross fees accrue to protocol revenue
+      fee_capture_pct: (() => {
+        if (revenueToFeesRatio == null) return null;
+        const pct = revenueToFeesRatio * 100;
+        return Number.isFinite(pct) ? parseFloat(pct.toFixed(1)) : null;
+      })(),
       // Round 200 (AutoResearch): protocol age from DeFiLlama listedAt timestamp
       // Round 206 (AutoResearch): revenue trend — compare current 7d vs prior 7d revenue
       revenue_trend: (() => {
@@ -497,6 +613,27 @@ export async function collectOnchain(projectName) {
         if (activeUsers24h == null) return null;
         return Math.round(activeUsers24h * 7 * 0.6);
       })(),
+      // Round 564 (AutoResearch): funding/raises data from DeFiLlama if available
+      // DeFiLlama includes raises field on some protocol records with funding round details
+      total_raised_usd: (() => {
+        const raises = protocol?.raises;
+        if (!Array.isArray(raises) || raises.length === 0) return null;
+        const total = raises.reduce((sum, r) => {
+          const amt = normalizeUsdAmount(r?.amount ?? r?.raisedAmount ?? r?.amountUsd ?? 0);
+          return sum + (amt != null ? amt : 0);
+        }, 0);
+        return total > 0 ? total : null;
+      })(),
+      raise_count: (() => {
+        const raises = protocol?.raises;
+        return Array.isArray(raises) ? raises.length : null;
+      })(),
+      last_raise_date: (() => {
+        const raises = protocol?.raises;
+        if (!Array.isArray(raises) || raises.length === 0) return null;
+        const dates = raises.map(r => r?.date).filter(Boolean).sort().reverse();
+        return dates[0] || null;
+      })(),
       // Round 544 (AutoResearch): security signals from DeFiLlama protocol data
       // audit_links presence = at least one public audit; stablecoin flag from category
       has_audit: (() => {
@@ -568,7 +705,7 @@ export async function collectOnchain(projectName) {
     const isCooldown = error.message?.includes('cooldown');
     const isNotFound = error.message?.includes('not found') || error.message?.includes('404');
     let errorMsg = error.message;
-    if (isTimeout) errorMsg = `DeFiLlama timeout (>${GLOBAL_TIMEOUT_MS ?? 20000}ms)`;
+    if (isTimeout) errorMsg = `DeFiLlama timeout (> ${ONCHAIN_TIMEOUT_MS}ms)`;
     else if (isCooldown) errorMsg = `DeFiLlama API in cooldown — too many recent failures`;
     else if (isNotFound) errorMsg = `DeFiLlama: protocol not found for "${projectName}"`;
     return {

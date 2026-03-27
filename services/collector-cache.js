@@ -61,6 +61,7 @@ function ensureSchema(db) {
 export function createCollectorCache(db) {
   ensureSchema(db);
 
+  const inflightRefreshes = new Map();
   const getStmt = db.prepare('SELECT data_json, created_at FROM collector_cache WHERE cache_key = ?');
   const upsertStmt = db.prepare(`
     INSERT INTO collector_cache (cache_key, data_json, created_at, collector)
@@ -121,6 +122,9 @@ export function createCollectorCache(db) {
      */
     write(collectorName, projectName, data) {
       const key = `${collectorName}:${projectName.trim().toLowerCase()}`;
+      if (data?.error && Object.values(data).every((value) => value == null || value === false || value === '' || value === data.error || Array.isArray(value) && value.length === 0 || typeof value === 'object' && value && Object.keys(value).length === 0 || value === projectName)) {
+        return;
+      }
       try {
         upsertStmt.run(key, JSON.stringify(data), Date.now(), collectorName);
       } catch (_) { /* never block on cache write */ }
@@ -134,6 +138,7 @@ export function createCollectorCache(db) {
      * @returns {Promise<{ data: any, fromCache: boolean, stale: boolean }>}
      */
     async withCache(collectorName, projectName, fetchFn) {
+      const cacheKey = `${collectorName}:${projectName.trim().toLowerCase()}`;
       const cached = this.read(collectorName, projectName);
 
       if (cached && !cached.stale) {
@@ -142,24 +147,37 @@ export function createCollectorCache(db) {
       }
 
       if (cached && cached.stale) {
-        // Stale — return stale data immediately, refresh in background
-        setImmediate(async () => {
-          try {
-            const fresh = await fetchFn();
-            this.write(collectorName, projectName, fresh);
-          } catch (_) { /* background refresh failure is non-fatal */ }
-        });
+        // Stale — return stale data immediately, refresh in background.
+        if (!inflightRefreshes.has(cacheKey)) {
+          inflightRefreshes.set(cacheKey, (async () => {
+            try {
+              const fresh = await fetchFn();
+              this.write(collectorName, projectName, fresh);
+            } catch (_) { /* background refresh failure is non-fatal */ }
+            finally { inflightRefreshes.delete(cacheKey); }
+          })());
+        }
         return { data: cached.data, fromCache: true, stale: true };
       }
 
-      // No cache — fetch fresh
+      // No cache — fetch fresh, but dedupe concurrent misses.
       try {
-        const fresh = await fetchFn();
-        this.write(collectorName, projectName, fresh);
+        if (!inflightRefreshes.has(cacheKey)) {
+          inflightRefreshes.set(cacheKey, (async () => {
+            try {
+              const fresh = await fetchFn();
+              this.write(collectorName, projectName, fresh);
+              return fresh;
+            } finally {
+              inflightRefreshes.delete(cacheKey);
+            }
+          })());
+        }
+        const fresh = await inflightRefreshes.get(cacheKey);
         return { data: fresh, fromCache: false, stale: false };
       } catch (err) {
         // On failure, check for any stale data (even beyond grace period) as last resort
-        const lastResort = getStmt.get(`${collectorName}:${projectName.trim().toLowerCase()}`);
+        const lastResort = getStmt.get(cacheKey);
         if (lastResort) {
           try {
             return { data: JSON.parse(lastResort.data_json), fromCache: true, stale: true, lastResort: true };

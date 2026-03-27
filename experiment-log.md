@@ -3152,3 +3152,63 @@ Focus: responsive layout, spacing, typography, loading states, animations, acces
 - **Why:** Helps downstream collectors use CoinGecko contract data directly and makes freshness visible.
 - **Files:** `collectors/market.js`
 - **Tests:** `npm test` → 179/179 pass
+
+### Round 11 — Onchain numeric sanitizers
+- **Change:** Added local non-negative/USD normalizers in `collectors/onchain.js`.
+- **Why:** DeFiLlama payloads sometimes mix numbers and `$1,234,567` strings; normalization avoids silent nulls/NaN.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 12 — Protocol list validation
+- **Change:** Added explicit partial-error return when the `/protocols` payload is missing or malformed.
+- **Why:** Makes upstream outages/rate-limit corruption visible instead of failing later with vague type errors.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 13 — More informative DeFiLlama miss errors
+- **Change:** Protocol-not-found errors now include project name, best-match name, slug, symbol, and score.
+- **Why:** Faster debugging of fuzzy-match misses and easier repo mapping fixes later.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 14 — Slug payload guard
+- **Change:** Added explicit error when both protocol detail and fee payloads are unavailable for a matched slug.
+- **Why:** Differentiates “matching worked” from “detail fetch failed”.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 15 — Fee/revenue coverage extraction
+- **Change:** Counted how many daily rows actually contain fee and revenue data, exposing `fee_data_days_covered` and `revenue_data_days_covered`.
+- **Why:** Lets downstream scoring/templates judge confidence of DeFiLlama monetization metrics.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 16 — More complete fee/revenue fallback parsing
+- **Change:** `fees_7d`/`revenue_7d` now fall back through more DeFiLlama fields (`total7d`, `totalRevenue7d`, `protocolRevenue7d`) with sanitization.
+- **Why:** Pulls more useful data from existing payloads without extra requests.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 17 — Chain/active-user cleanup
+- **Change:** Deduped protocol chains, sanitized chain TVL values, and added `active_users_7d`/`active_users_30d` fallbacks.
+- **Why:** Better DeFiLlama parsing coverage and cleaner downstream data.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 18 — Funding data parsing hardening
+- **Change:** Raise totals now normalize formatted USD strings and alternate amount fields.
+- **Why:** Prevents undercounting funding history when DeFiLlama uses string amounts.
+- **Files:** `collectors/onchain.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 19 — Collector cache single-flight refresh
+- **Change:** Added in-flight deduping for stale refreshes and cold misses in `collector-cache`.
+- **Why:** Prevents request stampedes against CoinGecko/DeFiLlama/GitHub and improves rate-limit resilience.
+- **Files:** `services/collector-cache.js`
+- **Tests:** `npm test` → 179/179 pass
+
+### Round 20 — Smarter cache fallback + contract platforms bridge
+- **Change:** Avoid caching pure error-only payloads; mark last-resort cache source; route market `platforms || contract_addresses` to the contract collector.
+- **Why:** Better stale fallback semantics and more reliable contract resolution when CoinGecko platform data exists.
+- **Files:** `services/collector-cache.js`, `collectors/index.js`
+- **Tests:** `npm test` → 179/179 pass
