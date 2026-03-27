@@ -79,6 +79,12 @@
       --green-dim: rgba(212,88,10,0.12);
       --green-glow: 0 0 28px rgba(212,88,10,0.2);
       --green-glow-strong: 0 0 40px rgba(212,88,10,0.3);
+      --green-alpha-03: rgba(212,88,10,0.03);
+      --green-alpha-04: rgba(212,88,10,0.04);
+      --green-alpha-06: rgba(212,88,10,0.06);
+      --green-alpha-07: rgba(212,88,10,0.07);
+      --green-alpha-08: rgba(212,88,10,0.08);
+      --green-alpha-10: rgba(212,88,10,0.10);
       --shadow: 0 4px 24px rgba(0,0,0,0.4);
       --shadow-lg: 0 8px 48px rgba(0,0,0,0.5);
       --radius: 16px;
@@ -237,7 +243,7 @@
     .hero-bg {
       position: absolute; inset: 0;
       background-image:
-        radial-gradient(circle at 50% 0%, rgba(212,88,10,0.06) 0%, transparent 60%),
+        radial-gradient(circle at 50% 0%, var(--green-alpha-06) 0%, transparent 60%),
         linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
       background-size: 100% 100%, 40px 40px, 40px 40px;
@@ -253,7 +259,7 @@
       border: 1px solid rgba(212,88,10,0.3);
       border-radius: 999px;
       background: rgba(212,88,10,0.06);
-      color: var(--green); font-size: 0.82rem; font-weight: 500;
+      color: var(--green); font-size: 0.82rem; font-weight: 600;
       margin-bottom: 28px; letter-spacing: 0.02em;
     }
     .hero-badge::before { content: '●'; font-size: 0.6rem; animation: pulse 2s ease-in-out infinite; }
@@ -262,14 +268,14 @@
     h1.hero-headline {
       font-size: clamp(2.8rem, 6vw, 5rem);
       font-weight: 800; line-height: 1.08;
-      letter-spacing: -0.04em; color: var(--text);
+      letter-spacing: -0.045em; color: var(--text);
       margin-bottom: 20px;
     }
     h1.hero-headline em { font-style: normal; color: var(--green); }
 
     .hero-sub {
       font-size: clamp(1rem, 2vw, 1.2rem);
-      color: var(--muted2); line-height: 1.7;
+      color: var(--muted2); line-height: 1.72;
       max-width: 660px; margin: 0 auto 36px;
     }
     .hero-ctas {
@@ -301,7 +307,7 @@
       background: transparent; color: var(--muted2);
       padding: 14px 28px; border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      font-weight: 500; font-size: 1rem;
+      font-weight: 600; font-size: 1rem;
       transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       font-family: 'Inter', sans-serif; cursor: pointer;
     }
@@ -315,7 +321,7 @@
     section { padding: clamp(48px, 8vw, 80px) 0; }
     .section-label {
       font-size: 0.73rem; font-weight: 700; color: var(--green);
-      text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 14px;
+      text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 14px;
       display: flex; align-items: center; gap: 8px;
     }
     .section-label::before {
@@ -332,7 +338,7 @@
       line-height: 1.1; margin-bottom: 14px;
     }
     .section-sub {
-      color: #a8a8a8; font-size: 1.02rem;
+      color: #adadad; font-size: 1.02rem;
       max-width: 560px; line-height: 1.75;
     }
     .section-head { margin-bottom: 48px; }
@@ -380,7 +386,7 @@
     .footer-logo .brand-text { color: var(--text); } .footer-logo .brand-text span { color: var(--green); }
     .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
     .footer-links a {
-      color: var(--muted); font-size: 0.88rem; transition: color 0.2s;
+      color: #888888; font-size: 0.88rem; transition: color 0.2s;
       position: relative;
     }
     /* Round 103: underline slide-in animation on footer links */
@@ -400,7 +406,7 @@
       background: rgba(255,255,255,0.06);
       border: 1px solid var(--border);
       border-radius: 4px; padding: 1px 5px;
-      font-size: 0.85em; color: var(--green);
+      font-size: 0.87em; color: var(--green);
     }
 
     /* Round 98: styled rescan button */
