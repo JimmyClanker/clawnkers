@@ -249,6 +249,17 @@ export function buildDataSummary(rawData = {}) {
     if (market.volume_spike_flag) {
       marketLines.push(`- ⚠️ Volume spike: ${market.volume_spike_flag} (vs 7d avg)`);
     }
+    // Round 376: realized volatility context — institutional risk metric
+    if (market.realized_vol_90d != null) {
+      const rvLabel = market.realized_vol_90d >= 150 ? 'extremely volatile' : market.realized_vol_90d >= 80 ? 'high volatility' : market.realized_vol_90d >= 40 ? 'moderate volatility' : 'low volatility (stable)';
+      marketLines.push(`- Realized vol 90d: ${market.realized_vol_90d.toFixed(0)}% annualized (${rvLabel})`);
+    }
+    // Round 376: days_since_ath for timing context
+    if (market.days_since_ath != null && market.days_since_ath > 0) {
+      const dsa = market.days_since_ath;
+      const dsaLabel = dsa <= 30 ? 'very recent ATH' : dsa <= 180 ? 'ATH within 6 months' : dsa <= 365 ? 'ATH within 1 year' : `ATH ${(dsa/365).toFixed(1)} years ago`;
+      marketLines.push(`- Days since ATH: ${dsa} days (${dsaLabel})`);
+    }
     // Round 233 (AutoResearch nightly): momentum divergence — is short-term vs long-term momentum aligned?
     if (market.momentum_divergence != null) {
       const div = market.momentum_divergence;
@@ -256,6 +267,12 @@ export function buildDataSummary(rawData = {}) {
       marketLines.push(`- Momentum divergence: ${div > 0 ? '+' : ''}${div.toFixed(0)}% (short vs long-term, ${divLabel})`);
     }
     marketLines.push(add('FDV', market.fully_diluted_valuation ?? market.fdv, formatNumber));
+    // Round 378: market_cap_to_volume_ratio — coverage metric (how many days of volume = market cap)
+    if (market.market_cap != null && market.total_volume != null && market.total_volume > 0) {
+      const mcvRatio = market.market_cap / market.total_volume;
+      const mcvLabel = mcvRatio <= 5 ? 'very liquid (5 days of volume = MCap)' : mcvRatio <= 20 ? 'liquid' : mcvRatio <= 100 ? 'moderate' : 'illiquid (100+ days to turnover MCap)';
+      marketLines.push(`- MCap/Vol ratio: ${mcvRatio.toFixed(0)}x days (${mcvLabel})`);
+    }
 
     const validMarket = marketLines.filter(Boolean);
     if (validMarket.length) {
@@ -730,6 +747,23 @@ export function buildDataSummary(rawData = {}) {
     if (redditActivityScore != null) {
       const redLabel = redditActivityScore >= 60 ? 'strong community discussion' : redditActivityScore >= 30 ? 'moderate discussion' : 'limited discussion';
       lines.push(`- Reddit activity score: ${redditActivityScore}/100 (${redLabel}) — upvote-weighted, recency-adjusted`);
+    }
+    lines.push('');
+  }
+
+  // Round 371: Narrative momentum quality context
+  const narrMom = rawData?.narrative_momentum;
+  if (narrMom && narrMom.active_narratives?.length > 0) {
+    lines.push('\nNARRATIVE MOMENTUM:');
+    lines.push(`- Alignment: ${narrMom.narrative_alignment?.toUpperCase() || 'n/a'}`);
+    if (narrMom.active_narratives?.length) lines.push(`- Active narratives: ${narrMom.active_narratives.slice(0, 5).map(n => n.replace(/_/g, ' ')).join(', ')}`);
+    if (narrMom.narrative_dominance_score != null) {
+      const ndLabel = narrMom.narrative_dominance_score >= 70 ? 'dominant narrative' : narrMom.narrative_dominance_score >= 40 ? 'moderate narrative' : 'fragmented narrative';
+      lines.push(`- Dominance score: ${narrMom.narrative_dominance_score}/100 (${ndLabel})`);
+    }
+    if (narrMom.narrative_momentum_quality) {
+      const nmqLabel = narrMom.narrative_momentum_quality === 'accelerating' ? '📈 accelerating — narrative gaining strength' : narrMom.narrative_momentum_quality === 'decelerating' ? '📉 decelerating — narrative fading' : '→ stable';
+      lines.push(`- Momentum quality: ${nmqLabel}`);
     }
     lines.push('');
   }
@@ -1576,6 +1610,22 @@ export function validateReport(report, rawData, scores = null) {
   }
 
   // 6. User-facing text hygiene: remove source tags/snake_case/raw unformatted numbers.
+  // Round 379: Also detect generic moat phrases and flag them as warnings
+  if (report.moat && typeof report.moat === 'string') {
+    const forbiddenMoatPhrases = [
+      /\bfirst.?mover advantage\b/i,
+      /\bstrong community\b(?! with \d)/i, // allow "strong community with 50K members" but not bare "strong community"
+      /\bnetwork effects\b(?! (from|with|of) [\w$])/i, // allow "network effects from 5M users"
+      /\brobust ecosystem\b/i,
+      /\binnovative (technology|protocol|approach)\b/i,
+      /\bunique (approach|technology|solution)\b/i,
+    ];
+    const foundForbidden = forbiddenMoatPhrases.filter(p => p.test(report.moat));
+    if (foundForbidden.length > 0) {
+      warnings.push(`moat contains ${foundForbidden.length} generic/unverifiable phrase(s) — may be hallucinated`);
+    }
+  }
+
   const userFacingFields = ['analysis_text', 'moat', 'competitor_comparison', 'x_sentiment_summary', 'liquidity_assessment'];
   for (const field of userFacingFields) {
     if (report[field]) report[field] = cleanReportText(report[field]);
@@ -1872,7 +1922,7 @@ export function buildOpusPrompt(projectName, rawData, scores) {
     '- project_summary: 2-3 sentences MAX. Sentence 1: MUST name the protocol type, its primary blockchain/chain from ECOSYSTEM data, and core use case (e.g. "X is a lending protocol on Ethereum and Base"). Sentence 2: the single most important traction metric from RAW_DATA — prioritize TVL > fees > MCap rank > GitHub commits (e.g. "$XM TVL growing +Y% weekly" or "ranked #Z by MCap with $XM 24h volume"). Sentence 3 (optional): key differentiator or primary user type. Use only RAW_DATA and X_SOCIAL — no hype, no source tags, no vague claims.',
     '- project_category: the project\'s primary category (examples: "DeFi Lending", "Layer 1", "DEX", "NFT Marketplace", "AI Infrastructure", "Meme Token"). Use the most specific category you can support from RAW_DATA.',
     '- analysis_text: 3-4 clean paragraphs for HUMAN READERS. STRICT PARAGRAPH SCOPES — each paragraph covers EXCLUSIVE territory, NO metric appears in 2 paragraphs:\n  Para 1 [VERDICT + TOP METRICS]: State verdict explicitly. Use the 2-3 highest-signal metrics (usually: overall score, P/TVL or market cap rank, and the single strongest signal — TVL growth OR social spike OR dev velocity). End Para 1 with a one-sentence verdict justification.\n  Para 2 [FUNDAMENTALS DEEP-DIVE]: On-chain numbers ONLY — TVL change, fees, revenue, protocol health, supply metrics. NEVER re-state Para 1 numbers. Add context: compare fees to peers if sector data available, highlight stickiness or growth trajectory.\n  Para 3 [MARKET + SENTIMENT]: Price action (24h/7d/30d), DEX pressure, social signal, volume patterns. NEVER re-state on-chain numbers from Para 2.\n  Para 4 [OUTLOOK]: Near-term risk/reward — what specific data threshold would change the verdict? What\'s the primary catalyst to watch? What\'s the main risk trigger? Be concrete with numbers.\n  FORMAT: $414.8M not 414828652 | -2.48% not -2.484401525322113% | NO source tags | NO snake_case field names.',
-    '- moat: competitive advantage in 1-2 sentences. MANDATORY: use EXACTLY ONE of these three evidence-backed moat types: (1) SCALE MOAT — "Highest TVL/volume in category at $X, 3x larger than nearest competitor" (requires SECTOR_CONTEXT data). (2) TECH/DEV MOAT — "X active contributors and Y commits/week show a technical team larger than typical DeFi protocols; Z stars signals developer mindshare". (3) NETWORK/LIQUIDITY MOAT — "$XM DEX liquidity across Z chains creates switching costs for LPs." FORBIDDEN generics: "first mover advantage", "strong community" (without number), "network effects" (without TVL/user data), "robust ecosystem" (without chain count). If no genuine data-backed moat exists, write exactly: "No clear moat identified from available data."',
+    '- moat: competitive advantage in 1-2 sentences. MANDATORY: use EXACTLY ONE evidence-backed moat type with specific numbers from RAW_DATA:\n  → SCALE MOAT (if SECTOR_CONTEXT available): "Leads category by TVL at $X, 2.5x larger than #2 competitor at $Y." Use only when SECTOR_CONTEXT has comparative data.\n  → DEV/TECH MOAT (if github data available): "Active dev team: X contributors, Y commits/week, Z GitHub stars — typical category protocol averages W commits/week." Must use github.contributors, github.commit_frequency or commits_90d.\n  → LIQUIDITY/NETWORK MOAT (if DEX/onchain data available): "$XM deep liquidity across Z chains + Y% revenue capture creates LP switching costs." Must use dex_liquidity_usd and chain_count.\n  → TOKENOMICS MOAT (if circulating supply data available): "Z% circulating supply with only Y% annual inflation gives controlled dilution vs category avg W%." Must use pct_circulating and inflation_rate.\n  ABSOLUTE FORBIDDEN (delete on sight): "first mover advantage", "strong community", "network effects" (without user/TVL numbers), "innovative", "unique", "robust ecosystem".\n  If NO genuine moat exists from data: write EXACTLY "No clear moat identified from available data — competitive position unverifiable without sector comparison."',
     '- risks: array of 3-5 risk strings. Format: "[Risk Type]: [Specific detail with numbers when available]. [Why this matters for price]". Examples: "Dilution risk: only 42% circulating, 58% supply unlocking over 18 months could suppress price." or "DEX sell pressure: buy/sell ratio 0.78 suggests sustained distribution." FORBIDDEN: vague risks like "regulatory uncertainty" without context, "smart contract risk" without audit/exploit data. Each risk must be actionable.',
     '- catalysts: array of 2-4 upcoming catalysts. ONLY include catalysts supported by data. Prefix unverified ones with "[Unverified]". It is OK to have fewer catalysts if data is limited.',
     '- competitor_comparison: Compare ONLY with metrics you have data for. If no competitor data available, write "Insufficient data for competitor comparison."',
@@ -1927,12 +1977,38 @@ export function buildOpusPrompt(projectName, rawData, scores) {
     userParts.push(`SECTOR_CONTEXT:\n${JSON.stringify(rawData.sector_comparison, null, 2)}`);
   }
 
+  // Round 372: narrative strength score context in user message
+  if (rawData?.narrative_momentum?.active_narratives?.length > 0) {
+    const narrMom = rawData.narrative_momentum;
+    const narrParts = [`NARRATIVE_CONTEXT (alignment: ${narrMom.narrative_alignment?.toUpperCase() || 'n/a'}):`];
+    if (narrMom.active_narratives?.length) narrParts.push(`- Active narratives: ${narrMom.active_narratives.slice(0, 5).map(n => n.replace(/_/g, ' ')).join(', ')}`);
+    if (narrMom.narrative_dominance_score != null) narrParts.push(`- Dominance: ${narrMom.narrative_dominance_score}/100 (higher = stronger macro tailwind)`);
+    if (narrMom.narrative_momentum_quality) narrParts.push(`- Trend: ${narrMom.narrative_momentum_quality}`);
+    if (narrMom.detail) narrParts.push(`- Summary: ${narrMom.detail}`);
+    userParts.push(narrParts.join('\n'));
+  }
+
   if (rawData?.percentiles) {
     userParts.push(`PERCENTILE_CONTEXT:\n${JSON.stringify(rawData.percentiles, null, 2)}`);
   }
 
   if (Array.isArray(rawData?.red_flags) && rawData.red_flags.length) {
     userParts.push(`RED_FLAGS:\n${rawData.red_flags.map((f) => `- [${f.severity?.toUpperCase() || 'WARNING'}] ${f.flag}: ${f.detail}`).join('\n')}`);
+  }
+
+  // Round 380: DATA_COMPLETENESS context — explicit collectors OK/failed for verdict calibration
+  if (rawData?.metadata?.collectors) {
+    const collectors = rawData.metadata.collectors;
+    const okList = Object.entries(collectors).filter(([,v]) => v === true || v?.ok).map(([k]) => k);
+    const failList = Object.entries(collectors).filter(([,v]) => v === false || (v && !v?.ok)).map(([k]) => k);
+    const completeness = scores?.overall?.completeness ?? rawData?.metadata?.completeness;
+    const compParts = [`DATA_COMPLETENESS: ${completeness != null ? completeness + '%' : 'unknown'}`];
+    if (okList.length) compParts.push(`- Available collectors: ${okList.join(', ')}`);
+    if (failList.length) compParts.push(`- Failed collectors: ${failList.join(', ')}`);
+    if (completeness != null && completeness < 40) {
+      compParts.push('⚠️ LOW COMPLETENESS: With <40% data coverage, cap your verdict at HOLD. Do not upgrade to BUY/STRONG BUY without unusually strong data-backed justification.');
+    }
+    userParts.push(compParts.join('\n'));
   }
 
   if (Array.isArray(rawData?.alpha_signals) && rawData.alpha_signals.length) {
@@ -2013,6 +2089,21 @@ export function buildOpusPrompt(projectName, rawData, scores) {
       devLines.push(`- Development velocity: ${gh.github_velocity_tier} (${velDesc[gh.github_velocity_tier] || gh.github_velocity_tier})`);
     }
     userParts.push(devLines.join('\n'));
+  }
+
+  // Round 377: VOLATILITY_CONTEXT block in Opus user message when regime data available
+  if (rawData?.volatility && rawData.volatility.regime !== 'calm') {
+    const vol = rawData.volatility;
+    const volParts = [`VOLATILITY_CONTEXT (regime: ${vol.regime?.toUpperCase() || 'UNKNOWN'}, caution: ${vol.caution_multiplier}x):`];
+    if (vol.volatility_pct_24h != null) volParts.push(`- 24h price swing: ${vol.volatility_pct_24h.toFixed(1)}%`);
+    if (vol.notes?.length) volParts.push(...vol.notes.map(n => `- ${n}`));
+    if (rawData.market?.realized_vol_90d != null) {
+      const rv = rawData.market.realized_vol_90d;
+      const rvLabel = rv >= 150 ? 'extremely volatile asset' : rv >= 80 ? 'high volatility' : 'moderate volatility';
+      volParts.push(`- 90d realized vol: ${rv.toFixed(0)}% annualized (${rvLabel})`);
+    }
+    volParts.push('→ Reduce position size recommendations accordingly. Widen stop-loss guidance in trade_setup context.');
+    userParts.push(volParts.join('\n'));
   }
 
   // X_SOCIAL data section (collected by Grok Fast collector)
@@ -2211,6 +2302,25 @@ export async function generateQuickReport(projectName, rawData, scores, { apiKey
         parts.push(`Team allocation: ${tokQ.vesting_info.team_allocation_pct.toFixed(1)}% ⚠️`);
       }
       return parts.length > 1 ? parts.join(' | ') : null;
+    })(),
+    // Round 374: LIQUIDITY CONTEXT block for quick report — helps fast model with position sizing context
+    (() => {
+      const dexQ = rawData?.dex;
+      const mktQ = rawData?.market;
+      if (!dexQ || dexQ.error || !dexQ.dex_liquidity_usd) return null;
+      const liqParts = ['## LIQUIDITY CONTEXT'];
+      const liq = dexQ.dex_liquidity_usd;
+      const liqLabel = liq >= 5e6 ? 'deep ($50K+ positions viable)' : liq >= 1e6 ? 'good ($10K-$50K positions)' : liq >= 100e3 ? 'moderate (<$10K recommended)' : 'thin (small orders only, high slippage)';
+      liqParts.push(`DEX liquidity: ${formatNumber(liq)} → ${liqLabel}`);
+      if (mktQ?.total_volume && mktQ?.market_cap) {
+        const vel = (mktQ.total_volume / mktQ.market_cap * 100).toFixed(1);
+        liqParts.push(`Volume velocity: ${vel}% of MCap traded daily`);
+      }
+      if (dexQ.buy_sell_ratio != null) {
+        const bsLabel = dexQ.buy_sell_ratio >= 1.15 ? '🟢 buy pressure' : dexQ.buy_sell_ratio <= 0.87 ? '🔴 sell pressure' : '→ balanced';
+        liqParts.push(`Buy/sell pressure: ${dexQ.buy_sell_ratio.toFixed(2)} (${bsLabel})`);
+      }
+      return liqParts.join(' | ');
     })(),
     `PROJECT: ${projectName}`,
     buildScoreSummary(scores),

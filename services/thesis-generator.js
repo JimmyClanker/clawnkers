@@ -195,6 +195,26 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
     ? ' but capital is actively fleeing the protocol'
     : '';
 
+  // Round 375: sector comparison context for data-backed bull/bear cases
+  const sectorCtx = rawData?.sector_comparison;
+  let sectorBullNote = '';
+  let sectorBearNote = '';
+  if (sectorCtx) {
+    const ptvl = sectorCtx.price_to_tvl;
+    if (ptvl?.value != null && ptvl?.median != null) {
+      const ptvlRatio = ptvl.value / ptvl.median;
+      if (ptvlRatio < 0.5) sectorBullNote = ` trading at ${ptvl.value.toFixed(2)}x P/TVL vs sector median ${ptvl.median.toFixed(2)}x (undervalued)`;
+      else if (ptvlRatio > 2) sectorBearNote = ` P/TVL ${ptvl.value.toFixed(2)}x is ${ptvlRatio.toFixed(1)}x sector median ${ptvl.median.toFixed(2)}x (overvalued)`;
+    }
+    if (sectorCtx.tvl_percentile != null) {
+      if (sectorCtx.tvl_percentile >= 75) sectorBullNote += ` top-quartile TVL in sector (${sectorCtx.tvl_percentile}th percentile)`;
+      else if (sectorCtx.tvl_percentile <= 25) sectorBearNote += ` bottom-quartile TVL in sector (${sectorCtx.tvl_percentile}th percentile)`;
+    }
+    if (sectorCtx.fees_percentile != null) {
+      if (sectorCtx.fees_percentile >= 75) sectorBullNote += ` strong fee generation (${sectorCtx.fees_percentile}th percentile)`;
+    }
+  }
+
   // Top alpha signals
   const strongSignals  = alphaSignals.filter((s) => s.strength === 'strong').map((s) => getPhraseLabel(SIGNAL_PHRASES, s.signal, 'signal'));
   const modSignals     = alphaSignals.filter((s) => s.strength === 'moderate').map((s) => getPhraseLabel(SIGNAL_PHRASES, s.signal, 'signal'));
@@ -214,23 +234,23 @@ export function generateThesis(projectName, rawData = {}, scores = {}, redFlags 
   // ── Bull case ─────────────────────────────────────────────────────────────
   let bull_case;
   if (strongSignals.length > 0 && strongest.length > 0) {
-    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10)${priceRangeNote}${stickinessNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
+    bull_case = `${projectName} presents a compelling opportunity driven by ${bullSignalText}, backed by strong ${strongest.join(' and ')} (score ${overallScore}/10)${priceRangeNote}${stickinessNote}${sectorBullNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   } else if (strongest.length > 0 && overallScore >= 6) {
-    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals${priceRangeNote}, positioning it for potential upside with an overall score of ${overallScore}/10${stickinessNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
+    bull_case = `${projectName} shows strong ${strongest.join(' and ')} fundamentals${priceRangeNote}${sectorBullNote}, positioning it for potential upside with an overall score of ${overallScore}/10${stickinessNote}.${trendReversal?.pattern === 'bullish_reversal' || trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   } else {
-    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors${priceRangeNote}.${trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
+    bull_case = `${projectName} has pockets of strength in ${strongest[0] ?? 'some dimensions'} that could reward patient, risk-tolerant investors${priceRangeNote}${sectorBullNote}.${trendReversal?.pattern === 'accumulation' ? trendNote : ''}`;
   }
 
   // ── Bear case ─────────────────────────────────────────────────────────────
   let bear_case;
   if (critFlags.length > 0) {
-    bear_case = `Critical concerns around ${bearFlagText} could severely impact ${projectName}'s value, compounded by weak ${weakest[0] ?? 'fundamentals'}.`;
+    bear_case = `Critical concerns around ${bearFlagText} could severely impact ${projectName}'s value, compounded by weak ${weakest[0] ?? 'fundamentals'}${sectorBearNote}.`;
   } else if (bearFlagText) {
-    bear_case = `${projectName} faces notable risks including ${bearFlagText}, with underperformance in ${weakest.join(' and ')}.`;
+    bear_case = `${projectName} faces notable risks including ${bearFlagText}, with underperformance in ${weakest.join(' and ')}${sectorBearNote}.`;
   } else if (overallScore < 5) {
-    bear_case = `With weak ${weakest.join(' and ')} and an overall score of ${overallScore}/10, ${projectName} lacks the fundamentals to justify significant allocation.`;
+    bear_case = `With weak ${weakest.join(' and ')} and an overall score of ${overallScore}/10, ${projectName} lacks the fundamentals to justify significant allocation${sectorBearNote}.`;
   } else {
-    bear_case = `${projectName}'s weaker ${weakest.join(' and ')} metrics introduce uncertainty that could limit near-term upside.`;
+    bear_case = `${projectName}'s weaker ${weakest.join(' and ')} metrics introduce uncertainty that could limit near-term upside${sectorBearNote}.`;
   }
 
   // ── Neutral case ──────────────────────────────────────────────────────────
