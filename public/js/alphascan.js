@@ -1689,7 +1689,9 @@
             var tid2 = setTimeout(function() { controller2.abort(); }, 90000);
             var res2;
             try {
-              res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey) + '&force_refresh=true', { signal: controller2.signal });
+              // Do not force refresh full scans by default: live full generation can exceed Cloudflare/tunnel limits.
+              // Cached full scans are still valuable and much more reliable. A manual refresh path can be added later.
+              res2 = await fetch('/alpha?project=' + encodeURIComponent(project) + '&key=' + encodeURIComponent(urlKey), { signal: controller2.signal });
             } finally { clearTimeout(tid2); }
             var payload2 = await readJsonResponse(res2);
             if (!res2.ok) throw new Error(payload2?.error || 'Server error (' + res2.status + ')');
