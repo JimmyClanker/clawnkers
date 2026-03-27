@@ -29,6 +29,10 @@ export function safeNum(value) {
 /**
  * Clamp a number between min and max (inclusive).
  * Round 380 (AutoResearch): Centralises repeated Math.min/Math.max pattern.
+ * @param {*} value - input value
+ * @param {number} min - minimum bound
+ * @param {number} max - maximum bound
+ * @returns {number} clamped value (defaults to min if not finite)
  */
 export function clamp(value, min, max) {
   const n = Number(value);

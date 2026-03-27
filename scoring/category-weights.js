@@ -1,3 +1,4 @@
+import { safeNumber } from '../utils/math.js';
 /**
  * Category-Adaptive Weighting — Clawnkers Scoring Engine v2 (Phase 3)
  *

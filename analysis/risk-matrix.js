@@ -5,10 +5,7 @@
  * Categories: Smart Contract, Tokenomics, Regulatory, Market, Operational, Concentration
  */
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
+import { safeNumber } from '../utils/math.js';
 
 // Map red flag keys to risk categories
 const FLAG_CATEGORY_MAP = {

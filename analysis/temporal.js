@@ -5,10 +5,7 @@
  * Detects trends, improvements, and degradation over time.
  */
 
-function safeN(v, fb = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
+import { safeNum } from '../utils/math.js';
 
 function pctChange(prev, curr) {
   if (prev === null || curr === null || prev === 0) return null;
@@ -72,20 +69,20 @@ export function analyzeTemporalDelta(db, projectName, currentRawData, currentSco
   const currDex = currentRawData?.dex ?? {};
 
   const metricPairs = [
-    { metric: 'price', prev: safeN(prevMarket.current_price ?? prevMarket.price), curr: safeN(currMarket.current_price ?? currMarket.price), unit: '$' },
-    { metric: 'market_cap', prev: safeN(prevMarket.market_cap), curr: safeN(currMarket.market_cap), unit: '$' },
-    { metric: 'tvl', prev: safeN(prevOnchain.tvl), curr: safeN(currOnchain.tvl), unit: '$' },
-    { metric: 'volume_24h', prev: safeN(prevMarket.total_volume), curr: safeN(currMarket.total_volume), unit: '$' },
-    { metric: 'fees_7d', prev: safeN(prevOnchain.fees_7d), curr: safeN(currOnchain.fees_7d), unit: '$' },
-    { metric: 'social_mentions', prev: safeN(prevSocial.filtered_mentions ?? prevSocial.mentions), curr: safeN(currSocial.filtered_mentions ?? currSocial.mentions), unit: '' },
+    { metric: 'price', prev: safeNum(prevMarket.current_price ?? prevMarket.price), curr: safeNum(currMarket.current_price ?? currMarket.price), unit: '$' },
+    { metric: 'market_cap', prev: safeNum(prevMarket.market_cap), curr: safeNum(currMarket.market_cap), unit: '$' },
+    { metric: 'tvl', prev: safeNum(prevOnchain.tvl), curr: safeNum(currOnchain.tvl), unit: '$' },
+    { metric: 'volume_24h', prev: safeNum(prevMarket.total_volume), curr: safeNum(currMarket.total_volume), unit: '$' },
+    { metric: 'fees_7d', prev: safeNum(prevOnchain.fees_7d), curr: safeNum(currOnchain.fees_7d), unit: '$' },
+    { metric: 'social_mentions', prev: safeNum(prevSocial.filtered_mentions ?? prevSocial.mentions), curr: safeNum(currSocial.filtered_mentions ?? currSocial.mentions), unit: '' },
     // Round 237 (AutoResearch nightly): new engagement metrics in temporal tracking
-    { metric: 'holder_engagement_score', prev: safeN(prevMarket.holder_engagement_score), curr: safeN(currMarket.holder_engagement_score), unit: '' },
-    { metric: 'dex_liquidity', prev: safeN(prevDex.dex_liquidity_usd), curr: safeN(currDex.dex_liquidity_usd), unit: '$' },
-    { metric: 'reddit_activity_score', prev: safeN(prevReport?.raw_data?.reddit?.reddit_activity_score), curr: safeN(currentRawData?.reddit?.reddit_activity_score), unit: '' },
+    { metric: 'holder_engagement_score', prev: safeNum(prevMarket.holder_engagement_score), curr: safeNum(currMarket.holder_engagement_score), unit: '' },
+    { metric: 'dex_liquidity', prev: safeNum(prevDex.dex_liquidity_usd), curr: safeNum(currDex.dex_liquidity_usd), unit: '$' },
+    { metric: 'reddit_activity_score', prev: safeNum(prevReport?.raw_data?.reddit?.reddit_activity_score), curr: safeNum(currentRawData?.reddit?.reddit_activity_score), unit: '' },
     // Round 382 (AutoResearch): add wash trading risk and article quality to temporal tracking
-    { metric: 'github_commits_90d', prev: safeN(prevReport?.raw_data?.github?.commits_90d), curr: safeN(currentRawData?.github?.commits_90d), unit: '' },
-    { metric: 'revenue_7d', prev: safeN(prevOnchain.revenue_7d), curr: safeN(currOnchain.revenue_7d), unit: '$' },
-    { metric: 'buy_sell_ratio', prev: safeN(prevDex.buy_sell_ratio), curr: safeN(currDex.buy_sell_ratio), unit: '' },
+    { metric: 'github_commits_90d', prev: safeNum(prevReport?.raw_data?.github?.commits_90d), curr: safeNum(currentRawData?.github?.commits_90d), unit: '' },
+    { metric: 'revenue_7d', prev: safeNum(prevOnchain.revenue_7d), curr: safeNum(currOnchain.revenue_7d), unit: '$' },
+    { metric: 'buy_sell_ratio', prev: safeNum(prevDex.buy_sell_ratio), curr: safeNum(currDex.buy_sell_ratio), unit: '' },
   ];
 
   for (const { metric, prev, curr, unit } of metricPairs) {
@@ -104,8 +101,8 @@ export function analyzeTemporalDelta(db, projectName, currentRawData, currentSco
   const DIMS = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health', 'distribution', 'risk', 'overall'];
   const scoreDeltas = [];
   for (const dim of DIMS) {
-    const prev = safeN(prevScores?.[dim]?.score ?? prevScores?.[dim]);
-    const curr = safeN(currentScores?.[dim]?.score ?? currentScores?.[dim]);
+    const prev = safeNum(prevScores?.[dim]?.score ?? prevScores?.[dim]);
+    const curr = safeNum(currentScores?.[dim]?.score ?? currentScores?.[dim]);
     const delta = prev !== null && curr !== null ? parseFloat((curr - prev).toFixed(2)) : null;
     scoreDeltas.push({
       dimension: dim,

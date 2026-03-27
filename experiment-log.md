@@ -2732,3 +2732,15 @@ Focus: responsive layout, spacing, typography, loading states, animations, acces
 - **Change:** Bumped engine_version to r470-2026-03-27 marking Oracle Signal Detection & Alpha Signals batch completion (R431-470).
 - **Files:** synthesis/templates.js
 - **Tests:** 177/177 pass
+
+### Round 471 — Deduplicate safeN utility in analysis/ files
+- **Change:** Removed inline `safeN` / `safeNum` definitions in `analysis/temporal.js`, `analysis/conviction.js`, and `analysis/risk-matrix.js`. All now import canonical `safeNum` or `safeNumber` from `utils/math.js`. Reduces code duplication and ensures consistent null-safety semantics across the codebase.
+- **Files:** `analysis/temporal.js` (safeNum), `analysis/conviction.js` (safeNumber), `analysis/risk-matrix.js` (safeNumber)
+- **Tests:** 177/177 pass
+- **Result:** kept — cleaner code, single source of truth for numeric sanitization
+
+### Round 472 — Add JSDoc to clamp utility
+- **Change:** Added complete JSDoc annotations (`@param`, `@returns`) to `clamp()` in `utils/math.js`. All exported math functions now have full documentation.
+- **Files:** `utils/math.js`
+- **Tests:** 177/177 pass
+- **Result:** kept — better IntelliSense and dev UX

@@ -7,10 +7,7 @@
  * Output: 0-100 conviction score + reasoning.
  */
 
-function safeN(v, fb = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
-}
+import { safeNumber } from '../utils/math.js';
 
 /**
  * Factor 1: Data completeness — how many collectors succeeded.
@@ -155,7 +152,7 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
   // Round 233 (AutoResearch nightly): P/TVL micro-bonus — undervalued assets with data support get +3 conviction pts
   const ptvlBonus = (() => {
     const ptvl = rawData?.ptvl_ratio;
-    const tvl = safeN(rawData?.onchain?.tvl ?? 0);
+    const tvl = safeNumber(rawData?.onchain?.tvl ?? 0);
     if (ptvl == null || tvl < 5_000_000) return 0; // only applies to protocols with real TVL
     if (ptvl < 0.5) return 3;  // deep value with TVL = high conviction opportunity
     if (ptvl < 1.0) return 2;  // undervalued
@@ -174,7 +171,7 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
 
   // Round 237 (AutoResearch nightly): holder engagement bonus — active community = higher conviction in social signals
   const holderEngBonus = (() => {
-    const engScore = safeN(rawData?.market?.holder_engagement_score ?? null, null);
+    const engScore = safeNumber(rawData?.market?.holder_engagement_score ?? null, null);
     if (engScore === null) return 0;
     if (engScore >= 70) return 3;   // Very active holder community
     if (engScore >= 40) return 1;   // Moderate engagement
@@ -213,7 +210,7 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
   // Round 382 (AutoResearch): Article quality boosts social conviction
   // When coverage comes from tier-1 sources (Bloomberg, CoinDesk, etc.), social signals are more reliable
   const articleQualityBonus = (() => {
-    const qual = safeN(rawData?.social?.avg_article_quality_score ?? null, null);
+    const qual = safeNumber(rawData?.social?.avg_article_quality_score ?? null, null);
     if (qual === null) return 0;
     if (qual >= 1.4) return 3;    // Tier-1 dominated coverage = high credibility
     if (qual >= 1.2) return 1;    // Above average source quality
@@ -225,8 +222,8 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
   const organicVolumeBonus = (() => {
     const washRisk = rawData?.dex?.wash_trading_risk;
     if (washRisk && washRisk !== 'low') return 0; // Cannot claim organic if wash trading suspected
-    const vol = safeN(rawData?.market?.total_volume ?? 0);
-    const mcap = safeN(rawData?.market?.market_cap ?? 0);
+    const vol = safeNumber(rawData?.market?.total_volume ?? 0);
+    const mcap = safeNumber(rawData?.market?.market_cap ?? 0);
     if (mcap <= 0 || vol <= 0) return 0;
     const velPct = (vol / mcap) * 100;
     if (velPct >= 50) return 3;   // Very high organic activity = strong market conviction
@@ -238,7 +235,7 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
   // High annual inflation (>50%/yr) reduces conviction because fundamentals are structurally
   // degrading — even if current metrics look good, supply dilution is working against holders.
   const inflationConvPenalty = (() => {
-    const inflation = safeN(rawData?.tokenomics?.inflation_rate ?? null, null);
+    const inflation = safeNumber(rawData?.tokenomics?.inflation_rate ?? null, null);
     if (inflation === null) return 0;
     if (inflation > 100) return -5;  // Hyperinflationary — fundamentals will deteriorate
     if (inflation > 50) return -3;   // Very high inflation — moderate conviction penalty
@@ -251,7 +248,7 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
   // When circulating supply is low AND price momentum is strong, the setup is unusually
   // high-conviction because supply constraints amplify demand signals.
   const lowFloatMomentumBonus = (() => {
-    const pctCirc = safeN(rawData?.tokenomics?.pct_circulating ?? null, null);
+    const pctCirc = safeNumber(rawData?.tokenomics?.pct_circulating ?? null, null);
     const momentumTier = rawData?.market?.price_momentum_tier;
     if (pctCirc === null || !momentumTier) return 0;
     if (pctCirc < 20 && (momentumTier === 'strong_uptrend' || momentumTier === 'uptrend')) return 3;

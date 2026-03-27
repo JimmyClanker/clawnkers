@@ -1,3 +1,4 @@
+import { safeNumber } from '../utils/math.js';
 /**
  * Circuit breakers: condizioni che impongono un tetto allo score.
  * Vengono applicati DOPO il calcolo del weighted score.
