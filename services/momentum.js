@@ -78,7 +78,15 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
   // ── Social: sentiment trend ───────────────────────────────────────────────
   const currSentiment = safeN(social.sentiment_score);
   const prevSentiment = previousScanData ? safeN(ps.sentiment_score) : null;
-  const socialMomentum = direction(currSentiment, prevSentiment, 0.1);
+  let socialMomentum = direction(currSentiment, prevSentiment, 0.1);
+  // Round 383 (AutoResearch): supplement social momentum with Reddit sentiment_momentum
+  // Reddit provides a within-week acceleration/deceleration signal not captured by Exa sentiment
+  const redditSentMom = rawData?.reddit?.sentiment_momentum;
+  if (redditSentMom === 'improving' && socialMomentum !== 'improving') {
+    socialMomentum = 'improving'; // Reddit acceleration upgrades stable → improving
+  } else if (redditSentMom === 'degrading' && socialMomentum !== 'declining') {
+    socialMomentum = 'declining'; // Reddit deceleration downgrades stable → declining
+  }
 
   // ── Development: use commit_trend directly ────────────────────────────────
   const commitTrend = github.commit_trend;

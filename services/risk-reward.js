@@ -188,6 +188,39 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
     }
   }
 
+  // Round 448: trend_reversal_adjustment — bullish reversal pattern from trend-reversal.js
+  const trendReversal = rawData?.trend_reversal;
+  if (trendReversal && expectedValue !== null) {
+    if (trendReversal.pattern === 'bullish_reversal' && trendReversal.confidence === 'high') {
+      volAdjustedEv = round(volAdjustedEv * 1.12, 4);
+      notes.push(`High-confidence bullish reversal pattern detected — EV boosted 12%.`);
+    } else if (trendReversal.pattern === 'accumulation' && trendReversal.confidence !== 'low') {
+      volAdjustedEv = round(volAdjustedEv * 1.06, 4);
+      notes.push(`Accumulation pattern detected — EV boosted 6%.`);
+    } else if (trendReversal.pattern === 'bearish_reversal' && trendReversal.confidence === 'high') {
+      volAdjustedEv = round(volAdjustedEv * 0.80, 4);
+      notes.push(`High-confidence bearish reversal pattern — EV reduced 20%. Consider waiting for confirmation.`);
+      if (positionSizeSuggestion === 'full') positionSizeSuggestion = 'half';
+    } else if (trendReversal.pattern === 'distribution') {
+      volAdjustedEv = round(volAdjustedEv * 0.90, 4);
+      notes.push(`Distribution pattern detected — EV reduced 10%. Smart money may be exiting.`);
+    }
+  }
+
+  // Round 443: signal_count_multiplier — more strong alpha signals = higher EV confidence
+  // Each strong alpha signal beyond 2 boosts EV by 3% (max +15%)
+  const alphaSignalsCount = safeN(rawData?._alpha_signals_count, 0);
+  const strongSignalsCount = safeN(rawData?._strong_signals_count, 0);
+  if (expectedValue !== null && expectedValue > 0 && strongSignalsCount >= 3) {
+    const extraStrong = Math.min(5, strongSignalsCount - 2);
+    const signalBoost = 1 + (extraStrong * 0.03);
+    volAdjustedEv = round(volAdjustedEv * signalBoost, 4);
+    notes.push(`${strongSignalsCount} strong alpha signals — EV boosted +${((signalBoost - 1) * 100).toFixed(0)}% for signal convergence.`);
+  } else if (expectedValue !== null && alphaSignalsCount === 0 && strongSignalsCount === 0) {
+    volAdjustedEv = round(volAdjustedEv * 0.90, 4);
+    notes.push('No alpha signals detected — EV discounted 10% for lack of confirmation.');
+  }
+
   return {
     rr_ratio: rrRatio,
     probability_tp1: pTP1,

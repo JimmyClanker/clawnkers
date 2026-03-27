@@ -375,6 +375,53 @@ function detectOrganicVolumeSocialConfirmation(scores, rawData = {}) {
   return divergences;
 }
 
+/**
+ * Round 383 (AutoResearch): Detect high-inflation + high-social divergence.
+ * When a protocol has very high inflation (>50%/yr) but strong social momentum,
+ * the bullish narrative is likely masking a structural supply problem.
+ * Retail is pumping while tokenomics will eventually dilute them.
+ */
+function detectInflationSocialDivergence(scores, rawData = {}) {
+  const divergences = [];
+  const tokenomics = rawData?.tokenomics ?? {};
+  const inflation = Number(tokenomics.inflation_rate ?? NaN);
+  const socialScore = safeScore(scores?.social_momentum);
+  if (!Number.isFinite(inflation) || socialScore === null) return divergences;
+  if (inflation > 50 && socialScore >= 6.5) {
+    divergences.push({
+      type: 'inflation_social_divergence',
+      severity: 'warning',
+      dimensions: ['social_momentum', 'tokenomics_health'],
+      detail: `Strong social momentum (${socialScore}/10) combined with very high annual inflation (${inflation.toFixed(0)}%/yr) — bullish narrative may be masking structural supply dilution that will erode holder value over time.`,
+    });
+  }
+  return divergences;
+}
+
+/**
+ * Round 383 (AutoResearch): Detect revenue collapse despite stable market.
+ * Protocol losing revenue/fees while price holds up = delayed reckoning scenario.
+ * Eventually market will reprice when fundamentals deteriorate become visible.
+ */
+function detectRevenuePriceDecoupling(scores, rawData = {}) {
+  const divergences = [];
+  const onchain = rawData?.onchain ?? {};
+  const marketScore = safeScore(scores?.market_strength);
+  const onchainScore = safeScore(scores?.onchain_health);
+  const feeTrend = onchain.fee_revenue_acceleration;
+  if (marketScore === null || onchainScore === null) return divergences;
+  // Market strong but fees declining = delayed fundamentals pricing
+  if (marketScore >= 7 && onchainScore <= 4 && feeTrend === 'declining') {
+    divergences.push({
+      type: 'revenue_price_decoupling',
+      severity: 'warning',
+      dimensions: ['market_strength', 'onchain_health'],
+      detail: `Strong market score (${marketScore}/10) but weak and declining onchain health (${onchainScore}/10, fees declining) — price strength may be a lagging indicator. Fundamentals deteriorating while price holds up.`,
+    });
+  }
+  return divergences;
+}
+
 export function analyzeCrossDimensional(scores, rawData = {}) {
   const divergences = [
     ...detectDivergences(scores),
@@ -383,6 +430,8 @@ export function analyzeCrossDimensional(scores, rawData = {}) {
     ...detectWashTradingSocialDivergence(scores, rawData),  // Round 381
     ...detectHiddenGemPattern(scores, rawData),             // Round 382
     ...detectOrganicVolumeSocialConfirmation(scores, rawData), // Round 382
+    ...detectInflationSocialDivergence(scores, rawData),    // Round 383
+    ...detectRevenuePriceDecoupling(scores, rawData),       // Round 383
   ];
   const convergences = detectConvergences(scores);
   const anomalies = detectAnomalies(scores);

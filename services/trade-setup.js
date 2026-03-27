@@ -67,7 +67,30 @@ export function generateTradeSetup(rawData, scores) {
     entrySpread = 0.03; // tighten to ±3% for stable tokens
     notes.push(`Entry zone tightened to ±3% due to low 7d volatility (${priceChange7d.toFixed(1)}%).`);
   }
-  const entryLow = formatPrice(price * (1 - entrySpread));
+
+  // Round 442: anchor entry zone to nearest ATH/ATL Fibonacci support level when available
+  // If price is between ATL and ATH, find the nearest Fibonacci support below current price
+  let fibSupportLevel = null;
+  if (ath !== null && atl !== null && ath > atl && price > atl && price < ath) {
+    const range = ath - atl;
+    const fibLevels = [0.236, 0.382, 0.5, 0.618, 0.786].map(f => atl + range * f);
+    // Find highest fib level below current price (= nearest support)
+    const belowPrice = fibLevels.filter(f => f < price);
+    if (belowPrice.length > 0) {
+      fibSupportLevel = belowPrice[belowPrice.length - 1];
+      const fibPct = Math.abs(price - fibSupportLevel) / price;
+      // Only use fib support if it's within 15% of current price
+      if (fibPct <= 0.15) {
+        notes.push(`Entry low anchored to Fibonacci support $${formatPrice(fibSupportLevel)} (${(fibPct * 100).toFixed(1)}% below price).`);
+      } else {
+        fibSupportLevel = null; // too far, don't use
+      }
+    }
+  }
+
+  const entryLow = fibSupportLevel !== null
+    ? formatPrice(Math.min(price * (1 - entrySpread), fibSupportLevel))
+    : formatPrice(price * (1 - entrySpread));
   const entryHigh = formatPrice(price * (1 + entrySpread));
 
   // Stop loss: volatility-adjusted (base -15%, wider for volatile tokens)
@@ -90,6 +113,22 @@ export function generateTradeSetup(rawData, scores) {
     if (atlStop > stopLoss) {
       stopLoss = atlStop;
       notes.push(`Stop loss adjusted to ATL-based level ($${formatPrice(atl)} - 5%).`);
+    }
+  }
+
+  // Round 447: Fibonacci support stop loss — find the nearest Fibonacci level below entry as stop
+  // If a Fibonacci level is between current stop and current price, use it as a tighter stop
+  if (ath !== null && atl !== null && ath > atl && price > atl) {
+    const range = ath - atl;
+    // Key support levels below price (from entry low perspective)
+    const fibSupports = [0.236, 0.382, 0.5, 0.618, 0.786].map(f => atl + range * f).filter(f => f < stopLoss);
+    if (fibSupports.length > 0) {
+      // Use the highest fib support below current stop as a more precise stop level
+      const fibStop = fibSupports[fibSupports.length - 1] * 0.98; // 2% buffer below fib
+      if (fibStop > stopLoss * 0.95 && fibStop < price * 0.95) { // within 5% of original stop, not too close to price
+        stopLoss = fibStop;
+        notes.push(`Stop loss refined to Fibonacci support level $${formatPrice(fibStop)} (2% buffer below fib).`);
+      }
     }
   }
   stopLoss = formatPrice(stopLoss);
@@ -216,6 +255,37 @@ export function generateTradeSetup(rawData, scores) {
   // Round 63: Recommended position size hint (% of portfolio)
   const positionSizeHint = overallScore >= 7.5 ? '3-5%' : overallScore >= 5.5 ? '1-3%' : '0.5-1%';
 
+  // Round 450: entry_timing_score — 0-100 composite score for entry timing quality
+  // Components: score quality (30pts) + RR ratio (25pts) + volatility fit (25pts) + proximity to support (20pts)
+  let entryTimingScore = 0;
+  // Score quality: 0-30 pts
+  entryTimingScore += Math.min(30, overallScore * 3);
+  // RR ratio: 0-25 pts
+  if (rrRatio !== null) {
+    entryTimingScore += rrRatio >= 3.0 ? 25 : rrRatio >= 2.0 ? 20 : rrRatio >= 1.5 ? 15 : rrRatio >= 1.0 ? 10 : 5;
+  }
+  // Volatility fit: sweet spot is 10-30% 7d change — enough momentum without being overextended
+  if (priceChange7d >= 10 && priceChange7d <= 30) {
+    entryTimingScore += 25;
+  } else if (priceChange7d >= 5 && priceChange7d < 10) {
+    entryTimingScore += 18;
+  } else if (priceChange7d > 30 && priceChange7d <= 50) {
+    entryTimingScore += 12; // overextended, less ideal
+  } else if (priceChange7d < 5) {
+    entryTimingScore += 8; // too quiet, lower opportunity
+  } else {
+    entryTimingScore += 3; // > 50% in 7d = likely overextended
+  }
+  // Proximity to support (fib or ATL): entry near support = better timing
+  if (fibSupportLevel !== null) {
+    const distToSupport = (price - fibSupportLevel) / price;
+    entryTimingScore += distToSupport < 0.05 ? 20 : distToSupport < 0.1 ? 15 : 10;
+  } else {
+    entryTimingScore += 10; // no fib support available, neutral score
+  }
+  entryTimingScore = Math.min(100, Math.max(0, Math.round(entryTimingScore)));
+  const entryTimingLabel = entryTimingScore >= 75 ? 'excellent' : entryTimingScore >= 55 ? 'good' : entryTimingScore >= 35 ? 'fair' : 'poor';
+
   return {
     entry_zone: { low: entryLow, high: entryHigh },
     stop_loss: stopLoss,
@@ -225,6 +295,8 @@ export function generateTradeSetup(rawData, scores) {
     setup_quality_score: setupQualityScore,
     risk_label: riskLabel,
     position_size_hint: positionSizeHint,
+    entry_timing_score: entryTimingScore,
+    entry_timing_label: entryTimingLabel,
     notes,
   };
 }

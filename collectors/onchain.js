@@ -482,6 +482,24 @@ export async function collectOnchain(projectName) {
         if (activeUsers24h == null) return null;
         return Math.round(activeUsers24h * 7 * 0.6);
       })(),
+      // Round 383 (AutoResearch): tvl_vs_ath_pct — how far current TVL is from protocol's all-time high TVL
+      // This is a critical onchain context signal: near ATH TVL = peak adoption; far below = declining protocol
+      // DeFiLlama historicalTvl endpoint provides full history
+      tvl_vs_ath_pct: (() => {
+        if (!Array.isArray(tvlHistory) || tvlHistory.length < 3 || currentTvl == null) return null;
+        const athTvl = Math.max(...tvlHistory.map(p => Number(p.totalLiquidityUSD ?? p[1] ?? p.tvl ?? 0)).filter(Number.isFinite));
+        if (athTvl <= 0 || !Number.isFinite(athTvl)) return null;
+        const pct = ((currentTvl - athTvl) / athTvl) * 100;
+        return Number.isFinite(pct) ? parseFloat(pct.toFixed(1)) : null;
+      })(),
+      // Round 383 (AutoResearch): weekly_tvl_velocity — absolute TVL gained/lost this week in USD
+      // More actionable than pct changes for large protocols ($100M+ TVL with 5% = $5M new capital)
+      weekly_tvl_velocity_usd: (() => {
+        if (currentTvl == null || tvl7dChange == null) return null;
+        const weekAgoTvl = currentTvl / (1 + tvl7dChange / 100);
+        const velocity = currentTvl - weekAgoTvl;
+        return Number.isFinite(velocity) ? Math.round(velocity) : null;
+      })(),
       error: null,
     };
   } catch (error) {

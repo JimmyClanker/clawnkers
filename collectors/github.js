@@ -481,6 +481,31 @@ export async function collectGithub(projectName) {
         return parseFloat(ratio.toFixed(1));
       })(),
 
+      // Round 383 (AutoResearch): top_contributor_name — the highest-commit contributor login.
+      // Useful for bus-factor assessment: a single prominent committer with no apparent team is a risk signal.
+      // We only expose the login (public data), not personal details.
+      top_contributor_login: (() => {
+        if (!Array.isArray(contributorStats) || contributorStats.length === 0) return null;
+        const sorted = [...contributorStats].sort((a, b) => (b?.total || 0) - (a?.total || 0));
+        return sorted[0]?.author?.login ?? null;
+      })(),
+
+      // Round 383 (AutoResearch): monthly_commit_velocity — a 3-month rolling window trend
+      // Returns { recent: number, prev: number, change_pct: number } for scoring trend analysis
+      // Supplements commit_trend (qualitative) with quantitative delta
+      monthly_commit_velocity: (() => {
+        if (commits30d == null || commits30dPrev == null) return null;
+        if (commits30dPrev === 0) {
+          return { recent: commits30d, prev: 0, change_pct: commits30d > 0 ? 100 : 0 };
+        }
+        const changePct = ((commits30d - commits30dPrev) / commits30dPrev) * 100;
+        return {
+          recent: commits30d,
+          prev: commits30dPrev,
+          change_pct: Number.isFinite(changePct) ? parseFloat(changePct.toFixed(1)) : 0,
+        };
+      })(),
+
       // Round 235 (AutoResearch): commit_consistency_score — regularity of commits over 90d (0-100)
       // A protocol with consistent weekly commits is more reliable than one with burst activity
       commit_consistency_score: (() => {

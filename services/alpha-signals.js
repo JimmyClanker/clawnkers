@@ -741,6 +741,110 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 383 (AutoResearch): Wire in new signal detectors
+  const lowFloatMomSignal = detectLowFloatMomentum(rawData);
+  if (lowFloatMomSignal) signals.push(lowFloatMomSignal);
+
+  // detectNarrativeDecay is a weakness/caution signal, not strictly an alpha signal
+  // but we surface it so the LLM and report can address narrative exhaustion risk
+  const narrativeDecaySignal = detectNarrativeDecay(rawData);
+  if (narrativeDecaySignal) signals.push(narrativeDecaySignal);
+
+  // Reddit sentiment momentum — improving Reddit activity = community acceleration
+  const redditSentMom = rawData?.reddit?.sentiment_momentum;
+  if (redditSentMom === 'improving' && (rawData?.reddit?.post_count ?? 0) >= 5) {
+    signals.push({
+      signal: 'reddit_sentiment_accelerating',
+      strength: (rawData?.reddit?.avg_post_score ?? 0) > 50 ? 'strong' : 'moderate',
+      detail: `Reddit sentiment improving in last 24h vs full week (${rawData.reddit.post_count} posts, avg score ${rawData.reddit.avg_post_score ?? 'n/a'}) — community momentum building.`,
+    });
+  }
+
+  // Round 449 (AutoResearch): protocol_upgrade_catalyst — upcoming upgrade/v2 signals
+  // Protocol upgrades (v2 launch, L2 migration, tokenomics overhaul) are high-impact catalysts
+  const narratives449 = Array.isArray(social.key_narratives) ? social.key_narratives : [];
+  const hasUpgradeCatalyst = narratives449.some(n =>
+    /v\d\s*launch|protocol upgrade|mainnet launch|migration|token upgrade|v2|v3|upgrade vote|hard fork|new version/i.test(n)
+  );
+  if (hasUpgradeCatalyst) {
+    const upgradeMentions = safeN(social.upgrade_mentions ?? 0);
+    signals.push({
+      signal: 'protocol_upgrade_catalyst',
+      strength: upgradeMentions >= 5 ? 'strong' : 'moderate',
+      detail: `Protocol upgrade/v2/migration narrative detected in social mentions${upgradeMentions > 0 ? ` (${upgradeMentions} mentions)` : ''} — major protocol upgrades historically drive 30-150%+ price appreciation.`,
+    });
+  }
+
+  // Round 445 (AutoResearch): holder_distribution_improving — Gini index improving = healthier token distribution
+  // When holder concentration decreases (more distributed), it reduces whale dump risk
+  // tokenomics.holder_gini < 0.7 AND gini improving trend = bullish tokenomics signal
+  const holderGini = safeN(rawData?.tokenomics?.holder_gini ?? null, NaN);
+  const holderGiniTrend = rawData?.tokenomics?.holder_gini_trend ?? null;
+  if (Number.isFinite(holderGini) && holderGini < 0.7) {
+    signals.push({
+      signal: 'healthy_holder_distribution',
+      strength: holderGini < 0.5 ? 'strong' : 'moderate',
+      detail: `Holder Gini coefficient ${holderGini.toFixed(3)} — well-distributed token ownership (< 0.7) reduces whale manipulation risk. ${holderGiniTrend === 'improving' ? 'Distribution improving over time.' : ''}`,
+    });
+  } else if (Number.isFinite(holderGini) && holderGiniTrend === 'improving') {
+    signals.push({
+      signal: 'holder_distribution_improving',
+      strength: 'moderate',
+      detail: `Holder Gini coefficient ${holderGini.toFixed(3)} improving trend — token is becoming more broadly distributed, reducing concentration risk over time.`,
+    });
+  }
+
+  // Round 444 (AutoResearch): on_chain_fee_velocity — fees growing faster than TVL = expanding protocol margins
+  // If fees_7d/tvl ratio is higher than fees_30d/tvl × 1.3, protocol is extracting more value per dollar locked
+  const fees7dVelocity = safeN(onchain.fees_7d ?? 0);
+  const fees30dVelocity = safeN(onchain.fees_30d ?? 0);
+  const tvlVelocity = safeN(onchain.tvl ?? 0);
+  if (fees7dVelocity > 0 && fees30dVelocity > 0 && tvlVelocity > 1_000_000) {
+    // Annualize: fees7d×52 vs fees30d×12 — if weekly rate accelerating
+    const annualizedWeeklyRate = fees7dVelocity * 52;
+    const annualizedMonthlyRate = fees30dVelocity * 12;
+    if (annualizedWeeklyRate > annualizedMonthlyRate * 1.3 && fees7dVelocity > 50_000) {
+      signals.push({
+        signal: 'on_chain_fee_velocity',
+        strength: annualizedWeeklyRate > annualizedMonthlyRate * 2 ? 'strong' : 'moderate',
+        detail: `Weekly fee rate ($${(fees7dVelocity / 1000).toFixed(0)}K/wk) is ${((annualizedWeeklyRate / annualizedMonthlyRate - 1) * 100).toFixed(0)}% above monthly trend ($${(fees30dVelocity / 1000).toFixed(0)}K/mo ÷ 4 = ${(fees30dVelocity / 4000).toFixed(0)}K/wk) — fee extraction is accelerating, protocol utility growing faster than TVL.`,
+      });
+    }
+  }
+
+  // Round 439 (AutoResearch): multi_timeframe_momentum — 1h + 24h + 7d ALL positive = strong trend alignment
+  // When short, medium, and long timeframes all confirm the trend, it's a high-conviction setup
+  const mtf1h  = safeN(market.price_change_pct_1h, NaN);
+  const mtf24h = safeN(market.price_change_pct_24h, NaN);
+  const mtf7d_mtf = safeN(market.price_change_pct_7d, NaN);
+  if (Number.isFinite(mtf1h) && Number.isFinite(mtf24h) && Number.isFinite(mtf7d_mtf)) {
+    if (mtf1h > 1 && mtf24h > 3 && mtf7d_mtf > 10) {
+      signals.push({
+        signal: 'multi_timeframe_momentum',
+        strength: (mtf1h > 3 && mtf24h > 8 && mtf7d_mtf > 25) ? 'strong' : 'moderate',
+        detail: `All timeframes aligned bullish: 1h +${mtf1h.toFixed(1)}%, 24h +${mtf24h.toFixed(1)}%, 7d +${mtf7d_mtf.toFixed(1)}% — multi-timeframe confirmation of uptrend.`,
+      });
+    } else if (mtf1h < -1 && mtf24h < -3 && mtf7d_mtf < -10) {
+      signals.push({
+        signal: 'multi_timeframe_bearish_alignment',
+        strength: (mtf1h < -3 && mtf24h < -8 && mtf7d_mtf < -25) ? 'strong' : 'moderate',
+        detail: `All timeframes aligned bearish: 1h ${mtf1h.toFixed(1)}%, 24h ${mtf24h.toFixed(1)}%, 7d ${mtf7d_mtf.toFixed(1)}% — multi-timeframe confirmation of downtrend. High risk.`,
+      });
+    }
+  }
+
+  // Round 440 (AutoResearch): momentum_score_alignment — alpha signal strength score correlates with price momentum
+  // When oracle overall score is high AND price momentum is strong, it's a double-confirmation
+  const oracleScore = safeN(scores?.overall?.score, NaN);
+  const momentumTier = market.price_momentum_tier;
+  if (Number.isFinite(oracleScore) && oracleScore >= 7.0 && (momentumTier === 'strong_uptrend' || momentumTier === 'uptrend')) {
+    signals.push({
+      signal: 'score_momentum_alignment',
+      strength: oracleScore >= 8.0 && momentumTier === 'strong_uptrend' ? 'strong' : 'moderate',
+      detail: `Oracle score ${oracleScore.toFixed(1)}/10 + price momentum tier "${momentumTier}" — fundamental and technical alignment confirms high-conviction setup.`,
+    });
+  }
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {
@@ -764,12 +868,38 @@ export function getSignalStrengthScore(signals = []) {
   
   // CONVICTION_SCORE: 5+ strong signals = composite conviction
   const strongCount = signals.filter(s => s.strength === 'strong').length;
+  let bonus = 0;
   if (strongCount >= 5) {
-    const convictionBonus = 10 * (strongCount - 4); // +10 per ogni strong oltre il 4°
-    return Math.min(100, raw + convictionBonus);
+    bonus += 10 * (strongCount - 4); // +10 per ogni strong oltre il 4°
+  }
+
+  // Round 441: theme clustering bonus — 3+ signals in same theme = correlated conviction
+  // Themes: onchain (tvl/fees/revenue), social (sentiment/kol/narrative), technical (price/volume/momentum)
+  const themeMap = {
+    tvl_growth_spike: 'onchain', cross_chain_tvl_growth: 'onchain', tvl_acceleration: 'onchain',
+    revenue_generating: 'onchain', high_fee_efficiency: 'onchain', fee_revenue_acceleration: 'onchain',
+    strong_revenue_capture: 'onchain', revenue_momentum: 'onchain', fee_switch_candidate: 'onchain',
+    veteran_protocol_strong_fees: 'onchain', low_price_to_tvl: 'onchain', ptvl_deep_value: 'onchain',
+    strong_positive_sentiment: 'social', kol_bullish_x_sentiment: 'social', x_vs_web_bullish_divergence: 'social',
+    accelerating_news_coverage: 'social', news_acceleration: 'social', social_velocity_spike: 'social',
+    fresh_narrative_momentum: 'social', strong_narrative_alignment: 'social', partnership_news: 'social',
+    institutional_interest: 'social', airdrop_catalyst: 'social',
+    volume_spike_no_price_move: 'technical', near_ath_breakout: 'technical', ath_breakout: 'technical',
+    ma7_breakout_with_volume: 'technical', dex_buy_pressure: 'technical', dex_momentum_burst: 'technical',
+    volume_surge: 'technical', organic_volume_spike: 'technical', multi_timeframe_momentum: 'technical',
+    smart_accumulation_pattern: 'technical', volume_spike_buy_pressure: 'technical',
+    price_volume_divergence_bullish: 'technical', '52w_high_breakout': 'technical',
+  };
+  const themeCounts = {};
+  for (const s of signals) {
+    const theme = themeMap[s.signal];
+    if (theme) themeCounts[theme] = (themeCounts[theme] ?? 0) + 1;
+  }
+  for (const count of Object.values(themeCounts)) {
+    if (count >= 3) bonus += 8; // 3+ aligned signals in a theme = +8 pts
   }
   
-  return Math.min(100, raw);
+  return Math.min(100, raw + bonus);
 }
 
 // Round 231 (AutoResearch nightly): Long-term holder signal — price well above ATH set long ago (reset pattern)
@@ -1000,6 +1130,54 @@ export function detectGovernanceSurge(rawData = {}) {
       signal: 'governance_momentum',
       strength: sentiment > 0.5 ? 'strong' : 'moderate',
       detail: `Active governance/DAO activity detected in social narratives with positive sentiment (${sentiment.toFixed(2)}) — community engagement and protocol direction clarity can drive price discovery.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 383 (AutoResearch): Stale narrative decay detection ───────────────
+/**
+ * Detect when a bullish narrative is fading (narrative freshness declining).
+ * A stale narrative with declining social activity = momentum exhaustion signal.
+ * NOT an alpha buy signal, but surfaced here for cross-signal context.
+ */
+export function detectNarrativeDecay(rawData = {}) {
+  const social = rawData.social ?? {};
+  const freshness = Number(social.narrative_freshness_score ?? NaN);
+  const mentions = Number(social.filtered_mentions ?? social.mentions ?? 0);
+  const sentiment = Number(social.sentiment_score ?? 0);
+  if (!Number.isFinite(freshness)) return null;
+  // Stale + still positive sentiment + declining mentions = narrative exhaustion
+  if (freshness < 20 && sentiment > 0.1 && mentions > 0 && mentions < 10) {
+    return {
+      signal: 'narrative_exhaustion',
+      strength: 'weak',
+      detail: `Narrative freshness score ${freshness}/100 with only ${mentions} mentions — bullish narrative appears stale. Social momentum may be exhausted despite positive sentiment.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 383 (AutoResearch): Low circulating + strong momentum combination ─
+/**
+ * Detect low-float momentum: low circulating supply + strong price momentum.
+ * Low-float tokens can move explosively when volume arrives because there are
+ * fewer tokens available for sale — classic supply-demand imbalance.
+ */
+export function detectLowFloatMomentum(rawData = {}) {
+  const market = rawData.market ?? {};
+  const tokenomics = rawData.tokenomics ?? {};
+  const pctCirculating = Number(tokenomics.pct_circulating ?? market.circulating_to_max_ratio != null ? (market.circulating_to_max_ratio ?? 0) * 100 : NaN);
+  const momentum = market.price_momentum_tier;
+  const vol = Number(market.total_volume ?? 0);
+  const mcap = Number(market.market_cap ?? 0);
+  if (!Number.isFinite(pctCirculating) || pctCirculating <= 0) return null;
+  if (pctCirculating < 25 && (momentum === 'strong_uptrend' || momentum === 'uptrend') && mcap > 10_000_000) {
+    const velPct = mcap > 0 ? (vol / mcap) * 100 : 0;
+    return {
+      signal: 'low_float_momentum',
+      strength: pctCirculating < 15 ? 'strong' : 'moderate',
+      detail: `Only ${pctCirculating.toFixed(1)}% of supply circulating with ${momentum} momentum — low-float structure amplifies price moves. Volume velocity ${velPct.toFixed(1)}% of MCap.`,
     };
   }
   return null;

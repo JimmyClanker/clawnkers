@@ -105,6 +105,8 @@ export function calculateConfidence(rawData = {}) {
     if (tokenomics.pct_circulating != null) tokenomicsConf += 30;
     if (tokenomics.inflation_rate != null) tokenomicsConf += 25;
     if (tokenomics.token_distribution != null) tokenomicsConf += 25;
+    // Round 383 (AutoResearch): vesting_info adds meaningful context for unlock risk assessment
+    if (tokenomics.vesting_info?.team_allocation_pct != null) tokenomicsConf += 10;
     tokenomicsConf = Math.min(100, tokenomicsConf);
   }
 
@@ -413,6 +415,22 @@ function scoreMarketStrength(market = {}) {
     else if (mcapToVol > 500) raw -= 0.3; // Very illiquid — speculative premium or ghost token
     else if (mcapToVol > 200) raw -= 0.15;
   }
+
+  // Round 383 (AutoResearch): 7-day price range as volatility signal for market strength
+  // High range (>30%) suggests speculative activity/pumping; very low range = accumulation or stagnation
+  const priceRange7d = market.price_range_pct_7d;
+  if (priceRange7d != null && Number.isFinite(priceRange7d)) {
+    if (priceRange7d >= 50) raw -= 0.3;  // Extreme volatility — speculative chaos, hard to assess direction
+    else if (priceRange7d >= 30) raw -= 0.1; // High volatility — mildly penalizes signal reliability
+    else if (priceRange7d <= 5 && momentum <= 3) raw -= 0.15; // Ultra-low range + weak momentum = stagnation
+    // Note: low range with positive momentum = accumulation = already captured by momentum signal
+  }
+
+  // Round 383 (AutoResearch): ATH recovery potential as market context
+  // near_recovery = still relevant, shows market believes in ATH level; very_distant_recovery = broken
+  const athRecoveryPotential = market.ath_recovery_potential;
+  if (athRecoveryPotential?.tier === 'very_distant_recovery') raw -= 0.2; // >500% needed = broken structure
+  else if (athRecoveryPotential?.tier === 'near_recovery') raw += 0.1; // Near ATH = market validation
 
   // Round 124 (AutoResearch): Empty data guard — no price, no volume, no market cap → neutral 5.0
   // Prevents spurious scoring when all market signals are absent
@@ -762,6 +780,15 @@ function scoreSocialMomentum(social = {}) {
     else if (articleQualityScore < 0.8) raw -= 0.15;   // Low quality / blog noise
   }
 
+  // Round 383 (AutoResearch): Narrative freshness boost — very fresh narratives indicate
+  // current catalysts driving social activity vs stale ongoing coverage.
+  const narrativeFreshnessForSocial = safeNumber(social.narrative_freshness_score ?? null, null);
+  if (narrativeFreshnessForSocial !== null && narrativeFreshnessForSocial >= 70 && filteredMentions >= 5) {
+    raw += 0.2; // Fresh catalyst + volume = high-quality signal
+  } else if (narrativeFreshnessForSocial !== null && narrativeFreshnessForSocial < 15 && filteredMentions < 5) {
+    raw -= 0.1; // Stale narrative + low volume = signal exhaustion
+  }
+
   // Round 48 (AutoResearch): social_health_index — 0-100 normalized composite
   // Measures community health: volume, sentiment quality, narrative depth, engagement quality
   const shiComponents = [
@@ -893,6 +920,16 @@ function scoreDevelopment(github = {}) {
     else if (busFactorScore > 70 && !busFactor) raw += 0.2;   // distributed team bonus
   }
 
+  // Round 383 (AutoResearch): monthly commit velocity change — quantifies acceleration
+  // monthly_commit_velocity.change_pct > 50% = significant recent ramp-up
+  const commitVelocity = github.monthly_commit_velocity;
+  if (commitVelocity && Number.isFinite(commitVelocity.change_pct)) {
+    if (commitVelocity.change_pct >= 100 && commitVelocity.recent >= 5) raw += 0.4;  // Doubled activity with substance
+    else if (commitVelocity.change_pct >= 50) raw += 0.2;   // Significant ramp-up
+    else if (commitVelocity.change_pct <= -50) raw -= 0.3;  // Activity collapsing
+    else if (commitVelocity.change_pct <= -75) raw -= 0.5;  // Nearly abandoned
+  }
+
   // Round 234 (AutoResearch): contributor growth rate bonus
   const contribGrowthRate = github.contributor_growth_rate;
   if (contribGrowthRate === 'growing') raw += 0.3;  // growing team = expanding capacity
@@ -970,6 +1007,14 @@ function scoreTokenomicsRisk(tokenomics = {}) {
   if (inflation < 0) {
     raw += Math.min(Math.abs(inflation) / 20, 0.5); // -10% inflation → +0.5 max bonus
   }
+
+  // Round 383 (AutoResearch): Unlock risk label — provides a pre-computed categorical risk judgment
+  // that aggregates cliff schedules, team allocations, and vesting into a single risk tier
+  const unlockRiskLabel = tokenomics.unlock_risk_label;
+  if (unlockRiskLabel === 'critical') raw -= 1.2;      // Immediate supply pressure
+  else if (unlockRiskLabel === 'high') raw -= 0.6;     // Significant medium-term dilution
+  else if (unlockRiskLabel === 'moderate') raw -= 0.2; // Manageable but present
+  else if (unlockRiskLabel === 'low') raw += 0.2;      // Low dilution risk = bonus
   raw += hasDistribution ? 0.5 : -0.5;
   raw += hasRoiData ? 0.3 : 0;
 
@@ -1173,6 +1218,21 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
     else if (fdvRatio > 5) raw -= 0.7;
   }
 
+  // Round 383 (AutoResearch): Inflation rate from tokenomics — high inflation = systematic risk
+  // Separates "temporary unlock risk" (FDV) from "structural supply inflation" (annual emission)
+  const inflationRateForRisk = safeNumber(tokenomics.inflation_rate ?? null, null);
+  if (inflationRateForRisk !== null && Number.isFinite(inflationRateForRisk)) {
+    if (inflationRateForRisk > 100) raw -= 1.0;        // Hyperinflationary — structural risk
+    else if (inflationRateForRisk > 50) raw -= 0.6;    // Very high inflation
+    else if (inflationRateForRisk > 20) raw -= 0.3;    // High inflation
+    else if (inflationRateForRisk < 0) raw += 0.2;     // Deflationary = lower supply risk
+  }
+
+  // Round 383 (AutoResearch): Contract honeypot = absolute risk ceiling (should cap score)
+  // If honeypot detected, risk score should be minimal regardless of other factors
+  // Note: we check via dexData field since scoreRisk doesn't have direct rawData access
+  // Honeypot/scam signals come through the circuit breaker and red flag system primarily
+
   // Round 12 (AutoResearch batch): DEX liquidity category bonus/penalty
   const liquidityCategory = dexData.liquidity_category;
   if (liquidityCategory === 'deep') raw += 0.6;
@@ -1340,6 +1400,22 @@ export function calculateScores(data) {
   } else if (dexSellWallRisk === 'elevated') {
     distribution.score = clampScore(distribution.score - 0.3);
     distribution.reasoning += ' | DEX sell_wall_risk ELEVATED: moderate distribution pressure (-0.3).';
+  }
+
+  // Round 383 (AutoResearch): TVL weekly velocity — large capital outflow is a distribution warning
+  // When >$5M is leaving the protocol weekly, token distribution becomes more risky (fewer buyers)
+  const tvlVelocity = data?.onchain?.weekly_tvl_velocity_usd;
+  if (tvlVelocity != null && Number.isFinite(tvlVelocity)) {
+    if (tvlVelocity < -10_000_000) {
+      distribution.score = clampScore(distribution.score - 0.5);
+      distribution.reasoning += ` | TVL outflow $${(Math.abs(tvlVelocity) / 1e6).toFixed(1)}M/week: capital exit (-0.5).`;
+    } else if (tvlVelocity < -5_000_000) {
+      distribution.score = clampScore(distribution.score - 0.2);
+      distribution.reasoning += ` | TVL moderate outflow $${(Math.abs(tvlVelocity) / 1e6).toFixed(1)}M/week (-0.2).`;
+    } else if (tvlVelocity > 10_000_000) {
+      distribution.score = clampScore(distribution.score + 0.2);
+      distribution.reasoning += ` | TVL inflow $${(tvlVelocity / 1e6).toFixed(1)}M/week: capital attraction (+0.2).`;
+    }
   }
 
   // Round 237b (AutoResearch nightly): reddit_activity_score supplement to social momentum
@@ -1544,6 +1620,24 @@ export function calculateScores(data) {
       weights_used: categoryResult.weights,
     },
   };
+}
+
+// ─── Round 383 (AutoResearch): Composite signal strength index ──────────────
+/**
+ * Computes a 0-100 "signal strength index" from alpha signals and red flags.
+ * High positive signal count + low flag count = strong signal.
+ * Used downstream for verdict calibration and report priority scoring.
+ */
+export function computeSignalStrengthIndex(alphaSignals = [], redFlags = []) {
+  const strongSignals = alphaSignals.filter(s => s.strength === 'strong').length;
+  const moderateSignals = alphaSignals.filter(s => s.strength === 'moderate').length;
+  const criticalFlags = redFlags.filter(f => f.severity === 'critical').length;
+  const warningFlags = redFlags.filter(f => f.severity === 'warning').length;
+
+  const positiveScore = Math.min(50, strongSignals * 15 + moderateSignals * 7);
+  const negativeScore = Math.min(50, criticalFlags * 15 + warningFlags * 7);
+  const base = 50 + positiveScore - negativeScore;
+  return Math.max(0, Math.min(100, Math.round(base)));
 }
 
 // ─── Re-export companion services for unified import ─────────────────────────

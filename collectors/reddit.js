@@ -163,6 +163,30 @@ export async function collectReddit(projectName) {
       tier1_subreddit_hits: tier1SubredditHits,
       subreddit_quality,
       top_posts: topPosts,
+      // Round 383 (AutoResearch): sentiment_momentum — compare last 24h vs full week sentiment
+      // Improving sentiment (more recent bullish vs week) = acceleration signal
+      // Degrading sentiment (more recent bearish) = distribution signal
+      sentiment_momentum: (() => {
+        const recentPosts = posts.filter(c => {
+          const ageH = (now - (c?.data?.created_utc ?? now)) / 3600;
+          return ageH < 24;
+        }).map(c => c?.data).filter(Boolean);
+        if (recentPosts.length < 2) return null;
+        let recentBullish = 0, recentBearish = 0;
+        for (const p of recentPosts) {
+          const s = classifySentiment(p.title || '');
+          if (s === 'bullish') recentBullish++;
+          else if (s === 'bearish') recentBearish++;
+        }
+        const recentSentScore = recentPosts.length > 0 ? (recentBullish - recentBearish) / recentPosts.length : 0;
+        const weekSentScore = posts.length > 0 ? (sentimentCounts.bullish - sentimentCounts.bearish) / posts.length : 0;
+        if (recentSentScore > weekSentScore + 0.1) return 'improving';
+        if (recentSentScore < weekSentScore - 0.1) return 'degrading';
+        return 'stable';
+      })(),
+      // Round 383 (AutoResearch): avg_post_score — average upvotes per post (quality signal)
+      // High avg upvotes = community validation; very low avg = noise/spam posts
+      avg_post_score: posts.length > 0 ? Math.round(totalUpvotes / posts.length) : 0,
       error: null,
     };
   } catch (error) {

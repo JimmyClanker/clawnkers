@@ -408,6 +408,17 @@ export async function collectSocial(projectName, exaService) {
         }).length;
         return Math.round((freshWithNarrative / Math.min(uniqueNews.length, 10)) * 100);
       })(),
+      // Round 383 (AutoResearch): top_tier_source_count — count of articles from Tier-1 sources
+      // Tier-1 = TRUSTED_DOMAINS set with score 1.4 (Bloomberg, CoinDesk, TheBlock, Blockworks, etc.)
+      // Separates "many articles" from "many high-quality articles" — better signal-to-noise metric
+      top_tier_source_count: (() => {
+        if (uniqueNews.length === 0) return 0;
+        return uniqueNews.filter((item) => getDomainTrustScore(item.url) >= 1.4).length;
+      })(),
+      // Round 383 (AutoResearch): subreddit_quality — qualitative tier for reddit signal if integrated
+      // Reflects quality of subreddit discussion (main crypto subreddits vs niche/new ones)
+      // Currently set to null here (computed by reddit collector) — placeholder for cross-collector integration
+      subreddit_quality: null, // populated by reddit collector override in routes/alpha.js if available
       // Round 192 (AutoResearch): more informative error — report failure count and first error message
       error: (() => {
         const failed = settled.filter((e) => e.status === 'rejected');

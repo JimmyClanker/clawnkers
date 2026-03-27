@@ -658,6 +658,19 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   const socialPriceFlag = detectSocialPriceDivergence(rawData);
   if (socialPriceFlag) flags.push(socialPriceFlag);
 
+  // Round 383 (AutoResearch): New red flag detectors
+  const highSellTaxFlag = detectHighSellTax(rawData);
+  if (highSellTaxFlag) flags.push(highSellTaxFlag);
+
+  const proxyContractFlag = detectProxyContractRisk(rawData);
+  if (proxyContractFlag) flags.push(proxyContractFlag);
+
+  const hyperinflationFlag = detectHyperinflation(rawData);
+  if (hyperinflationFlag) flags.push(hyperinflationFlag);
+
+  const mercenaryWhaleFlag = detectMercenaryTvlConcentration(rawData);
+  if (mercenaryWhaleFlag) flags.push(mercenaryWhaleFlag);
+
   // Deduplicate flags by flag key (keep highest severity)
   const severityOrder = { critical: 3, warning: 2, info: 1 };
   const flagMap = new Map();
@@ -847,6 +860,88 @@ export function detectLowVolume(rawData = {}) {
       flag: 'extremely_low_volume',
       severity: volMcapRatio < 0.001 ? 'critical' : 'warning',
       detail: `24h volume ($${(volume / 1000).toFixed(0)}K) is only ${(volMcapRatio * 100).toFixed(3)}% of market cap — extremely illiquid, price easily manipulated.`,
+    };
+  }
+  return null;
+}
+
+// ─── Round 383 (AutoResearch): Contract security red flags ───────────────────
+
+/**
+ * Detect high sell tax — tokens with sell tax >10% trap holders.
+ * This is a hallmark of honeypot-adjacent designs or exit fee extraction.
+ */
+export function detectHighSellTax(rawData = {}) {
+  const contract = rawData.contract ?? {};
+  const sellTax = Number(contract.sell_tax ?? NaN);
+  if (!Number.isFinite(sellTax)) return null;
+  if (sellTax > 10) {
+    return {
+      flag: 'high_sell_tax',
+      severity: sellTax > 20 ? 'critical' : 'warning',
+      detail: `Sell tax of ${sellTax}% detected — tokens with high exit fees trap holders and incentivize holding over fundamentals. Liquidity exit nearly impossible at scale.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Detect proxy contract upgrade risk — upgradeable contracts can change token behavior post-launch.
+ * A proxy contract combined with unverified code = maximum rug pull surface.
+ */
+export function detectProxyContractRisk(rawData = {}) {
+  const contract = rawData.contract ?? {};
+  if (contract.is_proxy !== true) return null;
+  const audited = contract.audited === true;
+  const verified = contract.verified === true;
+  if (!audited && !verified) {
+    return {
+      flag: 'unaudited_proxy_contract',
+      severity: 'critical',
+      detail: `Upgradeable proxy contract detected with no audit and no verification — team can silently change contract logic after deployment. Maximum smart contract risk.`,
+    };
+  }
+  if (!audited) {
+    return {
+      flag: 'unaudited_upgradeable_contract',
+      severity: 'warning',
+      detail: `Upgradeable proxy contract detected without formal security audit — contract behavior can be changed by deployer. High smart contract risk.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Detect severe inflation — tokens with >50%/yr inflation rate erode holder value aggressively.
+ * At high inflation, token emission economics are likely Ponzi-dependent.
+ */
+export function detectHyperinflation(rawData = {}) {
+  const tokenomics = rawData.tokenomics ?? {};
+  const inflation = Number(tokenomics.inflation_rate ?? NaN);
+  if (!Number.isFinite(inflation) || inflation <= 50) return null;
+  return {
+    flag: 'hyperinflationary_supply',
+    severity: inflation > 100 ? 'critical' : 'warning',
+    detail: `Annual inflation rate of ${inflation.toFixed(0)}%/yr — token supply expanding faster than demand can absorb. Classic Ponzi-emission structure where early holders dump on latecomers.`,
+  };
+}
+
+/**
+ * Detect TVL-to-active-user imbalance: very few users despite large TVL.
+ * This is a sign of mercenary capital (whales/protocols depositing for yield, not users using the product).
+ */
+export function detectMercenaryTvlConcentration(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const tvl = Number(onchain.tvl ?? 0);
+  const activeAddresses7d = Number(onchain.active_addresses_7d ?? onchain.active_users_24h ?? 0);
+  if (tvl <= 1_000_000 || activeAddresses7d === 0) return null;
+  const tvlPerUser = tvl / activeAddresses7d;
+  // If average TVL per active user > $5M, it's almost certainly mercenary/whale capital
+  if (tvlPerUser > 5_000_000) {
+    return {
+      flag: 'mercenary_tvl_whale_concentration',
+      severity: tvlPerUser > 20_000_000 ? 'critical' : 'warning',
+      detail: `Average TVL per active user is $${(tvlPerUser / 1_000_000).toFixed(1)}M — TVL is dominated by a small number of whale depositors, not organic user adoption. Withdrawal of one whale could crater TVL.`,
     };
   }
   return null;

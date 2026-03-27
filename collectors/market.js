@@ -467,6 +467,44 @@ export async function collectMarket(projectName) {
           pct_vs_ma7: parseFloat(pctAbove.toFixed(2)),
         };
       })(),
+      // Round 383 (AutoResearch): weekly_price_return — clean 7-day return from chart data
+      // More accurate than price_change_pct_7d (which is CoinGecko's rolling 7d, not aligned to chart)
+      // Useful for trend-following context and comparison with weekly fee efficiency signals
+      weekly_price_return: (() => {
+        const prices = (chartData?.prices || []).slice(-8).map(([, p]) => Number(p)).filter(Number.isFinite);
+        if (prices.length < 2) return null;
+        const first = prices[0];
+        const last = prices[prices.length - 1];
+        if (first <= 0) return null;
+        const ret = ((last - first) / first) * 100;
+        return Number.isFinite(ret) ? parseFloat(ret.toFixed(2)) : null;
+      })(),
+      // Round 383 (AutoResearch): price_range_pct_7d — range (high-low)/low over last 7 days
+      // Measures intraday volatility range — high range = volatile asset, low range = stable/consolidating
+      price_range_pct_7d: (() => {
+        const prices = (chartData?.prices || []).slice(-7).map(([, p]) => Number(p)).filter(Number.isFinite);
+        if (prices.length < 3) return null;
+        const high = Math.max(...prices);
+        const low = Math.min(...prices);
+        if (low <= 0) return null;
+        const rangePct = ((high - low) / low) * 100;
+        return Number.isFinite(rangePct) ? parseFloat(rangePct.toFixed(2)) : null;
+      })(),
+      // Round 383 (AutoResearch): ath_recovery_potential — how far could price go just to recover ATH?
+      // Simple metric that helps frame the "recovery trade" vs "price discovery" narrative:
+      // <50% to ATH = near territory | 50-200% = medium recovery | >200% = long way back
+      ath_recovery_potential: (() => {
+        if (athDistancePct == null || !Number.isFinite(athDistancePct) || athDistancePct >= 0) return null;
+        // If price is X% below ATH, the required move UP = 100 / (1 + X/100) - 1
+        // e.g. -50% below ATH → needs +100% to recover
+        const requiredPctMove = (100 / (1 + athDistancePct / 100) - 1) * 100;
+        if (!Number.isFinite(requiredPctMove)) return null;
+        const tier = requiredPctMove < 50 ? 'near_recovery' : requiredPctMove < 200 ? 'medium_recovery' : requiredPctMove < 500 ? 'long_recovery' : 'very_distant_recovery';
+        return {
+          required_pct: parseFloat(requiredPctMove.toFixed(1)),
+          tier,
+        };
+      })(),
       error: null,
     };
   } catch (error) {

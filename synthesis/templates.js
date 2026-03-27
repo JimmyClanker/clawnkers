@@ -184,6 +184,28 @@ function extractKeyMetrics(rawData, scores) {
       if (v >= 50) return `$${v.toFixed(0)} (retail organic)`;
       return `$${v.toFixed(2)} (micro/bot risk)`;
     })(),
+    // Round 383 (AutoResearch): TVL ATH distance — how far current TVL is from all-time high TVL
+    tvl_vs_ath_pct: rawData?.onchain?.tvl_vs_ath_pct ?? null,
+    tvl_vs_ath_fmt: (() => {
+      const v = rawData?.onchain?.tvl_vs_ath_pct;
+      if (v == null) return 'n/a';
+      if (v >= -5) return `near TVL ATH`;
+      if (v >= -30) return `${Math.abs(v).toFixed(0)}% below TVL ATH`;
+      return `${Math.abs(v).toFixed(0)}% below TVL ATH (declining protocol)`;
+    })(),
+    // Round 383 (AutoResearch): weekly TVL velocity in USD — absolute capital flow signal
+    weekly_tvl_velocity_usd: rawData?.onchain?.weekly_tvl_velocity_usd ?? null,
+    weekly_tvl_velocity_fmt: (() => {
+      const v = rawData?.onchain?.weekly_tvl_velocity_usd;
+      if (v == null) return 'n/a';
+      const sign = v >= 0 ? '+' : '';
+      if (Math.abs(v) >= 1e9) return `${sign}$${(v / 1e9).toFixed(2)}B this week`;
+      if (Math.abs(v) >= 1e6) return `${sign}$${(v / 1e6).toFixed(1)}M this week`;
+      if (Math.abs(v) >= 1e3) return `${sign}$${(v / 1e3).toFixed(0)}K this week`;
+      return `${sign}$${v.toFixed(0)} this week`;
+    })(),
+    // Round 383 (AutoResearch): ATH recovery potential for context
+    ath_recovery_potential: rawData?.market?.ath_recovery_potential ?? null,
     // Round 382 (AutoResearch): article quality score for social signal reliability
     avg_article_quality_score: rawData?.social?.avg_article_quality_score ?? null,
     article_quality_fmt: (() => {
@@ -238,7 +260,7 @@ export function formatReport(projectName, rawData, scores, llmAnalysis) {
 const json = {
     project_name: projectName,
     generated_at: new Date().toISOString(),
-    engine_version: 'r64-2026-03-27', // bump: 40-round AutoResearch Report Templates batch (R391-430)
+    engine_version: 'r383-2026-03-27', // bump: 30-round AutoResearch nightly batch (R383-412)
     verdict: llmAnalysis?.verdict || 'HOLD',
     headline: llmAnalysis?.headline ?? null,
     project_summary: llmAnalysis?.project_summary ?? null,

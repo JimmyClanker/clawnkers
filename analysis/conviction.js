@@ -234,7 +234,32 @@ export function calculateConviction(rawData, scores, enrichment = {}) {
     return 0;
   })();
 
-  const total = Math.min(100, Math.max(0, f1.score + f2.score + f3.score + f4.score + f5.score + ptvlBonus + range52wBonus + holderEngBonus + sellWallConvPenalty + washTradingPenalty + athConvictionBonus + articleQualityBonus + organicVolumeBonus));
+  // Round 383 (AutoResearch): Inflation-conviction penalty
+  // High annual inflation (>50%/yr) reduces conviction because fundamentals are structurally
+  // degrading — even if current metrics look good, supply dilution is working against holders.
+  const inflationConvPenalty = (() => {
+    const inflation = safeN(rawData?.tokenomics?.inflation_rate ?? null, null);
+    if (inflation === null) return 0;
+    if (inflation > 100) return -5;  // Hyperinflationary — fundamentals will deteriorate
+    if (inflation > 50) return -3;   // Very high inflation — moderate conviction penalty
+    if (inflation > 30) return -1;   // High inflation — mild penalty
+    if (inflation < 0) return 2;     // Deflationary — slight conviction boost
+    return 0;
+  })();
+
+  // Round 383 (AutoResearch): Low float + momentum convergence boost
+  // When circulating supply is low AND price momentum is strong, the setup is unusually
+  // high-conviction because supply constraints amplify demand signals.
+  const lowFloatMomentumBonus = (() => {
+    const pctCirc = safeN(rawData?.tokenomics?.pct_circulating ?? null, null);
+    const momentumTier = rawData?.market?.price_momentum_tier;
+    if (pctCirc === null || !momentumTier) return 0;
+    if (pctCirc < 20 && (momentumTier === 'strong_uptrend' || momentumTier === 'uptrend')) return 3;
+    if (pctCirc < 35 && momentumTier === 'strong_uptrend') return 2;
+    return 0;
+  })();
+
+  const total = Math.min(100, Math.max(0, f1.score + f2.score + f3.score + f4.score + f5.score + ptvlBonus + range52wBonus + holderEngBonus + sellWallConvPenalty + washTradingPenalty + athConvictionBonus + articleQualityBonus + organicVolumeBonus + inflationConvPenalty + lowFloatMomentumBonus));
   const label = convictionLabel(total);
 
   const reasoning = [

@@ -491,6 +491,52 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Round 383 (AutoResearch): Honeypot absolute circuit breaker
+  // A honeypot contract allows buy but blocks sell — this is fraud, not a risk.
+  // No matter how good other metrics look, a honeypot must produce STRONG AVOID.
+  if (rawData?.contract?.honeypot === true) {
+    breakers.push({
+      cap: 1.0,
+      reason: 'HONEYPOT DETECTED — contract blocks selling. This is a scam. Do not buy under any circumstances.',
+      severity: 'critical',
+    });
+  }
+
+  // Round 383 (AutoResearch): High sell tax circuit breaker
+  // A sell tax > 20% makes exit impossible without massive loss — effectively a soft honeypot.
+  const sellTaxCB = safeN(rawData?.contract?.sell_tax ?? 0);
+  if (sellTaxCB > 20) {
+    breakers.push({
+      cap: 2.5,
+      reason: `Sell tax ${sellTaxCB}% — holders lose 20%+ on every exit. Tokens with >20% sell tax are exit-restricted by design.`,
+      severity: 'critical',
+    });
+  } else if (sellTaxCB > 10) {
+    breakers.push({
+      cap: 4.5,
+      reason: `High sell tax ${sellTaxCB}% — significant exit cost creates holder trap dynamics. Cap at AVOID.`,
+      severity: 'warning',
+    });
+  }
+
+  // Round 383 (AutoResearch): Hyperinflationary supply + low market cap = economic spiral
+  // Tokens with >200%/yr inflation and <$10M mcap typically see supply outrun demand → collapse
+  const inflationCB = safeN(rawData?.tokenomics?.inflation_rate ?? 0);
+  const mcapForInflation = safeN(rawData?.market?.market_cap ?? 0);
+  if (inflationCB > 200 && mcapForInflation < 10_000_000) {
+    breakers.push({
+      cap: 4.0,
+      reason: `Hyperinflationary supply (${inflationCB.toFixed(0)}%/yr) with small market cap ($${(mcapForInflation / 1e6).toFixed(1)}M) — emissions will overwhelm demand, structural price erosion inevitable.`,
+      severity: 'critical',
+    });
+  } else if (inflationCB > 100) {
+    breakers.push({
+      cap: 5.5,
+      reason: `Very high annual inflation (${inflationCB.toFixed(0)}%/yr) — supply expanding rapidly, sustained buy pressure required just to maintain price.`,
+      severity: 'warning',
+    });
+  }
+
   // Applica il cap più restrittivo
   if (breakers.length === 0) {
     return { score: overallScore, breakers: [], capped: false };

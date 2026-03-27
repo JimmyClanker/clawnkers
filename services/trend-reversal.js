@@ -104,6 +104,26 @@ export function detectTrendReversal(rawData = {}) {
     bearishPoints += 2;
   }
 
+  // Round 446: momentum tier reversal — when price_momentum_tier was recently 'strong_downtrend'
+  // and is now 'uptrend' or better, it signals a momentum regime change
+  const momentumTier = rawData?.market?.price_momentum_tier ?? null;
+  if (momentumTier === 'uptrend' || momentumTier === 'strong_uptrend') {
+    if (c30d !== null && c30d < -15) {
+      // Was in downtrend recently (30d negative) but momentum now reverting
+      signals.push(`Momentum tier "${momentumTier}" despite ${c30d.toFixed(1)}% 30d price — regime flip from downtrend`);
+      bullishPoints += 2;
+    }
+  }
+
+  // Round 446: DEX price momentum burst with volume confirmation
+  const dexM5 = safeN(rawData?.dex?.dex_price_change_m5);
+  const dexH1 = safeN(rawData?.dex?.dex_price_change_h1);
+  const dexH24 = safeN(rawData?.dex?.dex_price_change_h24);
+  if (dexM5 !== null && dexH1 !== null && dexH24 !== null && dexM5 > 2 && dexH1 > 3 && dexH24 > 5 && c30d !== null && c30d < -10) {
+    signals.push(`DEX intraday momentum burst (m5: +${dexM5.toFixed(1)}%, h1: +${dexH1.toFixed(1)}%, h24: +${dexH24.toFixed(1)}%) after 30d downtrend — potential reversal catalyst`);
+    bullishPoints += 2;
+  }
+
   // Determine pattern
   let pattern = 'none';
   let confidence = 'low';

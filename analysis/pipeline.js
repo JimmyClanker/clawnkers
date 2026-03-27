@@ -9,7 +9,7 @@
  * Each phase has clear input/output contracts and is independently testable.
  */
 
-import { calculateScores, computeSparklineTrend } from '../synthesis/scoring.js';
+import { calculateScores, computeSparklineTrend, computeSignalStrengthIndex } from '../synthesis/scoring.js';
 import { generateReport, generateQuickReport } from '../synthesis/llm.js';
 import { getBenchmarkForCategory, compareToSector } from '../services/sector-benchmarks.js';
 import { detectRedFlags, detectFeeRevenueDivergence } from '../services/red-flags.js';
@@ -127,9 +127,14 @@ export function phaseEnrich(rawData, scores) {
     }
   } catch (_) { /* non-critical */ }
 
+  // Round 383 (AutoResearch): Compute signal strength index — 0-100 composite of alpha vs red flags
+  // Used by report-quality.js, scoring calibration, and verdict confidence assessment
+  const signalStrengthIndex = computeSignalStrengthIndex(alphaSignals, redFlags);
+
   // Inject into rawData for LLM context
   rawData.red_flags = redFlags;
   rawData.alpha_signals = alphaSignals;
+  rawData.signal_strength_index = signalStrengthIndex;
   rawData.volatility = volatilityAssessment;
   rawData.price_alerts = priceAlerts;
   rawData.trend_reversal = trendReversal;

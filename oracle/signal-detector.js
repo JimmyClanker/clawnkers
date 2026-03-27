@@ -104,14 +104,19 @@ export function detectScoreMomentum(db) {
     const delta = row.delta;
     const absDelta = Math.abs(delta);
     const direction = delta > 0 ? 'improving' : 'declining';
-    const severity = absDelta > 2.0 ? 'critical' : absDelta > 1.5 ? 'high' : 'medium';
+    // Round 438: factor in normalized_delta (relative change) to catch large % swings on low base
+    const normalizedDelta_raw = row.current_score !== 0 ? (delta / row.current_score) : 0;
+    const relativeChangePct = Math.abs(normalizedDelta_raw) * 100;
+    // Upgrade severity if relative change >30% regardless of absolute delta
+    let severity = absDelta > 2.0 ? 'critical' : absDelta > 1.5 ? 'high' : 'medium';
+    if (severity === 'medium' && relativeChangePct > 30) severity = 'high'; // large relative shift
     const tokenName = row.token_name || row.token_symbol || `token#${row.token_id}`;
 
     const msOld = new Date(row.old_at.replace(' ', 'T') + 'Z').getTime();
     const msRecent = new Date(row.recent_at.replace(' ', 'T') + 'Z').getTime();
     const hours = Math.round((msRecent - msOld) / (1000 * 60 * 60));
     const velocity = hours > 0 ? (delta / hours) : 0; // pts per hour
-    const normalizedDelta = row.current_score !== 0 ? (delta / row.current_score) : 0; // relative change
+    const normalizedDelta = normalizedDelta_raw; // relative change (already computed above)
 
     // Trend consistency: score è sempre cresciuto/decresciuto negli ultimi N snapshot?
     const recentSnaps = getRecentSnapshots(row.token_id, row.recent_at);
@@ -125,12 +130,26 @@ export function detectScoreMomentum(db) {
 
     const consistencyNote = trendConsistent ? ' [consistent trend]' : '';
 
+    // Round 431: velocity_tier label — fast/normal/slow momentum
+    const velocityTier = Math.abs(velocity) > 0.05 ? 'fast' : Math.abs(velocity) > 0.02 ? 'normal' : 'slow';
+
+    // Round 432: score_zone — which conviction zone did the token land in?
+    const scoreZone = row.current_score >= 7.0 ? 'strong_buy'
+      : row.current_score >= 5.5 ? 'watch'
+      : row.current_score >= 4.0 ? 'neutral'
+      : 'avoid';
+    const prevScoreZone = row.prev_score >= 7.0 ? 'strong_buy'
+      : row.prev_score >= 5.5 ? 'watch'
+      : row.prev_score >= 4.0 ? 'neutral'
+      : 'avoid';
+    const crossedZone = scoreZone !== prevScoreZone;
+
     return {
       signal_type: 'SCORE_MOMENTUM',
       token_id: row.token_id,
       severity,
-      title: `${tokenName}: score ${direction} ${absDelta.toFixed(1)} pts in 72h (velocity: ${velocity.toFixed(3)} pts/h)${consistencyNote}`,
-      detail: `Score moved from ${row.prev_score.toFixed(1)}/10 to ${row.current_score.toFixed(1)}/10. ${direction === 'improving' ? 'Positive momentum' : 'Deterioration detected'}. Velocity: ${velocity.toFixed(3)} pts/h.${trendConsistent ? ' Trend is consistent across recent snapshots.' : ''}`,
+      title: `${tokenName}: score ${direction} ${absDelta.toFixed(1)} pts in 72h (velocity: ${velocity.toFixed(3)} pts/h, ${velocityTier})${crossedZone ? ` [zone: ${prevScoreZone}→${scoreZone}]` : ''}${consistencyNote}`,
+      detail: `Score moved from ${row.prev_score.toFixed(1)}/10 (${prevScoreZone}) to ${row.current_score.toFixed(1)}/10 (${scoreZone}). ${direction === 'improving' ? 'Positive momentum' : 'Deterioration detected'}. Velocity: ${velocity.toFixed(3)} pts/h (${velocityTier}).${crossedZone ? ` Zone boundary crossed: ${prevScoreZone} → ${scoreZone}.` : ''}${trendConsistent ? ' Trend is consistent across recent snapshots.' : ''}`,
       data_json: JSON.stringify({
         current_score: row.current_score,
         prev_score: row.prev_score,
@@ -138,8 +157,12 @@ export function detectScoreMomentum(db) {
         direction,
         hours,
         velocity,
+        velocity_tier: velocityTier,
         normalized_delta: normalizedDelta,
         trend_consistent: trendConsistent,
+        score_zone: scoreZone,
+        prev_score_zone: prevScoreZone,
+        crossed_zone: crossedZone,
       }),
       expires_at: expiresAt,
     };
@@ -248,12 +271,19 @@ export function detectCategoryLeaderShift(db) {
     const oldLeaderScore = oldRows2[0]?.overall_score ?? null;
     const scoreGap = (newLeaderScore !== null && oldLeaderScore !== null) ? (newLeaderScore - oldLeaderScore) : null;
 
+    // Round 433: category_momentum — is the overall category getting stronger or weaker?
+    // Compare average score of current top3 vs old top3
+    const newTop3AvgScore = rows.slice(0, 3).reduce((s, r) => s + (r.overall_score ?? 0), 0) / Math.min(3, rows.length);
+    const oldTop3AvgScore = oldRows2.slice(0, 3).reduce((s, r) => s + (r.overall_score ?? 0), 0) / Math.min(3, oldRows2.length);
+    const categoryMomentum = (newTop3AvgScore - oldTop3AvgScore) > 0.3 ? 'strengthening'
+      : (newTop3AvgScore - oldTop3AvgScore) < -0.3 ? 'weakening' : 'stable';
+
     signals.push({
       signal_type: 'CATEGORY_LEADER_SHIFT',
       token_id: null,
       severity,
-      title: `${category}: leadership change — ${newLeader} enters top 3 (${changeCount} new)`,
-      detail: `New top 3: ${newTop3Names.join(', ')}. Previous: ${oldTop3Names.join(', ')}. ${changeCount} token(s) changed.${scoreGap !== null ? ` Leader score gap: ${scoreGap > 0 ? '+' : ''}${scoreGap.toFixed(1)} pts.` : ''}`,
+      title: `${category}: leadership change — ${newLeader} enters top 3 (${changeCount} new, category ${categoryMomentum})`,
+      detail: `New top 3: ${newTop3Names.join(', ')}. Previous: ${oldTop3Names.join(', ')}. ${changeCount} token(s) changed.${scoreGap !== null ? ` Leader score gap: ${scoreGap > 0 ? '+' : ''}${scoreGap.toFixed(1)} pts.` : ''} Category avg score: ${newTop3AvgScore.toFixed(2)} vs ${oldTop3AvgScore.toFixed(2)} (${categoryMomentum}).`,
       data_json: JSON.stringify({
         category,
         new_top3: newTop3Names,
@@ -264,6 +294,9 @@ export function detectCategoryLeaderShift(db) {
         exited: exitedNames,
         change_count: changeCount,
         score_gap: scoreGap,
+        category_momentum: categoryMomentum,
+        new_avg_score: parseFloat(newTop3AvgScore.toFixed(3)),
+        old_avg_score: parseFloat(oldTop3AvgScore.toFixed(3)),
       }),
       expires_at: expiresAt,
     });
@@ -386,12 +419,21 @@ export function detectBreakerAlerts(db) {
       const cap = firstBreaker?.cap ?? firstBreaker?.score_cap ?? null;
       const reason = firstBreaker?.reason || firstBreaker?.detail || breakerType;
       const durationNote = longDurationBreaker ? ' [active >48h]' : '';
+
+      // Round 436: breaker_risk_score — composite 1-10 risk score for alert prioritisation
+      // Higher score = more urgent to act on
+      // Components: severity (4 pts max) + breaker_count (3 pts max) + duration (3 pts max)
+      const severityPts = longDurationBreaker ? 4 : severity === 'critical' ? 3 : 2;
+      const countPts = Math.min(3, breakerCount);
+      const durationPts = longDurationBreaker ? 3 : 0;
+      const breakerRiskScore = Math.min(10, severityPts + countPts + durationPts);
+
       signals.push({
         signal_type: 'BREAKER_ALERT',
         token_id: snap.token_id,
         severity,
-        title: `${tokenName}: circuit breaker ACTIVATED — ${breakerType} (${breakerCount} active)${durationNote}`,
-        detail: `${reason}. Score cap: ${cap != null ? cap + '/10' : 'n/a'}. Total breakers: ${breakerCount}.${longDurationBreaker ? ' Breaker active for >48h.' : ''}`,
+        title: `${tokenName}: circuit breaker ACTIVATED — ${breakerType} (${breakerCount} active, risk: ${breakerRiskScore}/10)${durationNote}`,
+        detail: `${reason}. Score cap: ${cap != null ? cap + '/10' : 'n/a'}. Total breakers: ${breakerCount}. Risk score: ${breakerRiskScore}/10.${longDurationBreaker ? ' Breaker active for >48h.' : ''}`,
         data_json: JSON.stringify({ 
           breaker_type: breakerType, 
           activated: true, 
@@ -400,6 +442,7 @@ export function detectBreakerAlerts(db) {
           breaker_count: breakerCount,
           long_duration: longDurationBreaker,
           all_breakers: currentBreakers.map(b => b?.type || b?.id || 'unknown'),
+          breaker_risk_score: breakerRiskScore,
         }),
         expires_at: expiresAt,
       });
@@ -487,12 +530,31 @@ export function detectDivergence(db) {
 
     const volumeNote = lowVolume ? ' [low volume]' : '';
 
+    // Round 434: divergence_magnitude — combined score×|price_delta| for ranking signal strength
+    // Positive divergence: score × |negative_price_change| = how strong the buy-the-dip signal is
+    // Negative divergence: (10 - score) × positive_price_change = how strong the sell signal is
+    const divergenceMagnitude = isPositive
+      ? parseFloat((row.overall_score * Math.abs(row.price_change_7d) / 10).toFixed(3))
+      : parseFloat(((10 - row.overall_score) * Math.abs(row.price_change_7d) / 10).toFixed(3));
+    const magnitudeLabel = divergenceMagnitude > 15 ? 'extreme' : divergenceMagnitude > 8 ? 'strong' : 'moderate';
+
+    // Round 437: volume_confirmation — positive divergence with high volume is a stronger buy signal
+    // High volume during a price dip means real sellers are being absorbed (accumulation)
+    // High volume during a price pump with weak score = distribution (warning stronger)
+    const volumeConfirmed = !lowVolume && (
+      (isPositive && volumeToMcap > 0.15) ||  // positive: high vol dip = accumulation
+      (!isPositive && volumeToMcap > 0.20)     // negative: high vol pump = pump-and-dump risk
+    );
+    const volumeConfirmNote = volumeConfirmed
+      ? isPositive ? ' High volume confirms accumulation opportunity.' : ' High volume confirms distribution risk.'
+      : '';
+
     return {
       signal_type: 'DIVERGENCE',
       token_id: row.token_id,
       severity,
-      title: `${tokenName}: ${divergenceType} — score ${row.overall_score.toFixed(1)}/10 but price ${priceDirection}${volumeNote}`,
-      detail: `Algorithmic score ${row.overall_score.toFixed(1)}/10 suggests ${scoreImplication}, but price has moved ${priceDirection} in 7d. Potential ${opportunityOrTrap}.${lowVolume ? ' Low volume (<5% daily turnover) — signal quality reduced.' : ''}`,
+      title: `${tokenName}: ${divergenceType} — score ${row.overall_score.toFixed(1)}/10 but price ${priceDirection}${volumeNote} [magnitude: ${magnitudeLabel}]`,
+      detail: `Algorithmic score ${row.overall_score.toFixed(1)}/10 suggests ${scoreImplication}, but price has moved ${priceDirection} in 7d. Potential ${opportunityOrTrap}. Divergence magnitude: ${divergenceMagnitude} (${magnitudeLabel}).${volumeConfirmNote}${lowVolume ? ' Low volume (<5% daily turnover) — signal quality reduced.' : ''}`,
       data_json: JSON.stringify({
         score: row.overall_score,
         price_change_7d: row.price_change_7d,
@@ -500,6 +562,9 @@ export function detectDivergence(db) {
         extreme_score: extremeScore,
         volume_to_mcap: volumeToMcap,
         low_volume: lowVolume,
+        divergence_magnitude: divergenceMagnitude,
+        magnitude_label: magnitudeLabel,
+        volume_confirmed: volumeConfirmed,
       }),
       expires_at: expiresAt,
     };
@@ -507,15 +572,149 @@ export function detectDivergence(db) {
 }
 
 // ---------------------------------------------------------------------------
-// REGIME_SHIFT (placeholder)
+// REGIME_SHIFT
 // ---------------------------------------------------------------------------
 
 /**
- * Regime shift detection requires BTC regime filter (Phase 8).
- * Currently returns no signals.
+ * Round 435: Detect market regime shifts using BTC price + dominance stored in snapshots.
+ *
+ * Strategy: compare median btc_price + median overall_score distribution across snapshots
+ * - If BTC price dropped >15% in 7d AND avg score declined → bear regime entering
+ * - If BTC price rose >15% in 7d AND avg score improving → bull regime entering
+ * - If avg score dispersion increased → rotation/uncertainty regime
+ *
+ * Uses the token_snapshots.btc_price column (populated by batch scanner).
+ * Falls back gracefully if no btc_price data available.
  */
-export function detectRegimeShift(_db) {
-  return [];
+export function detectRegimeShift(db) {
+  // Need at least 2 time points: current (last 24h) and ~7d ago
+  const recentRows = db.prepare(`
+    SELECT ts.btc_price, sc.overall_score
+    FROM token_snapshots ts
+    JOIN token_scores sc ON sc.snapshot_id = ts.id
+    WHERE datetime(ts.snapshot_at) >= datetime('now', '-24 hours')
+      AND ts.btc_price IS NOT NULL
+      AND sc.overall_score IS NOT NULL
+  `).all();
+
+  const oldRows = db.prepare(`
+    SELECT ts.btc_price, sc.overall_score
+    FROM token_snapshots ts
+    JOIN token_scores sc ON sc.snapshot_id = ts.id
+    WHERE datetime(ts.snapshot_at) <= datetime('now', '-6 days')
+      AND datetime(ts.snapshot_at) >= datetime('now', '-8 days')
+      AND ts.btc_price IS NOT NULL
+      AND sc.overall_score IS NOT NULL
+  `).all();
+
+  // Need at least 3 data points in each window for meaningful stats
+  if (recentRows.length < 3 || oldRows.length < 3) return [];
+
+  const median = (arr) => {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  };
+  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const stddev = (arr, mean) => Math.sqrt(arr.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / arr.length);
+
+  const recentBtcPrices = recentRows.map(r => r.btc_price);
+  const oldBtcPrices = oldRows.map(r => r.btc_price);
+  const recentScores = recentRows.map(r => r.overall_score);
+  const oldScores = oldRows.map(r => r.overall_score);
+
+  const recentBtcMedian = median(recentBtcPrices);
+  const oldBtcMedian = median(oldBtcPrices);
+  const btcChangePct = oldBtcMedian > 0 ? ((recentBtcMedian - oldBtcMedian) / oldBtcMedian) * 100 : 0;
+
+  const recentAvgScore = avg(recentScores);
+  const oldAvgScore = avg(oldScores);
+  const scoreDelta = recentAvgScore - oldAvgScore;
+
+  // Score dispersion: high stddev = rotation/uncertainty
+  const recentMean = recentAvgScore;
+  const recentStddev = stddev(recentScores, recentMean);
+  const oldStddev = stddev(oldScores, oldAvgScore);
+  const dispersionChange = recentStddev - oldStddev;
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  const signals = [];
+
+  // Bear regime entering: BTC down >10% AND portfolio avg score declining
+  if (btcChangePct < -10 && scoreDelta < -0.3) {
+    const severity = btcChangePct < -20 && scoreDelta < -0.8 ? 'critical' : 'high';
+    signals.push({
+      signal_type: 'REGIME_SHIFT',
+      token_id: null,
+      severity,
+      title: `REGIME SHIFT: Bear market signal — BTC ${btcChangePct.toFixed(1)}% / avg score ${scoreDelta > 0 ? '+' : ''}${scoreDelta.toFixed(2)}`,
+      detail: `BTC fell ${Math.abs(btcChangePct).toFixed(1)}% over 7d (median: $${recentBtcMedian.toFixed(0)} vs $${oldBtcMedian.toFixed(0)}). Portfolio avg score declined ${Math.abs(scoreDelta).toFixed(2)} pts (${oldAvgScore.toFixed(2)} → ${recentAvgScore.toFixed(2)}). Risk-off regime signals: reduce exposure, tighten stops.`,
+      data_json: JSON.stringify({
+        regime: 'bear_entering',
+        btc_change_pct: parseFloat(btcChangePct.toFixed(2)),
+        score_delta: parseFloat(scoreDelta.toFixed(3)),
+        recent_btc_median: parseFloat(recentBtcMedian.toFixed(2)),
+        old_btc_median: parseFloat(oldBtcMedian.toFixed(2)),
+        recent_avg_score: parseFloat(recentAvgScore.toFixed(3)),
+        old_avg_score: parseFloat(oldAvgScore.toFixed(3)),
+        dispersion_change: parseFloat(dispersionChange.toFixed(3)),
+        sample_size_recent: recentRows.length,
+        sample_size_old: oldRows.length,
+      }),
+      expires_at: expiresAt,
+    });
+  }
+
+  // Bull regime entering: BTC up >10% AND portfolio avg score improving
+  if (btcChangePct > 10 && scoreDelta > 0.3) {
+    const severity = btcChangePct > 25 && scoreDelta > 0.8 ? 'critical' : 'high';
+    signals.push({
+      signal_type: 'REGIME_SHIFT',
+      token_id: null,
+      severity,
+      title: `REGIME SHIFT: Bull market signal — BTC +${btcChangePct.toFixed(1)}% / avg score +${scoreDelta.toFixed(2)}`,
+      detail: `BTC rose ${btcChangePct.toFixed(1)}% over 7d (median: $${recentBtcMedian.toFixed(0)} vs $${oldBtcMedian.toFixed(0)}). Portfolio avg score improved ${scoreDelta.toFixed(2)} pts (${oldAvgScore.toFixed(2)} → ${recentAvgScore.toFixed(2)}). Risk-on regime: increase conviction positions, extend TP targets.`,
+      data_json: JSON.stringify({
+        regime: 'bull_entering',
+        btc_change_pct: parseFloat(btcChangePct.toFixed(2)),
+        score_delta: parseFloat(scoreDelta.toFixed(3)),
+        recent_btc_median: parseFloat(recentBtcMedian.toFixed(2)),
+        old_btc_median: parseFloat(oldBtcMedian.toFixed(2)),
+        recent_avg_score: parseFloat(recentAvgScore.toFixed(3)),
+        old_avg_score: parseFloat(oldAvgScore.toFixed(3)),
+        dispersion_change: parseFloat(dispersionChange.toFixed(3)),
+        sample_size_recent: recentRows.length,
+        sample_size_old: oldRows.length,
+      }),
+      expires_at: expiresAt,
+    });
+  }
+
+  // Rotation regime: dispersion increased significantly → narrative rotation in progress
+  if (Math.abs(dispersionChange) > 0.5 && Math.abs(btcChangePct) < 10) {
+    const direction = dispersionChange > 0 ? 'increasing' : 'decreasing';
+    signals.push({
+      signal_type: 'REGIME_SHIFT',
+      token_id: null,
+      severity: 'medium',
+      title: `REGIME SHIFT: Score dispersion ${direction} — rotation signal (BTC flat, divergence ${dispersionChange > 0 ? '+' : ''}${dispersionChange.toFixed(2)})`,
+      detail: `Score standard deviation ${dispersionChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(dispersionChange).toFixed(2)} pts while BTC changed only ${btcChangePct.toFixed(1)}%. ${dispersionChange > 0 ? 'Winners and losers diverging — rotation between sectors underway.' : 'Scores converging — market consensus forming.'}`,
+      data_json: JSON.stringify({
+        regime: dispersionChange > 0 ? 'rotation' : 'convergence',
+        btc_change_pct: parseFloat(btcChangePct.toFixed(2)),
+        score_delta: parseFloat(scoreDelta.toFixed(3)),
+        dispersion_change: parseFloat(dispersionChange.toFixed(3)),
+        recent_stddev: parseFloat(recentStddev.toFixed(3)),
+        old_stddev: parseFloat(oldStddev.toFixed(3)),
+        sample_size_recent: recentRows.length,
+        sample_size_old: oldRows.length,
+      }),
+      expires_at: expiresAt,
+    });
+  }
+
+  return signals;
 }
 
 // ---------------------------------------------------------------------------

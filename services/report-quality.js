@@ -262,6 +262,30 @@ export function scoreReportQuality(rawData, scores, analysis) {
     score = Math.max(0, score - 3);
   }
 
+  // Round 383 (AutoResearch): Check signal strength index for report confidence
+  // A very low signal strength index with a high verdict suggests poor report reliability
+  const sigStrength = rawData?.signal_strength_index;
+  if (sigStrength != null && typeof sigStrength === 'number') {
+    const verdictLookup = { 'STRONG BUY': 4, 'BUY': 3, 'HOLD': 2, 'AVOID': 1, 'STRONG AVOID': 0 };
+    const verdictTier = verdictLookup[analysis?.verdict];
+    if (verdictTier != null && verdictTier >= 3 && sigStrength < 35) {
+      issues.push(`BUY/STRONG BUY verdict with low signal strength index (${sigStrength}/100) — insufficient alpha signals to justify bullish conviction. Downgrade risk is elevated.`);
+      score = Math.max(0, score - 6);
+    }
+  }
+
+  // Round 383 (AutoResearch): Check for critical contract issues not reflected in verdict
+  const hasHoneypot = rawData?.contract?.honeypot === true;
+  const hasCriticalSellTax = (rawData?.contract?.sell_tax ?? 0) > 20;
+  if (hasHoneypot && analysis?.verdict && !['AVOID', 'STRONG AVOID'].includes(analysis.verdict)) {
+    issues.push('CRITICAL: Honeypot contract detected but verdict is not AVOID/STRONG AVOID — this is a dangerous mismatch. Contract analysis should override bullish signals.');
+    score = Math.max(0, score - 20);
+  }
+  if (hasCriticalSellTax && analysis?.verdict === 'STRONG BUY') {
+    issues.push(`Critical sell tax (${rawData.contract.sell_tax}%) incompatible with STRONG BUY verdict — holders cannot exit at advertised price.`);
+    score = Math.max(0, score - 10);
+  }
+
   return {
     quality_score: Math.max(0, Math.min(100, score)),
     grade,

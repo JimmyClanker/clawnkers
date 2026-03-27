@@ -58,6 +58,12 @@ const SIGNAL_PHRASES = {
   payments_network_growth:       'payment network adoption growth',
   accelerating_news_coverage:    'accelerating news coverage',
   organic_volume_spike:              'organic volume surge (no wash trading detected)',
+  // Round 383 (AutoResearch): new signal phrases
+  low_float_momentum:                'low-float supply structure amplifying price momentum',
+  narrative_exhaustion:              'social narrative appears stale (declining freshness)',
+  hyperinflationary_supply:          'extreme supply inflation eroding holder value',
+  mercenary_tvl_whale_concentration: 'TVL dominated by whale capital, not organic users',
+  high_sell_tax:                     'high exit fee trapping holders',
   // Round 382 (AutoResearch): new signal phrases
   recent_ath_momentum:               'recent ATH set — active price discovery',
   ath_consolidation:                 'consolidating near ATH — potential breakout',

@@ -184,6 +184,22 @@ function buildFactRegistry(rawData = {}) {
   push('github.days_since_last_commit', rawData?.github?.days_since_last_commit);
   push('github.bus_factor_score', rawData?.github?.bus_factor_score);
 
+  // Round 383 (AutoResearch): New fields from nightly batch improvements
+  push('market.weekly_price_return', rawData?.market?.weekly_price_return);
+  push('market.price_range_pct_7d', rawData?.market?.price_range_pct_7d);
+  push('market.ath_recovery_required_pct', rawData?.market?.ath_recovery_potential?.required_pct);
+  push('onchain.tvl_vs_ath_pct', rawData?.onchain?.tvl_vs_ath_pct);
+  push('onchain.weekly_tvl_velocity_usd', rawData?.onchain?.weekly_tvl_velocity_usd);
+  push('github.monthly_commit_velocity_change_pct', rawData?.github?.monthly_commit_velocity?.change_pct);
+  push('reddit.avg_post_score', rawData?.reddit?.avg_post_score);
+  push('reddit.sentiment_momentum', rawData?.reddit?.sentiment_momentum);
+  push('signal.signal_strength_index', rawData?.signal_strength_index);
+  push('tokenomics.inflation_rate', rawData?.tokenomics?.inflation_rate);
+  push('contract.sell_tax', rawData?.contract?.sell_tax);
+  push('contract.honeypot', rawData?.contract?.honeypot);
+  push('contract.is_proxy', rawData?.contract?.is_proxy);
+  push('contract.audited', rawData?.contract?.audited);
+
   return facts;
 }
 
@@ -260,6 +276,20 @@ export function buildDataSummary(rawData = {}) {
       const dsaLabel = dsa <= 30 ? 'very recent ATH' : dsa <= 180 ? 'ATH within 6 months' : dsa <= 365 ? 'ATH within 1 year' : `ATH ${(dsa/365).toFixed(1)} years ago`;
       marketLines.push(`- Days since ATH: ${dsa} days (${dsaLabel})`);
     }
+    // Round 383 (AutoResearch): ATH recovery potential — how much upside just to return to ATH
+    if (market.ath_recovery_potential != null) {
+      const arp = market.ath_recovery_potential;
+      const tierDesc = { near_recovery: 'near ATH zone', medium_recovery: 'medium recovery play', long_recovery: 'significant recovery needed', very_distant_recovery: 'extremely far from ATH' };
+      marketLines.push(`- ATH recovery: needs +${arp.required_pct.toFixed(0)}% to reach ATH (${tierDesc[arp.tier] || arp.tier})`);
+    }
+    // Round 383 (AutoResearch): weekly price return and 7d range
+    if (market.weekly_price_return != null) {
+      marketLines.push(`- Weekly return: ${market.weekly_price_return >= 0 ? '+' : ''}${market.weekly_price_return.toFixed(1)}% (chart-based 7d)`);
+    }
+    if (market.price_range_pct_7d != null) {
+      const rangeLabel = market.price_range_pct_7d >= 30 ? 'highly volatile' : market.price_range_pct_7d >= 15 ? 'volatile' : market.price_range_pct_7d >= 5 ? 'moderate' : 'stable/consolidating';
+      marketLines.push(`- 7d price range: ${market.price_range_pct_7d.toFixed(1)}% (${rangeLabel})`);
+    }
     // Round 233 (AutoResearch nightly): momentum divergence — is short-term vs long-term momentum aligned?
     if (market.momentum_divergence != null) {
       const div = market.momentum_divergence;
@@ -296,6 +326,18 @@ export function buildDataSummary(rawData = {}) {
     onchainLines.push(add('TVL', onchain.tvl, formatNumber));
     onchainLines.push(add('TVL 7d Change', onchain.tvl_change_7d, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
     onchainLines.push(add('TVL 30d Change', onchain.tvl_change_30d, (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`));
+    // Round 383 (AutoResearch): TVL velocity in USD and vs ATH
+    if (onchain.weekly_tvl_velocity_usd != null) {
+      const vel = onchain.weekly_tvl_velocity_usd;
+      const velLabel = vel >= 10_000_000 ? '🚀 major inflow' : vel >= 1_000_000 ? '📈 inflow' : vel <= -10_000_000 ? '🔴 major outflow' : vel <= -1_000_000 ? '📉 outflow' : '→ roughly stable';
+      const velFmt = Math.abs(vel) >= 1e9 ? `${vel >= 0 ? '+' : ''}$${(vel / 1e9).toFixed(2)}B` : Math.abs(vel) >= 1e6 ? `${vel >= 0 ? '+' : ''}$${(vel / 1e6).toFixed(1)}M` : `${vel >= 0 ? '+' : ''}$${(vel / 1e3).toFixed(0)}K`;
+      onchainLines.push(`- TVL velocity: ${velFmt}/week (${velLabel})`);
+    }
+    if (onchain.tvl_vs_ath_pct != null) {
+      const v = onchain.tvl_vs_ath_pct;
+      const vLabel = v >= -10 ? 'near TVL ATH' : v >= -50 ? `${Math.abs(v).toFixed(0)}% below TVL ATH` : `far below TVL ATH (${Math.abs(v).toFixed(0)}% down)`;
+      onchainLines.push(`- TVL vs ATH: ${vLabel}`);
+    }
     onchainLines.push(add('Fees 7d', onchain.fees_7d, formatNumber));
     // Round 238 (AutoResearch): surface fees_7d_prev for trend comparison in LLM context
     if (onchain.fees_7d != null && onchain.fees_7d_prev != null && onchain.fees_7d_prev > 0) {
@@ -604,6 +646,17 @@ export function buildDataSummary(rawData = {}) {
     const redditLines = [];
     redditLines.push(add('Post Count', reddit.post_count));
     redditLines.push(add('Sentiment', reddit.sentiment));
+    if (reddit.sentiment_momentum && reddit.sentiment_momentum !== 'stable') {
+      const momEmoji = reddit.sentiment_momentum === 'improving' ? '📈' : '📉';
+      redditLines.push(`- Sentiment momentum: ${momEmoji} ${reddit.sentiment_momentum} (last 24h vs week)`);
+    }
+    if (reddit.avg_post_score != null && reddit.avg_post_score > 0) {
+      const scoreLabel = reddit.avg_post_score >= 100 ? 'high upvote quality' : reddit.avg_post_score >= 20 ? 'moderate engagement' : 'low engagement';
+      redditLines.push(`- Avg post score: ${reddit.avg_post_score} upvotes (${scoreLabel})`);
+    }
+    if (reddit.subreddit_quality && reddit.subreddit_quality !== 'niche') {
+      redditLines.push(`- Subreddit quality: ${reddit.subreddit_quality} (${reddit.tier1_subreddit_hits ?? 0} tier-1 subreddits)`);
+    }
     const validReddit = redditLines.filter(Boolean);
     if (validReddit.length) {
       lines.push('REDDIT:');
@@ -1987,6 +2040,8 @@ export function buildOpusPrompt(projectName, rawData, scores) {
     '6. CHECK FOR REPETITION: scan your analysis_text — if the same metric (e.g., TVL, price, fees) appears in more than one paragraph, remove it from the less important paragraph. Each paragraph = unique information.',
     '7. CHECK BULL/BEAR CASES: do they contain at least 2 specific numbers from RAW_DATA? If not, add them or delete the generic claim.',
     '8. CHECK VERDICT: does your narrative actually justify the verdict? If you say HOLD but your evidence is all positive, recalibrate.',
+    '9. TOKENOMICS SANITY CHECK: if unlock_risk_label is "critical" or "high", this MUST appear in your bear case risks array and your analysis_text risk paragraph. Do not ignore critical tokenomics red flags.',
+    '10. INFLATION AWARENESS: if annual inflation rate > 30%, explicitly address dilution timeline in the bear case. High-yield protocols with high inflation require yield > inflation to be net positive for holders.',
   ].join('\n\n');
 
   // Round R179: Build composite indexes block from scoring output
