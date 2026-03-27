@@ -171,6 +171,27 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
     : decliningCount > improvingCount ? 'mildly_bearish'
     : 'neutral';
 
+  // Round 453: momentum_score (0-100) — weighted composite replacing binary improving/declining
+  // Weights: market (25) + onchain (20) + social (15) + dev (15) + dex (15) + tokenomics (10)
+  const dimWeights = { market: 25, onchain: 20, social: 15, development: 15, dex: 15, tokenomics: 10 };
+  const dimDirs = {
+    market: marketMomentum, onchain: onchainMomentum, social: socialMomentum,
+    development: devMomentum, dex: dexMomentum, tokenomics: tokenomicsMomentum,
+  };
+  let momentumScore = 0;
+  for (const [dim, dir] of Object.entries(dimDirs)) {
+    const weight = dimWeights[dim] ?? 10;
+    if (dir === 'improving') momentumScore += weight;
+    else if (dir === 'stable') momentumScore += weight * 0.5;
+    // declining = 0
+  }
+  momentumScore = Math.round(momentumScore);
+  const momentumScoreLabel = momentumScore >= 75 ? 'strongly_bullish'
+    : momentumScore >= 55 ? 'bullish'
+    : momentumScore >= 40 ? 'neutral'
+    : momentumScore >= 25 ? 'bearish'
+    : 'strongly_bearish';
+
   return {
     market:     { direction: marketMomentum },
     onchain:    { direction: onchainMomentum },
@@ -182,6 +203,8 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
     price_vol_divergence: priceVolDivergence,
     momentum_alignment_score: momentumAlignmentScore,
     momentum_alignment_label: momentumAlignmentLabel,
+    momentum_score: momentumScore,
+    momentum_score_label: momentumScoreLabel,
     // Round 233 (AutoResearch nightly): momentum_confidence — how reliable is the momentum signal?
     // Confidence is higher when: more dims available, prev data exists for comparison, no divergence
     momentum_confidence: (() => {

@@ -121,14 +121,26 @@ export function detectScoreMomentum(db) {
     // Trend consistency: score è sempre cresciuto/decresciuto negli ultimi N snapshot?
     const recentSnaps = getRecentSnapshots(row.token_id, row.recent_at);
     let trendConsistent = false;
+    let deltaAcceleration = 0; // Rate of change of rate of change
     if (recentSnaps.length >= 3) {
       const scores = recentSnaps.map(s => s.overall_score);
       const allImproving = scores.every((s, i) => i === 0 || s >= scores[i - 1]);
       const allDeclining = scores.every((s, i) => i === 0 || s <= scores[i - 1]);
       trendConsistent = direction === 'improving' ? allImproving : allDeclining;
+
+      // Round 459: delta_acceleration — if last 3 snapshots: is the rate increasing?
+      // deltas[0] = most recent change, deltas[1] = prior change
+      if (scores.length >= 3) {
+        const d1 = scores[0] - scores[1]; // most recent window delta
+        const d2 = scores[1] - scores[2]; // prior window delta
+        deltaAcceleration = d1 - d2; // positive = accelerating, negative = decelerating
+      }
     }
 
     const consistencyNote = trendConsistent ? ' [consistent trend]' : '';
+    const accelerationNote = Math.abs(deltaAcceleration) > 0.2
+      ? (deltaAcceleration > 0 ? ' [accelerating]' : ' [decelerating]')
+      : '';
 
     // Round 431: velocity_tier label — fast/normal/slow momentum
     const velocityTier = Math.abs(velocity) > 0.05 ? 'fast' : Math.abs(velocity) > 0.02 ? 'normal' : 'slow';
@@ -148,8 +160,8 @@ export function detectScoreMomentum(db) {
       signal_type: 'SCORE_MOMENTUM',
       token_id: row.token_id,
       severity,
-      title: `${tokenName}: score ${direction} ${absDelta.toFixed(1)} pts in 72h (velocity: ${velocity.toFixed(3)} pts/h, ${velocityTier})${crossedZone ? ` [zone: ${prevScoreZone}→${scoreZone}]` : ''}${consistencyNote}`,
-      detail: `Score moved from ${row.prev_score.toFixed(1)}/10 (${prevScoreZone}) to ${row.current_score.toFixed(1)}/10 (${scoreZone}). ${direction === 'improving' ? 'Positive momentum' : 'Deterioration detected'}. Velocity: ${velocity.toFixed(3)} pts/h (${velocityTier}).${crossedZone ? ` Zone boundary crossed: ${prevScoreZone} → ${scoreZone}.` : ''}${trendConsistent ? ' Trend is consistent across recent snapshots.' : ''}`,
+      title: `${tokenName}: score ${direction} ${absDelta.toFixed(1)} pts in 72h (velocity: ${velocity.toFixed(3)} pts/h, ${velocityTier})${crossedZone ? ` [zone: ${prevScoreZone}→${scoreZone}]` : ''}${consistencyNote}${accelerationNote}`,
+      detail: `Score moved from ${row.prev_score.toFixed(1)}/10 (${prevScoreZone}) to ${row.current_score.toFixed(1)}/10 (${scoreZone}). ${direction === 'improving' ? 'Positive momentum' : 'Deterioration detected'}. Velocity: ${velocity.toFixed(3)} pts/h (${velocityTier}).${crossedZone ? ` Zone boundary crossed: ${prevScoreZone} → ${scoreZone}.` : ''}${trendConsistent ? ' Trend is consistent across recent snapshots.' : ''}${Math.abs(deltaAcceleration) > 0.2 ? ` Momentum ${deltaAcceleration > 0 ? 'accelerating' : 'decelerating'} (Δ²=${deltaAcceleration.toFixed(2)}).` : ''}`,
       data_json: JSON.stringify({
         current_score: row.current_score,
         prev_score: row.prev_score,
@@ -163,6 +175,7 @@ export function detectScoreMomentum(db) {
         score_zone: scoreZone,
         prev_score_zone: prevScoreZone,
         crossed_zone: crossedZone,
+        delta_acceleration: parseFloat(deltaAcceleration.toFixed(3)),
       }),
       expires_at: expiresAt,
     };
@@ -490,7 +503,8 @@ export function detectDivergence(db) {
       ts.price_change_7d,
       ts.volume_24h,
       ts.market_cap,
-      sc.overall_score
+      sc.overall_score,
+      ts.snapshot_at
     FROM token_snapshots ts
     JOIN token_universe tu ON tu.id = ts.token_id
     JOIN token_scores sc ON sc.snapshot_id = ts.id
@@ -505,6 +519,17 @@ export function detectDivergence(db) {
         (sc.overall_score <= 4.5 AND ts.price_change_7d > 15.0)
       )
   `).all();
+
+  // Round 456: persistence check — check if this token showed same divergence in prior snapshot
+  const getDivergencePersistence = db.prepare(`
+    SELECT sc.overall_score, ts.price_change_7d, ts.snapshot_at
+    FROM token_snapshots ts
+    JOIN token_scores sc ON sc.snapshot_id = ts.id
+    WHERE ts.token_id = ?
+      AND datetime(ts.snapshot_at) < datetime(?)
+    ORDER BY ts.snapshot_at DESC
+    LIMIT 3
+  `);
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
@@ -530,6 +555,21 @@ export function detectDivergence(db) {
 
     const volumeNote = lowVolume ? ' [low volume]' : '';
 
+    // Round 456: divergence persistence — was divergence present in prior snapshots?
+    let divergencePersistentSnapshots = 0;
+    try {
+      const priorSnaps = getDivergencePersistence.all(row.token_id, row.snapshot_at);
+      for (const p of priorSnaps) {
+        if (p.overall_score == null || p.price_change_7d == null) continue;
+        const isPriorPos = p.overall_score >= 6.5 && p.price_change_7d < -15;
+        const isPriorNeg = p.overall_score <= 4.5 && p.price_change_7d > 15;
+        if ((isPositive && isPriorPos) || (!isPositive && isPriorNeg)) divergencePersistentSnapshots++;
+      }
+    } catch {}
+    const isPersistent = divergencePersistentSnapshots >= 2;
+    // Upgrade severity if persistent
+    if (isPersistent && severity === 'medium') severity = 'high';
+
     // Round 434: divergence_magnitude — combined score×|price_delta| for ranking signal strength
     // Positive divergence: score × |negative_price_change| = how strong the buy-the-dip signal is
     // Negative divergence: (10 - score) × positive_price_change = how strong the sell signal is
@@ -554,7 +594,7 @@ export function detectDivergence(db) {
       token_id: row.token_id,
       severity,
       title: `${tokenName}: ${divergenceType} — score ${row.overall_score.toFixed(1)}/10 but price ${priceDirection}${volumeNote} [magnitude: ${magnitudeLabel}]`,
-      detail: `Algorithmic score ${row.overall_score.toFixed(1)}/10 suggests ${scoreImplication}, but price has moved ${priceDirection} in 7d. Potential ${opportunityOrTrap}. Divergence magnitude: ${divergenceMagnitude} (${magnitudeLabel}).${volumeConfirmNote}${lowVolume ? ' Low volume (<5% daily turnover) — signal quality reduced.' : ''}`,
+      detail: `Algorithmic score ${row.overall_score.toFixed(1)}/10 suggests ${scoreImplication}, but price has moved ${priceDirection} in 7d. Potential ${opportunityOrTrap}. Divergence magnitude: ${divergenceMagnitude} (${magnitudeLabel}).${isPersistent ? ` Divergence persistent across ${divergencePersistentSnapshots}+ snapshots — signal is sustained, not noise.` : ''}${volumeConfirmNote}${lowVolume ? ' Low volume (<5% daily turnover) — signal quality reduced.' : ''}`,
       data_json: JSON.stringify({
         score: row.overall_score,
         price_change_7d: row.price_change_7d,
@@ -565,6 +605,8 @@ export function detectDivergence(db) {
         divergence_magnitude: divergenceMagnitude,
         magnitude_label: magnitudeLabel,
         volume_confirmed: volumeConfirmed,
+        persistent_snapshots: divergencePersistentSnapshots,
+        is_persistent: isPersistent,
       }),
       expires_at: expiresAt,
     };

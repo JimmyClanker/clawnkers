@@ -760,6 +760,95 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
     });
   }
 
+  // Round 460 (AutoResearch): active_addresses_growth — growing active addresses = increasing adoption
+  // When active_addresses_7d is growing vs active_addresses_30d average, organic usage is expanding
+  const activeAddresses7d = safeN(onchain.active_addresses_7d ?? 0);
+  const activeAddresses30d = safeN(onchain.active_addresses_30d ?? 0);
+  if (activeAddresses7d > 0 && activeAddresses30d > 0) {
+    // Weekly rate vs monthly rate: if 7d rate (×4) > 30d count × 1.3
+    const weeklyRate = activeAddresses7d * 4; // annualize to 4 weeks
+    if (weeklyRate > activeAddresses30d * 1.3 && activeAddresses7d > 500) {
+      const growthPct = ((weeklyRate / activeAddresses30d) - 1) * 100;
+      signals.push({
+        signal: 'active_addresses_growth',
+        strength: weeklyRate > activeAddresses30d * 2 ? 'strong' : 'moderate',
+        detail: `Active addresses accelerating: ${activeAddresses7d.toLocaleString()} last 7d (${growthPct.toFixed(0)}% above monthly run rate of ${(activeAddresses30d / 4).toLocaleString()}/wk) — organic usage adoption growing.`,
+      });
+    }
+  }
+
+  // Round 457 (AutoResearch): high_token_velocity — on-chain transactions per day / circulating supply
+  // High velocity = token actively used (not just held), DeFi utility demand
+  const dailyTxns = safeN(onchain.daily_transactions ?? 0);
+  const circulatingTokens = safeN(market.circulating_supply ?? 0);
+  const tokenPrice = safeN(market.current_price ?? market.price ?? 0);
+  if (dailyTxns > 1000 && circulatingTokens > 0 && tokenPrice > 0) {
+    // Token velocity = daily volume / market cap (simplified)
+    const dailyVolume = safeN(market.total_volume ?? 0);
+    const tokenVelocityPct = (dailyVolume / (circulatingTokens * tokenPrice)) * 100;
+    if (tokenVelocityPct > 10) { // >10% of circulating supply transacted daily = very active
+      signals.push({
+        signal: 'high_token_velocity',
+        strength: tokenVelocityPct > 30 ? 'strong' : 'moderate',
+        detail: `Token velocity ${tokenVelocityPct.toFixed(1)}% — ${tokenVelocityPct.toFixed(1)}% of circulating supply transacted daily (${dailyTxns.toLocaleString()} daily transactions). Active on-chain utility demand.`,
+      });
+    }
+  }
+
+  // Round 455 (AutoResearch): deep_liquidity_pool — total liquidity (DEX + CEX depth) > 5% MCap
+  // High liquidity relative to market cap = institutional market making, reduced slippage, institutional interest
+  const dexLiquidityAbs = safeN(dex.dex_liquidity_usd ?? 0);
+  const totalLiquidityEst = dexLiquidityAbs; // in future could add cex_depth
+  const mcapForLiq = safeN(market.market_cap ?? 0);
+  if (dexLiquidityAbs > 0 && mcapForLiq > 0) {
+    const liqRatio = dexLiquidityAbs / mcapForLiq;
+    if (liqRatio >= 0.05 && dexLiquidityAbs >= 1_000_000) {
+      signals.push({
+        signal: 'deep_liquidity_pool',
+        strength: liqRatio >= 0.10 ? 'strong' : 'moderate',
+        detail: `DEX liquidity $${(dexLiquidityAbs / 1e6).toFixed(2)}M is ${(liqRatio * 100).toFixed(1)}% of market cap — deep on-chain liquidity supports large orders without significant slippage. Institutional market maker presence.`,
+      });
+    }
+  }
+
+  // Round 452 (AutoResearch): high_developer_activity composite signal
+  // Combines: stars growth + forks + recent releases + commit acceleration for a dev health verdict
+  const starsGrowth30d = safeN(github.stars_growth_30d ?? 0);
+  const forkCount = safeN(github.forks ?? 0);
+  const openIssues = safeN(github.open_issues ?? 0);
+  const recentPRs = safeN(github.recent_prs_30d ?? 0);
+  const commits30d = safeN(github.commits_30d ?? 0);
+  // Composite: 3+ indicators all showing growth = strong development signal
+  let devActivityScore = 0;
+  if (starsGrowth30d > 100) devActivityScore++;
+  if (forkCount > 500) devActivityScore++;
+  if (recentPRs > 20) devActivityScore++;
+  if (commits30d > 100) devActivityScore++;
+  if (github.commit_trend === 'accelerating') devActivityScore++;
+  if (openIssues > 50 && openIssues < 500) devActivityScore++; // healthy: busy but not abandoned
+  if (devActivityScore >= 4) {
+    signals.push({
+      signal: 'high_developer_activity',
+      strength: devActivityScore >= 5 ? 'strong' : 'moderate',
+      detail: `Strong developer activity composite (${devActivityScore}/6 indicators): stars growth +${starsGrowth30d}, ${forkCount} forks, ${commits30d} commits/30d${recentPRs > 0 ? `, ${recentPRs} recent PRs` : ''}. Active development reduces execution risk.`,
+    });
+  }
+
+  // Round 451 (AutoResearch): stablecoin_exposure_risk_cleared — protocol predominantly uses blue-chip stablecoins
+  // When a DeFi protocol's TVL is primarily USDC/USDT/DAI (vs algorithmic stablecoins), systemic risk is lower
+  const stablecoinComposition = rawData?.onchain?.stablecoin_composition ?? null;
+  if (stablecoinComposition && typeof stablecoinComposition === 'object') {
+    const blueChipPct = safeN(stablecoinComposition.blue_chip_pct ?? 0);
+    const algorithmicPct = safeN(stablecoinComposition.algorithmic_pct ?? 0);
+    if (blueChipPct >= 80 && algorithmicPct < 10) {
+      signals.push({
+        signal: 'low_stablecoin_systemic_risk',
+        strength: blueChipPct >= 95 ? 'strong' : 'moderate',
+        detail: `${blueChipPct.toFixed(0)}% of protocol TVL in blue-chip stablecoins (USDC/USDT/DAI), ${algorithmicPct.toFixed(0)}% algorithmic — low systemic stablecoin risk.`,
+      });
+    }
+  }
+
   // Round 449 (AutoResearch): protocol_upgrade_catalyst — upcoming upgrade/v2 signals
   // Protocol upgrades (v2 launch, L2 migration, tokenomics overhaul) are high-impact catalysts
   const narratives449 = Array.isArray(social.key_narratives) ? social.key_narratives : [];

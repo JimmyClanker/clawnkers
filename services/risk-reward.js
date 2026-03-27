@@ -188,6 +188,34 @@ export function assessRiskReward(rawData, scores, tradeSetup) {
     }
   }
 
+  // Round 458: score_confidence_adjustment — data confidence directly impacts EV reliability
+  // When confidence is high (>=80%), scores are reliable → don't penalize
+  // When confidence is low (<40%), scores may be wrong → penalize EV
+  // (Note: this is different from the probabilityTP1/TP2 adjustment which already does this for probabilities)
+  // Here we directly adjust vol_adjusted_ev for the confidence in the underlying data
+  if (expectedValue !== null && confidence < 40) {
+    volAdjustedEv = round(volAdjustedEv * 0.80, 4);
+    notes.push(`Very low data confidence (${confidence}%) — scores may be unreliable, EV penalized 20%.`);
+  } else if (expectedValue !== null && confidence >= 85) {
+    volAdjustedEv = round(volAdjustedEv * 1.05, 4);
+    notes.push(`High data confidence (${confidence}%) — signals reliable, EV boosted 5%.`);
+  }
+
+  // Round 454: momentum_score adjustment — use weighted momentum_score to adjust EV
+  // momentum_score 0-100 from calculateMomentum — high score = higher probability of TP hits
+  const momentumScore = safeN(rawData?.momentum?.momentum_score, null);
+  if (momentumScore !== null && expectedValue !== null) {
+    // Normalize to -0.15 to +0.15 multiplier (50 = neutral, 75+ = +10%, 25- = -10%)
+    const momentumAdjust = 1 + ((momentumScore - 50) / 50) * 0.15;
+    if (momentumScore >= 70) {
+      volAdjustedEv = round(volAdjustedEv * momentumAdjust, 4);
+      notes.push(`Momentum score ${momentumScore}/100 — strong momentum, EV adjusted +${((momentumAdjust - 1) * 100).toFixed(1)}%.`);
+    } else if (momentumScore <= 30) {
+      volAdjustedEv = round(volAdjustedEv * momentumAdjust, 4);
+      notes.push(`Momentum score ${momentumScore}/100 — weak momentum, EV adjusted ${((momentumAdjust - 1) * 100).toFixed(1)}%.`);
+    }
+  }
+
   // Round 448: trend_reversal_adjustment — bullish reversal pattern from trend-reversal.js
   const trendReversal = rawData?.trend_reversal;
   if (trendReversal && expectedValue !== null) {
