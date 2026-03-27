@@ -60,6 +60,7 @@ const CREATE_SCHEMA_SQL = `
     risk_score REAL,
     overall_score REAL,
     raw_score REAL,
+    score_bucket TEXT,
     verdict TEXT,
     confidence REAL,
     category TEXT,
@@ -126,10 +127,18 @@ function resolveDbPath() {
   return process.env.CALIBRATION_DB_PATH || DEFAULT_DB_PATH;
 }
 
+function ensureColumn(db, table, column, typeSql) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((r) => r.name);
+  if (!cols.includes(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
+  }
+}
+
 function initializeDb(db) {
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
   db.exec(CREATE_SCHEMA_SQL);
+  ensureColumn(db, 'token_scores', 'score_bucket', 'TEXT');
   return db;
 }
 

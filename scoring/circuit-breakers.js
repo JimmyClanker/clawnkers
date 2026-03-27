@@ -129,8 +129,15 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   }
 
   // Data completeness < 40%
+  // Round 337 (AutoResearch): tiered completeness caps — very low data = stronger cap
   const completeness = scores?.overall?.completeness ?? 100;
-  if (completeness < 40) {
+  if (completeness < 20) {
+    breakers.push({
+      cap: 5.0,
+      reason: `Only ${completeness}% data coverage — extremely limited data, score is speculative`,
+      severity: 'warning',
+    });
+  } else if (completeness < 40) {
     breakers.push({
       cap: 6.0,
       reason: `Only ${completeness}% data coverage — insufficient for conviction`,
@@ -377,19 +384,26 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 238 (AutoResearch): Security breach circuit breaker
   // When multiple news articles report active hacks/exploits, cap score aggressively
+  // Round 334 (AutoResearch): only apply to non-meme, non-stablecoin, non-wrapped tokens
+  // Meme/stable/wrapped tokens can have high hackMentions from ecosystem news without being directly hacked
   const hackMentions = safeN((rawData?.social?.hack_exploit_mentions ?? 0) + (rawData?.social?.exploit_mentions ?? 0));
-  if (hackMentions >= 4) {
-    breakers.push({
-      cap: 3.5,
-      reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
-      severity: 'critical',
-    });
-  } else if (hackMentions >= 2) {
-    breakers.push({
-      cap: 5.5,
-      reason: `${hackMentions} articles mention security exploits — potential security incident, elevated caution warranted`,
-      severity: 'warning',
-    });
+  const _hackSymbol = (market.symbol || '').toUpperCase();
+  const _isPassiveHackTarget = /^(USDT|USDC|DAI|WBTC|WETH|WBNB|WRAPPED|STAKED)/.test(_hackSymbol) ||
+    String(rawData?.onchain?.category || '').toLowerCase().includes('meme');
+  if (!_isPassiveHackTarget) {
+    if (hackMentions >= 4) {
+      breakers.push({
+        cap: 3.5,
+        reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
+        severity: 'critical',
+      });
+    } else if (hackMentions >= 2) {
+      breakers.push({
+        cap: 5.5,
+        reason: `${hackMentions} articles mention security exploits — potential security incident, elevated caution warranted`,
+        severity: 'warning',
+      });
+    }
   }
 
   // Round 238 (AutoResearch): Revenue collapse breaker — 7d fees < 10% of 30d weekly avg
@@ -410,9 +424,10 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 238b (AutoResearch): Mercenary TVL trap — TVL > 10x MCap = incentivized capital at risk
   // When TVL is massively > MCap, it often means unsustainable yield farming is holding capital
+  // Round 333 (AutoResearch): raised minimum mcap to $2M — below that, TVL imbalance is noise not signal
   const tvlR238b = safeN(onchain.tvl ?? 0);
   const mcapR238b = safeN(market.market_cap ?? 0);
-  if (tvlR238b > 0 && mcapR238b > 0 && mcapR238b > 500_000) {
+  if (tvlR238b > 0 && mcapR238b > 2_000_000) {
     const tvlMcapRatio = tvlR238b / mcapR238b;
     if (tvlMcapRatio > 15) {
       breakers.push({

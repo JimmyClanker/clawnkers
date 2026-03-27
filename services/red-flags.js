@@ -46,7 +46,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 3. No GitHub repo
-  if (github.error || (!github.stars && !github.commits_90d && !github.contributors)) {
+  // Round 338 (AutoResearch): use null check instead of falsy — stars=0 or commits=0 is real data, not missing
+  if (github.error || (github.stars == null && github.commits_90d == null && github.contributors == null)) {
     flags.push({
       flag: 'no_github',
       severity: 'warning',
@@ -66,7 +67,8 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 5. No onchain data
-  if (onchain.error || (!onchain.tvl && !onchain.tvl_change_7d && !onchain.fees_7d)) {
+  // Round 339 (AutoResearch): use null check — tvl=0 is valid data (new protocol), not missing data
+  if (onchain.error || (onchain.tvl == null && onchain.tvl_change_7d == null && onchain.fees_7d == null)) {
     flags.push({
       flag: 'no_onchain_data',
       severity: 'info',
@@ -408,8 +410,11 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   }
 
   // 28. Round 1 (AutoResearch batch): No social mentions at all — ghost project
+  // Round 340 (AutoResearch): only fire if we have evidence the social search ran (has sentiment or narratives)
+  // Prevents false positive when social collector never ran or returned no data object at all
   const mentions = safeN(social.mentions ?? social.filtered_mentions ?? 0);
-  if (mentions === 0 && !social.error) {
+  const socialSearchRan = social.sentiment_score != null || Array.isArray(social.key_narratives) || social.bot_filtered_count != null;
+  if (mentions === 0 && !social.error && socialSearchRan) {
     flags.push({
       flag: 'zero_social_mentions',
       severity: 'warning',

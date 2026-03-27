@@ -34,15 +34,24 @@ export function calculateConfidence(rawData = {}) {
   }
 
   // Onchain — Round 138: graduated (4 key fields)
+  // Round 335 (AutoResearch): distinguish between onchain error (0) vs no data (N/A = 50).
+  // For non-DeFi tokens with no onchain data, confidence 0 unfairly deflates overall_confidence.
+  // Unknown (not applicable) should be neutral 50, not 0 (which implies a collection failure).
   let onchainConf;
   if (onchain.error) onchainConf = 0;
   else {
-    onchainConf = 0;
-    if (onchain.tvl != null) onchainConf += 30;
-    if (onchain.fees_7d != null || onchain.fees_30d != null) onchainConf += 25;
-    if (onchain.revenue_7d != null || onchain.revenue_30d != null) onchainConf += 25;
-    if (onchain.tvl_change_7d != null) onchainConf += 20;
-    onchainConf = Math.min(100, onchainConf);
+    const hasAnyOnchainField = onchain.tvl != null || onchain.fees_7d != null ||
+      onchain.fees_30d != null || onchain.revenue_7d != null || onchain.tvl_change_7d != null;
+    if (!hasAnyOnchainField) {
+      onchainConf = 50; // N/A (non-DeFi token) — neutral, not a collection failure
+    } else {
+      onchainConf = 0;
+      if (onchain.tvl != null) onchainConf += 30;
+      if (onchain.fees_7d != null || onchain.fees_30d != null) onchainConf += 25;
+      if (onchain.revenue_7d != null || onchain.revenue_30d != null) onchainConf += 25;
+      if (onchain.tvl_change_7d != null) onchainConf += 20;
+      onchainConf = Math.min(100, onchainConf);
+    }
   }
 
   // Social — Round 138: graduated (volume + sentiment + narratives)
@@ -65,16 +74,24 @@ export function calculateConfidence(rawData = {}) {
   }
 
   // Dev — Round 139: graduated (4 key fields)
+  // Round 336 (AutoResearch): like onchain, distinguish error (0) vs N/A (50).
+  // Closed-source / non-open-source projects have no GitHub but it's not a collection failure.
   let devConf;
   if (github.error) devConf = 0;
   else {
-    devConf = 0;
-    if (github.commits_90d != null) devConf += 30;
-    if (github.contributors != null) devConf += 25;
-    if (github.stars != null) devConf += 20;
-    if (github.last_commit != null) devConf += 15;
-    if (github.forks != null) devConf += 10;
-    devConf = Math.min(100, devConf);
+    const hasAnyGithubField = github.commits_90d != null || github.contributors != null ||
+      github.stars != null || github.last_commit != null;
+    if (!hasAnyGithubField) {
+      devConf = 50; // N/A (non-open-source token) — neutral, not a collection failure
+    } else {
+      devConf = 0;
+      if (github.commits_90d != null) devConf += 30;
+      if (github.contributors != null) devConf += 25;
+      if (github.stars != null) devConf += 20;
+      if (github.last_commit != null) devConf += 15;
+      if (github.forks != null) devConf += 10;
+      devConf = Math.min(100, devConf);
+    }
   }
 
   // Tokenomics — graduated: +20 per field

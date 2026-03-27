@@ -119,13 +119,8 @@ export const CATEGORY_MAP = {
   'prediction-market': 'prediction_market',
   'prediction-markets': 'prediction_market',
   polymarket: 'prediction_market',
-  'liquid-staking': 'defi_lending',
-  bridge: 'defi_dex',
-  derivatives: 'defi_dex',
-  perpetuals: 'defi_dex',
   'layer-1': 'layer_1',
   'layer-2': 'layer_2',
-  rollup: 'layer_2',
   meme: 'meme_token',
   'meme-token': 'meme_token',
   'dog-themed': 'meme_token',
@@ -161,7 +156,6 @@ export const CATEGORY_MAP = {
   'oracle-network': 'oracle',
   'data-oracle': 'oracle',
   infrastructure: 'layer_1',      // generic infra → treat like L1 (dev-heavy)
-  'cross-chain': 'layer_2',       // bridges/cross-chain are layer_2-like
   privacy: 'privacy_protocol',    // Round R27: privacy protocols get dedicated weights
   'privacy-coins': 'privacy_protocol',
   'privacy-protocol': 'privacy_protocol',
@@ -170,7 +164,6 @@ export const CATEGORY_MAP = {
   'liquid-staking-tokens': 'liquid_staking',
   restaking: 'liquid_staking',
   'insurance': 'defi_lending',    // DeFi insurance is onchain-risk heavy
-  'prediction-market': 'defi_dex', // prediction markets: onchain volume/usage
   'fan-token': 'meme_token',      // fan tokens behave like memes: social-driven
   'sports': 'meme_token',
   // Round 232: consumer crypto & infra
@@ -287,7 +280,8 @@ export function getCategoryWeights(rawData = {}) {
       const confidence = 0.9;
       // Round 136 (AutoResearch): meme_token large-cap blending
       // High-mcap meme tokens ($1B+) behave more like L1s in market dynamics.
-      // Blend meme weights toward L1 proportionally: $1B = 10% L1, $10B+ = 30% L1.
+      // Blend meme weights toward L1 proportionally: $1B = 0% L1, $10B+ = 30% L1 (log10 scale).
+      // Round 332 (AutoResearch): fixed comment — formula starts at 0% at $1B, reaches 30% at $10B+.
       let effectiveWeights = interpolateWeights(CATEGORY_WEIGHTS[resolved], confidence);
       if (resolved === 'meme_token') {
         const mcap = safeNum(market?.market_cap ?? 0);

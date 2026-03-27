@@ -121,9 +121,19 @@ function extractSnapshotRecord(projectName, rawData = {}, btcPrice) {
   };
 }
 
+function scoreBucket(score) {
+  const n = toNumber(score);
+  if (n == null) return null;
+  if (n < 3) return '0-3';
+  if (n < 5) return '3-5';
+  if (n < 7) return '5-7';
+  return '7-10';
+}
+
 function extractScoreRecord(rawData = {}, scores = {}) {
   const overall = scores?.overall ?? {};
   const llmAnalysis = rawData?.llm_analysis ?? {};
+  const overallScore = toNumber(overall.score);
 
   return {
     market_score: toNumber(scores?.market_strength?.score),
@@ -133,8 +143,9 @@ function extractScoreRecord(rawData = {}, scores = {}) {
     tokenomics_score: toNumber(scores?.tokenomics_health?.score),
     distribution_score: toNumber(scores?.distribution?.score),
     risk_score: toNumber(scores?.risk?.score),
-    overall_score: toNumber(overall.score),
+    overall_score: overallScore,
     raw_score: toNumber(overall.raw_score ?? overall.score),
+    score_bucket: scoreBucket(overallScore),
     verdict: llmAnalysis?.verdict ?? null,
     confidence: toNumber(overall.overall_confidence),
     category: scores?.overall?.category ?? rawData?.project_category ?? rawData?.onchain?.category ?? null,
@@ -223,10 +234,10 @@ export async function storeScanSnapshot(projectName, rawData = {}, scores = {}) 
     INSERT INTO token_scores (
       snapshot_id, market_score, onchain_score, social_score, dev_score,
       tokenomics_score, distribution_score, risk_score, overall_score, raw_score,
-      verdict, confidence, category, category_confidence, category_source,
+      score_bucket, verdict, confidence, category, category_confidence, category_source,
       weights_json, leading_signals_json, circuit_breakers_json, red_flags_count,
       alpha_signals_count, divergence_json, regime
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const tx = db.transaction(() => {
@@ -272,6 +283,7 @@ export async function storeScanSnapshot(projectName, rawData = {}, scores = {}) 
       scoreRecord.risk_score,
       scoreRecord.overall_score,
       scoreRecord.raw_score,
+      scoreRecord.score_bucket,
       scoreRecord.verdict,
       scoreRecord.confidence,
       scoreRecord.category,
