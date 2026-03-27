@@ -3272,3 +3272,148 @@ Focus: responsive layout, spacing, typography, loading states, animations, acces
 - **Why:** The old logic was effectively meaningless; the new one measures real 13-week activity regularity.
 - **Files:** `collectors/github.js`
 - **Tests:** `npm test` → 179/179 pass
+
+## AutoResearch UX & Layout Batch — 30 Rounds (2026-03-28 00:30 UTC)
+
+**Focus:** Responsive layout, accessibility, loading states, animations, SEO, print styles, keyboard UX.
+
+### Round 1 — signals.html: skip-link, ARIA landmarks, filter labels, aria-live
+- **Change:** Added skip-to-main link, header/main/footer landmarks, sr-only class, prefers-reduced-motion, aria-live on signals container and last-update span, explicit label elements on filter controls.
+- **Files:** `public/signals.html`
+- **Tests:** 179/179 pass
+
+### Round 2 — signals.html: scroll-to-top button
+- **Change:** Fixed orange-themed scroll-to-top button (appears after 400px scroll) with hover lift, same pattern as alphascan.html.
+- **Files:** `public/signals.html`
+- **Tests:** 179/179 pass
+
+### Round 3 — metrics.html: skip-link, header/main landmarks, role=alert on error
+- **Change:** Added skip-link, header/main semantic elements, aria-label on form, role=alert+aria-live=assertive on error-message div, tabindex=-1 on main-content.
+- **Files:** `public/metrics.html`
+- **Tests:** 179/179 pass
+
+### Round 4 — alphascan.html: @media print stylesheet
+- **Change:** Print styles hide nav/toolbar/buttons, set white background, page-break-inside:avoid on panels, ensure bar colors print correctly with print-color-adjust.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 5 — alphascan.js: keyboard shortcuts
+- **Change:** '/' focuses search input (when not in a form field). Escape clears results section and resets URL to pathname, refocuses input.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 179/179 pass
+
+### Round 6 — index.html: keyboard shortcut hint in hero CTAs
+- **Change:** Added small keyboard hint badge below CTA buttons showing '/' shortcut for scanner input.
+- **Files:** `public/index.html`
+- **Tests:** 179/179 pass
+
+### Round 7 — alphascan.html: forced-colors / High Contrast Mode CSS
+- **Change:** @media(forced-colors:active) block ensures buttons/panels/verdicts remain accessible in Windows High Contrast Mode.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 8 — alphascan.html: content-visibility:auto on below-fold sections
+- **Change:** .how-section and .stats-section get content-visibility:auto + contain-intrinsic-size for faster initial paint.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 9 — index.html: content-visibility:auto on products/diff sections
+- **Change:** .products-section and .diff-section get content-visibility:auto + contain-intrinsic-size.
+- **Files:** `public/index.html`
+- **Tests:** 179/179 pass
+
+### Round 10 — Commit R1-10: 5 files, 155 insertions
+
+### Round 11 — alphascan.js: progressive fake-progress bar width
+- **Change:** Loading bar gets animated width (0→85%) via JS interval over estimated scan duration. fill-track <span> injected inside loading-bar. Never reaches 100% until scan completes.
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 179/179 pass
+
+### Round 12 — alphascan.html/js: scan result announced to screen readers
+- **Change:** Added #sr-announcer aria-live=assertive element. After scan completes, verdict+score announced: "Scan complete. PROJECT: VERDICT, score X.X".
+- **Files:** `public/alphascan.html`, `public/js/alphascan.js`
+- **Tests:** 179/179 pass
+
+### Round 13 — index.html: aria-labelledby on all sections + heading ids
+- **Change:** All 6 sections get aria-labelledby. Corresponding <h2> elements get matching ids. Social proof section gets aria-label.
+- **Files:** `public/index.html`
+- **Tests:** 179/179 pass
+
+### Round 14 — alphascan.html: tabindex=-1 on <main>, aria-label on hero section
+- **Change:** main#main-content gets tabindex=-1 for skip-link focus. Hero section gets aria-label.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 15 — metrics.html: responsive grid breakpoints fix
+- **Change:** grid-2 stays 2-col at 641-900px (was collapsing to 1-col at 900px). Proper tablet layout.
+- **Files:** `public/metrics.html`
+- **Tests:** 179/179 pass
+
+### Round 16 — metrics.html: theme-color meta, print button, print styles
+- **Change:** Added meta theme-color. Print button in header. @media print hides header/controls, uses white bg, avoids page breaks inside cards.
+- **Files:** `public/metrics.html`
+- **Tests:** 179/179 pass
+
+### Round 17 — alphascan.html: decoding=async on logos, defer utils/hamburger.js
+- **Change:** Logo images get decoding=async. Footer logo gets loading=lazy. utils.js and hamburger.js get defer attribute. Script version bumped to v=92.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 18 — alphascan.html: results-section as <section> with ARIA roles
+- **Change:** #results-section div → <section> with aria-label + aria-live=polite. #error-box gets role=alert + aria-live=assertive. #report gets aria-label.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 19 — alphascan.html: CSS spinner on disabled .btn-primary
+- **Change:** .btn-primary:disabled shows ::before spinner animation (14px ring, 0.7s linear). Makes loading state obvious without JS.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 20 — Commit R11-20: 4 files, 102 insertions
+
+### Round 21 — index.html: footer nav as <nav>, GitHub rel=noopener noreferrer
+- **Change:** .footer-links div → <nav> with aria-label. GitHub link gets target=_blank + rel=noopener noreferrer + sr-only "(opens in new tab)".
+- **Files:** `public/index.html`
+- **Tests:** 179/179 pass
+
+### Round 22 — alphascan.html: footer nav with aria-current, external link indicators
+- **Change:** .footer-links div → <nav> with aria-label. Alpha Scanner gets aria-current=page. GitHub gets target+rel+sr-only.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 23 — alphascan.js: smoother 5-tier score color gradient
+- **Change:** barColor() now uses 5 tiers (≥8.5 orange, ≥7.0 warm, ≥5.5 neutral, ≥4.0 weak, <4.0 avoid) instead of 4 for smoother visual progression.
+- **Files:** `public/js/alphascan.js`
+- **Tests:** 179/179 pass
+
+### Round 24 — alphascan.html: tabindex=0 + role=article on how-step cards
+- **Change:** Cards are keyboard-navigable (Tab key). aria-label describes step number and title.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 25 — alphascan.html: stat-val reveal animation with stagger delay
+- **Change:** @keyframes statReveal (fade+scale from 0.95 to 1) applied to .stat-val with 0.1/0.2/0.3s stagger per card.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 26 — signals.html + index.html: external links get rel=noopener noreferrer + sr-only
+- **Change:** Nevermined subscribe link in signals.html gets target+rel+sr-only. GitHub trust logo in index.html gets noreferrer.
+- **Files:** `public/signals.html`, `public/index.html`
+- **Tests:** 179/179 pass
+
+### Round 27 — index.html + alphascan.html: <time datetime> + "Not financial advice"
+- **Change:** Footer copyright year wrapped in <time datetime="2026">. Added "Not financial advice" disclaimer to both footers.
+- **Files:** `public/index.html`, `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 28 — alphascan.html: prefers-color-scheme:light fallback palette
+- **Change:** Light mode override for --bg, --surface, --text, --muted, --border. Keeps header dark for brand consistency.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 29 — alphascan.html: improved noscript message with CLI example
+- **Change:** Noscript box now includes curl CLI example: `curl https://clawnkers.com/alpha/quick?project=eth` as a no-JS fallback path.
+- **Files:** `public/alphascan.html`
+- **Tests:** 179/179 pass
+
+### Round 30 — Commit R21-30: 4 files, 57 insertions — pushed to main
