@@ -683,6 +683,59 @@ export function detectRedFlags(rawData = {}, scores = {}) {
   const zeroCexFlag = detectZeroCexListings(rawData);
   if (zeroCexFlag) flags.push(zeroCexFlag);
 
+  // Round 67 (AutoResearch): High sell tax warning flag
+  const contract = rawData.contract ?? {};
+  const sellTax = Number(contract.sell_tax ?? NaN);
+  if (Number.isFinite(sellTax) && sellTax > 0) {
+    if (sellTax > 10) {
+      flags.push({
+        flag: 'high_sell_tax',
+        severity: 'critical',
+        detail: `Sell tax is ${sellTax.toFixed(1)}% — holders lose over 10% on every sale. Typical honeypot signature. Exit extremely costly.`,
+      });
+    } else if (sellTax > 5) {
+      flags.push({
+        flag: 'high_sell_tax',
+        severity: 'warning',
+        detail: `Sell tax is ${sellTax.toFixed(1)}% — significant friction on exits. Reduces effective liquidity for holders.`,
+      });
+    }
+  }
+
+  // Round 88 (AutoResearch): Negative revenue (protocol paying out more than earning)
+  const onchainForRevFlag = rawData.onchain ?? {};
+  const rev7dForFlag = Number(onchainForRevFlag.revenue_7d ?? NaN);
+  const tvlForRevFlag = Number(onchainForRevFlag.tvl ?? 0);
+  if (Number.isFinite(rev7dForFlag) && rev7dForFlag < 0 && tvlForRevFlag > 1_000_000) {
+    flags.push({
+      flag: 'negative_protocol_revenue',
+      severity: 'warning',
+      detail: `Protocol revenue is negative ($${(rev7dForFlag / 1000).toFixed(0)}K/week) — paying out more than it earns. Unsustainable subsidy model risks treasury depletion.`,
+    });
+  }
+
+  // Round 68 (AutoResearch): Unaudited established protocol warning
+  const mcapForAudit = Number(rawData.market?.market_cap ?? 0);
+  const genesisForAudit = rawData.market?.genesis_date ?? rawData.tokenomics?.genesis_date;
+  const ageMonthsForAudit = genesisForAudit
+    ? (Date.now() - new Date(genesisForAudit).getTime()) / (1000 * 60 * 60 * 24 * 30.44)
+    : null;
+  if (contract.audited === false && mcapForAudit > 5_000_000 && (ageMonthsForAudit == null || ageMonthsForAudit > 6)) {
+    flags.push({
+      flag: 'unaudited_established_protocol',
+      severity: 'warning',
+      detail: `$${(mcapForAudit / 1e6).toFixed(0)}M MCap protocol has no verified smart contract audit. Smart contract risk is unquantified — exploits possible without warning.`,
+    });
+  }
+
+  // Round 700 (AutoResearch batch): wire new standalone detectors into main export
+  const fdvMcapFlag = detectExtremeFdvMcapMismatch(rawData);
+  if (fdvMcapFlag) flags.push(fdvMcapFlag);
+  const pvDecouplingFlag = detectPriceVolumeDecoupling(rawData);
+  if (pvDecouplingFlag) flags.push(pvDecouplingFlag);
+  const githubAbandonFlag = detectGithubAbandonment(rawData);
+  if (githubAbandonFlag) flags.push(githubAbandonFlag);
+
   // Deduplicate flags by flag key (keep highest severity)
   const severityOrder = { critical: 3, warning: 2, info: 1 };
   const flagMap = new Map();
@@ -1053,4 +1106,88 @@ export function detectZeroCexListings(rawData = {}) {
     severity: mcap > 50_000_000 ? 'critical' : 'warning',
     detail: `$${(mcap / 1e6).toFixed(0)}M MCap token with zero CEX listings — excluded from institutional flow and retail discovery. Exit liquidity severely constrained.`,
   };
+}
+
+// ─── Round 700 (AutoResearch batch): New red flag detectors ──────────────────
+
+/**
+ * R700-1: FDV/MCap ratio extreme mismatch — when FDV is >10x MCap, most tokens
+ * are locked and will create massive sell pressure when they vest.
+ */
+export function detectExtremeFdvMcapMismatch(rawData = {}) {
+  const market = rawData.market ?? {};
+  const fdv = Number(market.fully_diluted_valuation ?? market.fdv ?? NaN);
+  const mcap = Number(market.market_cap ?? NaN);
+  if (!Number.isFinite(fdv) || !Number.isFinite(mcap) || mcap <= 0 || fdv <= 0) return null;
+  const ratio = fdv / mcap;
+  if (ratio > 20) {
+    return {
+      flag: 'extreme_fdv_mcap_mismatch',
+      severity: 'critical',
+      detail: `FDV/MCap ratio ${ratio.toFixed(1)}x — over 95% of tokens are not yet in circulation. Extreme dilution risk; any unlock event could cause cascading sell pressure.`,
+    };
+  } else if (ratio > 10) {
+    return {
+      flag: 'high_fdv_mcap_mismatch',
+      severity: 'warning',
+      detail: `FDV/MCap ratio ${ratio.toFixed(1)}x — more than 90% of total supply is locked. Significant future dilution overhang on existing holders.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * R700-2: Negative volume trend while price rises — artificial price inflation.
+ * Price going up while volume decreases often signals thin-market manipulation.
+ */
+export function detectPriceVolumeDecoupling(rawData = {}) {
+  const market = rawData.market ?? {};
+  const change7d = Number(market.price_change_pct_7d ?? NaN);
+  const change30d = Number(market.price_change_pct_30d ?? NaN);
+  const volToMcap = Number(market.volume_to_mcap_ratio ?? NaN);
+  const volSpike = market.volume_spike_flag;
+
+  if (!Number.isFinite(change7d) || !Number.isFinite(change30d) || !Number.isFinite(volToMcap)) return null;
+  // Price up significantly but volume is very thin — hallmark of manipulation
+  if (change7d > 20 && change30d > 30 && volToMcap < 0.01 && volSpike !== 'spike' && volSpike !== 'extreme_spike') {
+    return {
+      flag: 'price_volume_decoupling',
+      severity: 'warning',
+      detail: `Price surged ${change7d.toFixed(0)}%/7d and ${change30d.toFixed(0)}%/30d but vol/mcap ratio is only ${(volToMcap * 100).toFixed(2)}% — price move on thin volume suggests low conviction or market manipulation.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * R700-3: GitHub abandonment — project had code but stopped committing.
+ * Indicates a project that launched but then went quiet on development.
+ */
+export function detectGithubAbandonment(rawData = {}) {
+  const github = rawData.github ?? {};
+  const commits90d = Number(github.commits_90d ?? NaN);
+  const stars = Number(github.stars ?? NaN);
+  const repoAgeDays = Number(github.repo_age_days ?? NaN);
+  const lastCommit = github.last_commit;
+
+  if (!Number.isFinite(commits90d)) return null;
+  // Only flag if we know the project has an established repo (has stars, is older)
+  if (!Number.isFinite(stars) || stars < 10) return null;
+  if (!Number.isFinite(repoAgeDays) || repoAgeDays < 180) return null;
+
+  if (commits90d === 0) {
+    const lastCommitStr = lastCommit ? ` (last commit: ${lastCommit})` : '';
+    return {
+      flag: 'github_abandonment',
+      severity: 'critical',
+      detail: `${stars} GitHub stars but ZERO commits in past 90 days${lastCommitStr}. Established project that has gone silent — development has likely ceased.`,
+    };
+  } else if (commits90d < 3 && repoAgeDays > 365) {
+    return {
+      flag: 'near_abandoned_development',
+      severity: 'warning',
+      detail: `Only ${commits90d} commits in last 90 days despite ${Math.round(repoAgeDays / 30)}+ month old repo with ${stars} stars. Development activity extremely low.`,
+    };
+  }
+  return null;
 }

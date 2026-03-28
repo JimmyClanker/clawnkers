@@ -92,7 +92,11 @@ export async function collectReddit(projectName) {
       const title = post.title || '';
       const subreddit = post.subreddit || 'unknown';
       const postScore = Math.max(0, post.score ?? 0);
-      const upvoteWeight = Math.log10(postScore + 2); // log scale so viral posts don't dominate
+      // Round 69 (AutoResearch): incorporate upvote_ratio into weight calculation
+      // High upvote ratio (>0.9) = community consensus; low ratio (<0.5) = controversial/spam
+      const upvoteRatio = typeof post.upvote_ratio === 'number' ? post.upvote_ratio : 0.7;
+      const ratioMultiplier = upvoteRatio >= 0.9 ? 1.3 : upvoteRatio >= 0.7 ? 1.0 : upvoteRatio >= 0.5 ? 0.7 : 0.3;
+      const upvoteWeight = Math.log10(postScore + 2) * ratioMultiplier; // log scale + ratio-adjusted
 
       subredditCounts.set(subreddit, (subredditCounts.get(subreddit) || 0) + 1);
 
@@ -111,6 +115,7 @@ export async function collectReddit(projectName) {
           title,
           subreddit,
           score: postScore,
+          upvote_ratio: upvoteRatio,
           url: post.url || null,
           created_utc: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : null,
         });
@@ -161,6 +166,10 @@ export async function collectReddit(projectName) {
         neutral: parseFloat(upvoteWeightedCounts.neutral.toFixed(2)),
       },
       total_upvotes: totalUpvotes,
+      avg_upvote_ratio: posts.length > 0 ? (() => {
+        const ratios = posts.map(c => typeof c?.data?.upvote_ratio === 'number' ? c.data.upvote_ratio : 0.7);
+        return parseFloat((ratios.reduce((a, b) => a + b, 0) / ratios.length).toFixed(3));
+      })() : null,
       reddit_activity_score: redditActivityScore,
       tier1_subreddit_hits: tier1SubredditHits,
       subreddit_quality,

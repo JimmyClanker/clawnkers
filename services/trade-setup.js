@@ -329,6 +329,12 @@ export function generateTradeSetup(rawData, scores) {
     stop_loss: stopLoss,
     take_profit_targets: takeProfitTargets,
     risk_reward_ratio: rrRatio,
+    // Round 96 (AutoResearch): rr_label — categorical label for frontend display
+    rr_label: rrRatio == null ? null
+      : rrRatio >= 3 ? 'favorable'
+      : rrRatio >= 1.5 ? 'acceptable'
+      : rrRatio >= 1 ? 'marginal'
+      : 'unfavorable',
     setup_quality: setupQuality,
     setup_quality_score: setupQualityScore,
     risk_label: riskLabel,

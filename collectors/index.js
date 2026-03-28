@@ -329,20 +329,64 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     }
   }
 
+  // Round 102 (AutoResearch): NaN sanitizer pass + impossible value guards
+  // Replace any NaN with null, guard negative prices/market caps, extreme ratios
+  function sanitizeCollectorData(data) {
+    if (!data || typeof data !== 'object') return data;
+    if (Array.isArray(data)) return data.map(sanitizeCollectorData);
+    const sanitized = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (typeof val === 'number') {
+        // NaN → null
+        if (!Number.isFinite(val)) {
+          sanitized[key] = null;
+          continue;
+        }
+        // Impossible value guards
+        if (key.includes('price') && val < 0) sanitized[key] = null;
+        else if (key.includes('market_cap') && val < 0) sanitized[key] = null;
+        else if (key.includes('volume') && val < 0) sanitized[key] = null;
+        else if (key.includes('ratio') && (val < 0 || val > 1e12)) sanitized[key] = null;
+        else if (key.includes('tvl') && val < 0) sanitized[key] = null;
+        else sanitized[key] = val;
+      } else if (typeof val === 'object' && val !== null) {
+        sanitized[key] = sanitizeCollectorData(val);
+      } else {
+        sanitized[key] = val;
+      }
+    }
+    return sanitized;
+  }
+
+  const cleanedData = {
+    market: sanitizeCollectorData(market.data),
+    onchain: sanitizeCollectorData(onchain.data),
+    social: sanitizeCollectorData(social.data),
+    github: sanitizeCollectorData(github.data),
+    tokenomics: sanitizeCollectorData(tokenomics.data),
+    dex: sanitizeCollectorData(dex.data),
+    reddit: sanitizeCollectorData(reddit.data),
+    holders: sanitizeCollectorData(holders.data),
+    ecosystem: sanitizeCollectorData(ecosystem.data),
+    contract: sanitizeCollectorData(contract.data),
+    x_social: sanitizeCollectorData(xSocial.data),
+    fear_greed: sanitizeCollectorData(fearGreed.data),
+  };
+
   return {
     project_name: projectName,
-    market: market.data,
-    onchain: onchain.data,
-    social: social.data,
-    github: github.data,
-    tokenomics: tokenomics.data,
-    dex: dex.data,
-    reddit: reddit.data,
-    holders: holders.data,
-    ecosystem: ecosystem.data,
-    contract: contract.data,
-    x_social: xSocial.data,
-    fear_greed: fearGreed.data,
+    market: cleanedData.market,
+    onchain: cleanedData.onchain,
+    social: cleanedData.social,
+    github: cleanedData.github,
+    tokenomics: cleanedData.tokenomics,
+    dex: cleanedData.dex,
+    reddit: cleanedData.reddit,
+    holders: cleanedData.holders,
+    ecosystem: cleanedData.ecosystem,
+    contract: cleanedData.contract,
+    x_social: cleanedData.x_social,
+    fear_greed: cleanedData.fear_greed,
     metadata: {
       started_at: new Date(startedAt).toISOString(),
       completed_at: new Date().toISOString(),

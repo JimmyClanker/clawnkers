@@ -28,6 +28,10 @@ function createEmptyDexResult(projectName) {
     pump_dump_signal: null,
     avg_liquidity_per_pair: null,
     decent_pairs_count: null,
+    // Round 103 (AutoResearch): additional pair metadata
+    top_pair_boosted: null,
+    top_pair_created_at: null,
+    top_pair_age_days: null,
     error: null,
   };
 }
@@ -363,18 +367,57 @@ export async function collectDexScreener(projectName) {
         const avgTradeSize = totalVolume24h / totalTxns;
         return Number.isFinite(avgTradeSize) ? parseFloat(avgTradeSize.toFixed(2)) : null;
       })(),
+      // Round 103 (AutoResearch): boosted pair flag, pair creation date, token age
+      top_pair_boosted: topPair?.boosts?.active ?? null,
+      top_pair_created_at: topPair?.pairCreatedAt ?? null,
+      top_pair_age_days: (() => {
+        const created = topPair?.pairCreatedAt;
+        if (!created) return null;
+        const ageMs = Date.now() - created;
+        const days = Math.floor(ageMs / 86400000);
+        return days >= 0 ? days : null;
+      })(),
       // Round 381 (AutoResearch): wash_trading_risk — heuristic combining trade size + volume/liq ratio
-      // Small trade size + very high volume/liq ratio is a classic wash trading pattern
+      // Round 700 (AutoResearch batch): enhanced multi-factor detection
+      // Factor 1: tiny avg trade size with high vol/liq = micro wash
+      // Factor 2: suspiciously round number buy/sell ratio (exactly 1.000 = synthetic)
+      // Factor 3: multiple pairs with identical buy/sell ratios = coordinated wash
       wash_trading_risk: (() => {
         const totalTxns = totalBuys24h + totalSells24h;
         if (totalTxns === 0 || totalVolume24h === 0 || totalLiquidity === 0) return null;
         const avgTradeSize = totalVolume24h / totalTxns;
         const volLiqRatio = totalVolume24h / totalLiquidity;
-        // Flag: avg trade < $20 AND volume/liq > 5 (rapid cycling of tiny orders = wash)
-        if (avgTradeSize < 20 && volLiqRatio > 5) return 'high';
-        // Flag: avg trade < $100 AND volume/liq > 10
-        if (avgTradeSize < 100 && volLiqRatio > 10) return 'elevated';
+        let riskScore = 0;
+
+        // Factor 1: micro-trades (classic wash trading pattern)
+        if (avgTradeSize < 10 && volLiqRatio > 3) riskScore += 3;
+        else if (avgTradeSize < 20 && volLiqRatio > 5) riskScore += 2;
+        else if (avgTradeSize < 100 && volLiqRatio > 10) riskScore += 1;
+
+        // Factor 2: perfect buy/sell balance (statistically improbable in organic markets)
+        const buySellR = totalBuys24h > 0 && totalSells24h > 0
+          ? totalBuys24h / totalSells24h : null;
+        if (buySellR != null && Math.abs(buySellR - 1) < 0.02) riskScore += 1; // within 2% of perfect balance
+
+        // Factor 3: extremely high txn frequency relative to liquidity depth
+        // A $100K liquidity pool turning over 50x/day is suspicious
+        if (totalTxns > 0 && totalLiquidity > 0) {
+          const txnsPerKLiquidity = (totalTxns / totalLiquidity) * 1000;
+          if (txnsPerKLiquidity > 10) riskScore += 1; // 10+ txns per $1K liquidity = very high frequency
+        }
+
+        if (riskScore >= 4) return 'high';
+        if (riskScore >= 2) return 'elevated';
         return 'low';
+      })(),
+      // Round 73 (AutoResearch): liquidity_concentration_risk — single-pair dependency
+      // When top pair holds >80% of liquidity, a rug on that one pair = near-total liquidity loss
+      liquidity_concentration_risk: (() => {
+        if (topPairLiqPct === null) return null;
+        if (topPairLiqPct >= 80) return 'high';      // Single pair controls >80% — very fragile
+        if (topPairLiqPct >= 60) return 'elevated';  // Single pair dominates — moderate fragility
+        if (topPairLiqPct >= 40) return 'moderate';  // Some concentration — acceptable
+        return 'low'; // Well-distributed across pairs
       })(),
       // Round 235 (AutoResearch): most_active_chain — chain with highest 24h volume
       most_active_chain: (() => {

@@ -71,6 +71,11 @@ const TRUSTED_DOMAINS = new Set([
   'zerion.io', 'tokenterminal.com', 'artemis.xyz', 'defillama.com',
   'ethresear.ch', 'research.lido.fi', 'forum.arbitrum.foundation', 'gov.uniswap.org',
   'mirror.xyz', 'substack.com',
+  // Round 80 (AutoResearch): 2026 high-signal domain additions
+  'unchained.com', 'thedefiant.io', 'research.binance.com', 'dragonfly.xyz',
+  'panteracapital.com', 'chainalysis.com', 'kaito.ai', 'arkham.com',
+  'dune.com', 'flipside.is', 'intotheblock.com', 'santiment.net',
+  'coinbase.com', 'kraken.com', 'blog.uniswap.org', 'medium.com',
 ]);
 
 function getDomainTrustScore(url) {
@@ -84,6 +89,8 @@ function getDomainTrustScore(url) {
 }
 
 // Heuristic bot indicators in article titles/content
+// Round 700 (AutoResearch batch): Enhanced bot/spam filter patterns
+// Added patterns for 2026 common spam: fake airdrops, shill farms, bridge scams, impersonation
 const BOT_SIGNAL_PATTERNS = [
   /\bprice prediction\b/i,
   /\b\d+\s*%\s*(gain|profit|return)\s+(guaranteed|sure|certain)\b/i,
@@ -91,6 +98,19 @@ const BOT_SIGNAL_PATTERNS = [
   /\bclick here\b/i,
   /\bdon't miss\b/i,
   /\bexclusive (offer|deal|bonus)\b/i,
+  // R700 additions: modern spam patterns
+  /\bfree\s+(token|airdrop|giveaway)\b/i,
+  /\b(join|claim)\s+(now|today|immediately)\s+and\s+(get|earn|receive)\b/i,
+  /\bwhatsapp\s+group\b/i,
+  /\btelegram\s+(group|channel)\s+(link|join)\b/i,
+  /\b(100x|1000x)\s+(guaranteed|confirmed|sure)\b/i,
+  /\bpump\s+(incoming|confirmed|alert)\b/i,
+  /\b(sent|send)\s+\d+\s+(eth|btc|sol|usdt)\s+to\s+get\b/i, // classic doubling scam
+  /\bvisit\s+our\s+(website|channel|group)\b/i,
+  /\bpromo\s*code\b/i,
+  /\bsponsor(ed)?\s+(content|post|article)\b/i,
+  /\baffiliate\s+(link|discount)\b/i,
+  /\bnot\s+financial\s+advice.{0,30}buy\b/i, // "not financial advice" immediately followed by buy = shill
 ];
 
 function isBotLikeContent(text) {

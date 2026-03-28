@@ -212,6 +212,10 @@ export async function collectMarket(projectName) {
     let staleTickerCount = null;
     let trustScoreAvg = null;
     const topExchanges = [];
+    // Round 101 (AutoResearch): bid-ask spread data from tickers for liquidity quality signal
+    let bidAskSpreadAvg = null;
+    let bidAskSpreadMedian = null;
+    let bidAskSpreadCount = 0;
 
     if (tickersData?.tickers && Array.isArray(tickersData.tickers)) {
       const tickers = tickersData.tickers;
@@ -225,6 +229,8 @@ export async function collectMarket(projectName) {
       marketPairCount = tickers.length;
       cexPairCount = 0;
       dexPairCount = 0;
+      // Round 101 (AutoResearch): collect bid-ask spreads from tickers
+      const bidAskSpreads = [];
 
       for (const ticker of tickers) {
         const rawExchangeName = ticker?.market?.name || ticker?.market?.identifier || 'unknown';
@@ -235,6 +241,10 @@ export async function collectMarket(projectName) {
         if (trustLabel === 'green') { trustScorePoints += 3; trustScoreSamples += 1; }
         else if (trustLabel === 'yellow') { trustScorePoints += 2; trustScoreSamples += 1; }
         else if (trustLabel === 'red') { trustScorePoints += 1; trustScoreSamples += 1; }
+
+        // Round 101 (AutoResearch): extract bid-ask spread percentage if present
+        const spread = sanitizeFinite(ticker?.bid_ask_spread_percentage, { min: 0, max: 100, decimals: 4 });
+        if (spread != null) bidAskSpreads.push(spread);
 
         if (ticker?.is_anomaly) anomalousTickerCount += 1;
         if (ticker?.is_stale) staleTickerCount += 1;
@@ -248,6 +258,17 @@ export async function collectMarket(projectName) {
 
         if (isDex) totalDexVol += vol;
         else totalCexVol += vol;
+      }
+
+      // Round 101 (AutoResearch): compute bid-ask spread stats
+      if (bidAskSpreads.length > 0) {
+        bidAskSpreadCount = bidAskSpreads.length;
+        bidAskSpreadAvg = sanitizeFinite(bidAskSpreads.reduce((sum, s) => sum + s, 0) / bidAskSpreads.length, { decimals: 4 });
+        const sorted = [...bidAskSpreads].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        bidAskSpreadMedian = sorted.length % 2 === 0
+          ? sanitizeFinite((sorted[mid - 1] + sorted[mid]) / 2, { decimals: 4 })
+          : sorted[mid];
       }
 
       // Unique exchange names
@@ -423,6 +444,10 @@ export async function collectMarket(projectName) {
         const total = twitterScore + telegramScore + redditScore;
         return total > 0 ? Math.round(total) : null;
       })(),
+      // Round 101 (AutoResearch): watchlist_portfolio_users — CoinGecko's signal of user interest
+      // How many users have added this coin to their watchlist/portfolio on CoinGecko
+      // Strong signal of retail attention and potential buying interest
+      watchlist_portfolio_users: sanitizeNonNegative(marketData?.watchlist_portfolio_users),
       // Round 237 (AutoResearch nightly): holder_engagement_score (0-100)
       // Measures how actively holders are engaging vs holding. High velocity + large community = active.
       // Combines: volume/mcap velocity, community size, and trending status.
@@ -476,6 +501,10 @@ export async function collectMarket(projectName) {
       stale_ticker_count: staleTickerCount,
       trust_score_avg: trustScoreAvg,
       top_exchanges: topExchanges,
+      // Round 101 (AutoResearch): bid-ask spread stats — liquidity quality signal
+      bid_ask_spread_avg: bidAskSpreadAvg,
+      bid_ask_spread_median: bidAskSpreadMedian,
+      bid_ask_spread_sample_count: bidAskSpreadCount > 0 ? bidAskSpreadCount : null,
       sparkline_7d: coinData?.market_data?.sparkline_7d?.price || [],
       price_history_90d: (chartData?.prices || []).map(([ts, price]) => ({ t: ts, p: price })),
       // Round 156 (AutoResearch): 7-day sparkline realized volatility (daily return std dev)

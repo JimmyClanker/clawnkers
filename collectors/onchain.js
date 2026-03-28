@@ -299,10 +299,18 @@ export async function collectOnchain(projectName) {
     }
 
     const slug = match.protocol.slug;
+    // Round 109 (AutoResearch): log timing per-call to detect slow DeFiLlama endpoints
+    const perfStart = Date.now();
     const [protocolData, feesData] = await Promise.allSettled([
       fetchJson(`${LLAMA_PROTOCOL_URL}/${encodeURIComponent(slug)}`),
       fetchJson(`${LLAMA_FEES_URL}/${encodeURIComponent(slug)}`).catch(() => null),
     ]);
+    const perfEnd = Date.now();
+    const duration = perfEnd - perfStart;
+    // Log warning if DeFiLlama protocol fetch took >8s (common with rate limit throttling)
+    if (duration > 8000) {
+      console.warn(`[onchain:${projectName}] DeFiLlama protocol endpoint slow: ${duration}ms (slug=${slug})`);
+    }
 
     const protocol = protocolData.status === 'fulfilled' ? protocolData.value : null;
     const fees = feesData.status === 'fulfilled' ? feesData.value : null;
@@ -704,8 +712,15 @@ export async function collectOnchain(projectName) {
     const isTimeout = error.name === 'AbortError' || error.message?.includes('timed out');
     const isCooldown = error.message?.includes('cooldown');
     const isNotFound = error.message?.includes('not found') || error.message?.includes('404');
+    // Round 104 (AutoResearch): distinguish network/API errors for clearer diagnostics
+    const isRateLimit = error.message?.includes('429') || error.message?.includes('rate limit');
+    const isServerError = error.message?.includes('503') || error.message?.includes('500');
+    const isNetworkError = error.message?.includes('ECONNREFUSED') || error.message?.includes('ENOTFOUND');
     let errorMsg = error.message;
-    if (isTimeout) errorMsg = `DeFiLlama timeout (> ${ONCHAIN_TIMEOUT_MS}ms)`;
+    if (isTimeout) errorMsg = `DeFiLlama timeout (> ${ONCHAIN_TIMEOUT_MS}ms) — API may be slow or unresponsive`;
+    else if (isRateLimit) errorMsg = `DeFiLlama rate limit exceeded — retry after cooldown`;
+    else if (isServerError) errorMsg = `DeFiLlama server error (503/500) — temporary outage`;
+    else if (isNetworkError) errorMsg = `DeFiLlama network unreachable — check connectivity`;
     else if (isCooldown) errorMsg = `DeFiLlama API in cooldown — too many recent failures`;
     else if (isNotFound) errorMsg = `DeFiLlama: protocol not found for "${projectName}"`;
     return {

@@ -72,8 +72,19 @@ CRITICAL: Only report what you actually find via X Search. If there is little to
     if (!text) return { error: 'Empty response from Grok fast', source: 'grok_fast' };
 
     const parsed = JSON.parse(text);
+    // Round 107 (AutoResearch): guard against NaN/null in numeric fields from Grok response
+    if (typeof parsed.sentiment_score === 'number' && !Number.isFinite(parsed.sentiment_score)) {
+      parsed.sentiment_score = 0; // default neutral
+    }
+    // Ensure required fields have defaults if missing
     return {
-      ...parsed,
+      sentiment: parsed.sentiment ?? 'neutral',
+      sentiment_score: parsed.sentiment_score ?? 0,
+      mention_volume: parsed.mention_volume ?? 'none',
+      key_narratives: Array.isArray(parsed.key_narratives) ? parsed.key_narratives : [],
+      notable_accounts: Array.isArray(parsed.notable_accounts) ? parsed.notable_accounts : [],
+      kol_sentiment: parsed.kol_sentiment ?? null,
+      summary: parsed.summary ?? null,
       source: 'grok_fast',
       model: GROK_FAST_MODEL,
       collected_at: new Date().toISOString(),

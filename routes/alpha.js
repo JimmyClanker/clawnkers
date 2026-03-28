@@ -5,6 +5,7 @@ import {
   verifyPayment,
   FULL_TTL_MS,
   QUICK_TTL_MS,
+  adaptiveTtlMs,
   normalizeProject,
   buildCacheKey,
   createCacheHelpers,
@@ -55,13 +56,18 @@ export function createAlphaRouter({ config, exaService, signalsService, collectA
         } catch (err) {
           console.error('[alpha] Snapshot save failed:', err.message);
         }
+        // Round 700 (AutoResearch batch): compute adaptive TTL based on freshly computed volatility
+        const adaptedTtlMs = adaptiveTtlMs(mode, report?.volatility, report?.scores);
+        if (adaptedTtlMs !== ttlMs) {
+          console.log(`[alpha] Adaptive TTL for ${projectName}: ${ttlMs}ms → ${adaptedTtlMs}ms (regime: ${report?.volatility?.regime ?? 'unknown'})`);
+        }
         return {
           ...report,
           cache: {
             ...(report.cache || {}),
             hit: false,
             key: cacheKey,
-            ttl_ms: ttlMs,
+            ttl_ms: adaptedTtlMs,
             age_ms: 0,
             created_at: new Date().toISOString(),
           },

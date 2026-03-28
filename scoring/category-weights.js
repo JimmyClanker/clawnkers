@@ -154,6 +154,13 @@ export const CATEGORY_WEIGHTS = {
     market: 0.10, onchain: 0.28, social: 0.15, development: 0.18,
     tokenomics: 0.10, distribution: 0.09, risk: 0.10,
   },
+  // Round 65 (AutoResearch): Perpetual DEX tokens (Hyperliquid, dYdX, GMX class)
+  // Open interest, funding rates, and fee revenue are primary signals; onchain metrics dominate
+  // Risk weight higher than spot DEX due to leverage and liquidation cascade risk
+  perpetual_dex: {
+    market: 0.12, onchain: 0.30, social: 0.10, development: 0.15,
+    tokenomics: 0.13, distribution: 0.10, risk: 0.10,
+  },
   // Round 54 (AutoResearch): CEX/Exchange tokens (BNB, OKB, KCS, etc.)
   // Exchange volume + tokenomics (buyback/burn) drive value — onchain usage is secondary
   // Development matters less (centralized infra); distribution matters (insider holdings)
@@ -277,7 +284,14 @@ export const CATEGORY_MAP = {
   'synths': 'derivatives',
   'structured-products': 'derivatives',
   'options-protocol': 'derivatives',
-  'perpetual-protocol': 'derivatives',
+  'perpetual-protocol': 'perpetual_dex',  // Round 65: dedicated perpetual_dex category
+  'perp': 'perpetual_dex',
+  'perps': 'perpetual_dex',
+  'perpetual-exchange': 'perpetual_dex',
+  'perpetuals-dex': 'perpetual_dex',
+  'hyperliquid': 'perpetual_dex',
+  'dydx': 'perpetual_dex',
+  'gmx': 'perpetual_dex',
   'margin-trading': 'derivatives',
   'etf': 'rwa',                        // on-chain ETFs are effectively tokenized assets
   'tokenized-fund': 'rwa',

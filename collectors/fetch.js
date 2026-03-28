@@ -3,14 +3,22 @@ const DEFAULT_RETRIES = 2;
 const RETRY_BASE_DELAY_MS = 800;
 
 // Round R10 (AutoResearch nightly): rotate user-agents to reduce bot-filter false positives
-// Expanded pool with more realistic browser-style UAs to reduce 403/429 on aggressive APIs
+// Round 700 (AutoResearch batch): Updated to Chrome 132/133 fingerprints (2026 versions)
+// More realistic browser-style UAs to reduce 403/429 on aggressive APIs
 const USER_AGENTS = [
   'AlphaScanner/2.0 (research; +https://clawnkers.com)',
   'CryptoResearch/1.5 (+https://clawnkers.com/alphascan)',
   'Mozilla/5.0 (compatible; AlphaBot/1.0; +https://clawnkers.com)',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  // Chrome 132 (Jan 2026) on macOS
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+  // Chrome 132 on Windows
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+  // Chrome 133 on Linux
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  // Firefox 135 on macOS (diversity for API fingerprint bypass)
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0',
+  // Edge 132 on Windows
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0',
 ];
 let _uaIdx = 0;
 function nextUserAgent() {
@@ -120,6 +128,8 @@ async function _fetchJsonImpl(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, re
           // Round 13: prevent CDN/proxy from serving stale data
           'cache-control': 'no-cache',
           pragma: 'no-cache',
+          // Round 83 (AutoResearch): identify scanner in server logs for debugging
+          'x-scanner-version': '7.0.0',
           ...(headers || {}),
         },
         signal: controller.signal,

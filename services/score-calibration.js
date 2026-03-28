@@ -117,6 +117,28 @@ export function calibrateScores(db, rawScores) {
     return { score: qualityScore, label, avg_n: Math.round(avgN) };
   })();
 
+  // Round 700 (AutoResearch batch): Composite score_rank — percentile of overall score vs historical
+  // Users care "is this score high or low vs what we normally see?" — a percentile answers that clearly
+  let overallPercentile = null;
+  let overallScoreRank = null;
+  try {
+    const overallVal = typeof rawScores?.overall === 'object' ? rawScores.overall.score : rawScores?.overall;
+    if (overallVal != null) {
+      const allOverall = db.prepare(
+        "SELECT score FROM score_history WHERE dimension = 'overall' ORDER BY created_at DESC LIMIT 500"
+      ).all().map((r) => r.score).filter(Number.isFinite);
+      if (allOverall.length >= MIN_HISTORY) {
+        const below = allOverall.filter((s) => s < overallVal).length;
+        overallPercentile = Math.round((below / allOverall.length) * 100);
+        overallScoreRank = overallPercentile >= 80 ? 'top_20pct'
+          : overallPercentile >= 60 ? 'above_median'
+          : overallPercentile >= 40 ? 'median'
+          : overallPercentile >= 20 ? 'below_median'
+          : 'bottom_20pct';
+      }
+    }
+  } catch { /* ignore if table not ready */ }
+
   return {
     scores: rawScores,
     calibrated,
@@ -126,6 +148,9 @@ export function calibrateScores(db, rawScores) {
       calibration_coverage: `${calibratedDims.length}/${DIMENSIONS.length}`,
       has_full_calibration: calibratedDims.length === DIMENSIONS.length,
       calibration_quality: calibrationQuality,
+      // Round 700: overall score percentile rank
+      overall_percentile: overallPercentile,
+      overall_score_rank: overallScoreRank,
     },
   };
 }

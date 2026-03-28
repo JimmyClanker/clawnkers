@@ -138,6 +138,28 @@ export function assessVolatility(rawData = {}) {
     }
   }
 
+  // Round 700 (AutoResearch batch): sparkline trend quality as volatility context
+  // A 'smooth_down' sparkline during high volatility confirms directional selling pressure
+  // A 'smooth_up' sparkline during elevated volatility suggests controlled buying (accumulation)
+  // An 'erratic' sparkline in any regime = unreliable price action — reduce confidence
+  const sparklineTrend = rawData?.sparkline_trend ?? rawData?.market?.sparkline_trend;
+  let sparklineVolContext = null;
+  if (sparklineTrend) {
+    const trendQuality = sparklineTrend.trend_quality;
+    if (trendQuality === 'smooth_down' && regime !== 'calm') {
+      sparklineVolContext = 'directional_downtrend';
+      notes.push(`7d sparkline shows smooth downtrend (consistency ${((sparklineTrend.consistency || 0) * 100).toFixed(0)}%) — organized selling, not random volatility.`);
+      // Upgrade regime if directional selling is smooth (more dangerous than random volatility)
+      if (regime === 'elevated') regime = 'high';
+    } else if (trendQuality === 'smooth_up' && regime !== 'calm') {
+      sparklineVolContext = 'directional_uptrend';
+      notes.push(`7d sparkline shows smooth uptrend — volatility is upward directional, constructive accumulation pattern.`);
+    } else if (trendQuality === 'erratic') {
+      sparklineVolContext = 'erratic_indecision';
+      notes.push(`Erratic 7d price action — trend is unclear, conflicting signals reduce confidence in any direction.`);
+    }
+  }
+
   return {
     regime,
     risk_tier,
@@ -148,6 +170,8 @@ export function assessVolatility(rawData = {}) {
     volatility_pct_7d: change7d,
     // Round 381 (AutoResearch): ATH context for interpreting volatility direction
     ath_volatility_context: athVolatilityContext,
+    // Round 700 (AutoResearch batch): sparkline-enhanced volatility context
+    sparkline_vol_context: sparklineVolContext,
     notes,
   };
 }

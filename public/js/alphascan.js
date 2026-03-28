@@ -367,7 +367,7 @@
             <span style="--target-width:${w}; background:${barC}; box-shadow:0 0 8px ${barC}55"></span>
             ${confBand}
           </div>
-          <div class="score-value" style="color:${barC};font-family:'IBM Plex Mono',monospace;font-size:0.92rem;">${v.toFixed(1)}</div>
+          <div class="score-value" style="color:${barC};font-family:'IBM Plex Mono',monospace;font-size:0.92rem;">${v >= 7 ? '🟢' : v >= 5 ? '🟡' : '🔴'} ${v.toFixed(1)}</div>
         </div>`;
       }).join('');
     }
@@ -380,17 +380,32 @@
         if (!mcap || !tvl || tvl <= 0) return null;
         return parseFloat((mcap / tvl).toFixed(2));
       })();
+      // Round 700: FDV/MCap ratio for dilution risk display
+      const fdvMcapRatioFmt = (() => {
+        const fdvV = raw?.market?.fully_diluted_valuation;
+        const mcapV = raw?.market?.market_cap;
+        if (!fdvV || !mcapV || mcapV <= 0) return null;
+        const ratio = fdvV / mcapV;
+        if (ratio <= 1.05) return null; // fully diluted — no need to show
+        const emoji = ratio > 10 ? '🚨 ' : ratio > 5 ? '⚠️ ' : '';
+        return `${emoji}${ratio.toFixed(2)}x`;
+      })();
+
       const rows = [
         ['Price','price',mp,null],
         ['Market cap','market_cap',raw?.market?.market_cap,null],
+        ['FDV/MCap (dilution)','fdv_mcap_ratio',fdvMcapRatioFmt,null], // Round 700
         ['24h volume','total_volume',raw?.market?.total_volume,null],
         ['TVL','tvl',raw?.onchain?.tvl,null],
         ['P/TVL ratio','ptvl_ratio',ptvlRaw != null ? ptvlRaw + 'x' : null,null],
+        ['Fee yield/yr (TVL)','fee_to_tvl_annualized', raw?.onchain?.fee_to_tvl_annualized != null ? `${raw.onchain.fee_to_tvl_annualized.toFixed(2)}%` : null,null], // Round 700
         ['Fees 7d','fees_7d',raw?.onchain?.fees_7d,null],
         ['Commits 90d','commits_90d',raw?.github?.commits_90d,null],
         ['Pct circulating','pct_circulating',raw?.tokenomics?.pct_circulating,null],
         ['DEX liquidity','dex_liquidity_usd',raw?.dex?.dex_liquidity_usd,null],
         ['DEX buy/sell','buy_sell_ratio',raw?.dex?.buy_sell_ratio,null],
+        // Round 91 (AutoResearch): liquidity concentration risk
+        ...(raw?.dex?.liquidity_concentration_risk && raw.dex.liquidity_concentration_risk !== 'low' ? [['Liq concentration','liquidity_concentration_risk',raw.dex.liquidity_concentration_risk === 'high' ? '🚨 High (single pair dominates)' : '⚠️ Elevated (top pair >60%)',null]] : []),
       ];
       return rows.filter(([,,value])=> value !== null && value !== undefined && value !== '' && value !== 'N/A' && value !== 'n/a').map(([label,key,value,type])=>{
         const cls=type==='change'?` class="${changeClass(value)}"`:''
@@ -835,6 +850,21 @@
               return`<div style="margin-top:4px;padding:3px 10px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">${cfg.icon} ${cfg.label}${distStr}</div>`;
             })()}
           </div>
+          ${(()=>{
+            // Round 700 (AutoResearch batch): Health Index badge — quick 0-100 composite score
+            // More intuitive than 1-10 for non-crypto-native users; shows rank context
+            const hi = payload?.health_index;
+            const hl = payload?.health_label;
+            if (hi == null) return '';
+            const cfg = hi >= 70
+              ? {bg:'rgba(34,197,94,0.1)',border:'rgba(34,197,94,0.25)',color:'#86efac',icon:'💚'}
+              : hi >= 50
+              ? {bg:'rgba(251,191,36,0.1)',border:'rgba(251,191,36,0.25)',color:'#fbbf24',icon:'🟡'}
+              : hi >= 30
+              ? {bg:'rgba(249,115,22,0.1)',border:'rgba(249,115,22,0.25)',color:'#fdba74',icon:'🟠'}
+              : {bg:'rgba(239,68,68,0.1)',border:'rgba(239,68,68,0.25)',color:'#fca5a5',icon:'🔴'};
+            return `<div style="margin-top:8px;padding:4px 14px;background:${cfg.bg};border:1px solid ${cfg.border};color:${cfg.color};border-radius:999px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:6px;">${cfg.icon} Health Index: ${hi}/100 <span style="opacity:0.7;font-weight:400;">(${hl || ''})</span></div>`;
+          })()}
         </div>
         ${renderProjectIntro(payload, analysis, raw)}
         <div class="report-main-grid">

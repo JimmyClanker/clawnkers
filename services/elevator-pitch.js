@@ -137,11 +137,30 @@ export function generateElevatorPitch(projectName, rawData, scores, analysis) {
   if (range90d?.tier === 'upper_quartile') range90dTag = '📊 90d high zone';
   else if (range90d?.tier === 'lower_quartile') range90dTag = '📊 90d low zone';
 
+  // Round 700 (AutoResearch batch): Add FDV overhang warning to pitch if extreme
+  // FDV/MCap > 10x is a critical dilution risk that every investor should know upfront
+  const fdvV = Number(market.fully_diluted_valuation ?? 0);
+  const mcapV = Number(market.market_cap ?? 0);
+  let fdvWarningTag = null;
+  if (fdvV > 0 && mcapV > 0) {
+    const fdvRatio = fdvV / mcapV;
+    if (fdvRatio > 20) fdvWarningTag = `🚨 FDV/${fdvRatio.toFixed(0)}x MCap — extreme unlock risk`;
+    else if (fdvRatio > 10) fdvWarningTag = `⚠️ FDV/${fdvRatio.toFixed(0)}x MCap — high dilution overhang`;
+    else if (fdvRatio > 5) fdvWarningTag = `FDV/${fdvRatio.toFixed(1)}x MCap — watch unlock schedule`;
+  }
+
+  // Health index tag
+  const hi = rawData?.health_index;
+  const healthTag = hi != null ? `Health: ${hi}/100` : null;
+
   return {
     pitch,
     one_line_risk: oneLineRisk,
     range_tag: rangeTag,
     range_90d_tag: range90dTag,
     critical_flag_note: criticalFlagNote,
+    // Round 700: new pitch context tags
+    fdv_warning_tag: fdvWarningTag,
+    health_tag: healthTag,
   };
 }

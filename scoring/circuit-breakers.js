@@ -62,6 +62,33 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
     });
   }
 
+  // Round 63 (AutoResearch): Honeypot detection — absolute scam cap
+  // Honeypot tokens cannot be sold once bought — any score above STRONG AVOID is dangerously wrong
+  if (contract.honeypot === true) {
+    breakers.push({
+      cap: 2.5,
+      reason: 'Contract identified as honeypot — buyers cannot sell tokens. STRONG AVOID regardless of other signals.',
+      severity: 'critical',
+    });
+  }
+
+  // Round 89 (AutoResearch): Extreme sell tax hard cap
+  // 20%+ sell tax = soft rug — investors lose >1/5 of value on every exit
+  const sellTaxForBreaker = safeNum(contract.sell_tax ?? NaN) ?? 0;
+  if (sellTaxForBreaker > 20) {
+    breakers.push({
+      cap: 3.0,
+      reason: `Extreme sell tax: ${sellTaxForBreaker}% on every sale — investors cannot exit without catastrophic loss. Indistinguishable from a soft rug.`,
+      severity: 'critical',
+    });
+  } else if (sellTaxForBreaker > 10) {
+    breakers.push({
+      cap: 5.0,
+      reason: `High sell tax: ${sellTaxForBreaker}% — significant exit friction, not suitable for most investors.`,
+      severity: 'warning',
+    });
+  }
+
   // Round 141 (AutoResearch): DEX liquidity in "extremely thin" zone ($10K-$50K) = warning cap
   // Not quite untradeable but severe slippage risk for any meaningful position
   // Round 42 (AutoResearch): also add thin zone ($50K-$200K) = mild cap at 7.0
@@ -703,6 +730,26 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
         });
       }
     }
+  }
+
+  // Round 98 (AutoResearch): Coordinated multi-source bearish convergence
+  // Three independent data sources all pointing bearish = high-confidence bear signal
+  // Unlike the Round 57 single-day dump, this checks structural bearish alignment
+  const sentScore98 = safeNum(rawData?.social?.sentiment_score ?? null);
+  const dexPressure98 = rawData?.dex?.pressure_signal;
+  const change7d98 = safeNum(rawData?.market?.price_change_pct_7d ?? null);
+  const redditSent98 = rawData?.reddit?.sentiment;
+  const multiBearishSignals =
+    (sentScore98 != null && sentScore98 < -0.4 ? 1 : 0) +
+    (dexPressure98 === 'sell_pressure' ? 1 : 0) +
+    (change7d98 != null && change7d98 < -20 ? 1 : 0) +
+    (redditSent98 === 'bearish' ? 1 : 0);
+  if (multiBearishSignals >= 3) {
+    breakers.push({
+      cap: 5.5,
+      reason: `Multi-source bearish convergence: ${multiBearishSignals}/4 independent signals bearish (social sentiment, DEX pressure, 7d price, Reddit) — high-confidence bear environment for this token`,
+      severity: 'warning',
+    });
   }
 
   // Applica il cap più restrittivo

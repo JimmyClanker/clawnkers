@@ -71,3 +71,58 @@ export function weightedAvg(items) {
   if (totalWeight === 0) return null;
   return valid.reduce((s, { value, weight }) => s + Number(value) * (Number(weight) / totalWeight), 0);
 }
+
+/**
+ * Round 95 (AutoResearch): Sigmoid normalization for smooth S-curve score mapping.
+ * Useful for converting raw metrics to scores where linear scaling creates hard cliffs.
+ *
+ * Returns a value in [0, 1]:
+ *   - At x == center: returns 0.5
+ *   - steepness controls how fast the curve transitions (higher = sharper transition)
+ *   - Use invert=true for metrics where lower is better
+ *
+ * @param {number} x - input value
+ * @param {number} center - the midpoint (where output = 0.5)
+ * @param {number} steepness - controls curve sharpness (default 1.0)
+ * @param {boolean} invert - if true, inverts the output (lower x = higher output)
+ * @returns {number} value in [0, 1]
+ */
+export function sigmoidNormalize(x, center, steepness = 1.0, invert = false) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0.5;
+  const sig = 1 / (1 + Math.exp(-steepness * (n - center) / (Math.abs(center) || 1)));
+  return invert ? 1 - sig : sig;
+}
+
+/**
+ * Round 700 (AutoResearch batch): Format a 1-10 score to a human-readable quality label.
+ * Useful for generating natural language score descriptions.
+ * @param {number} score - 1-10 score value
+ * @param {string} [dimension] - optional dimension name for context
+ * @returns {string} quality label
+ */
+export function scoreToLabel(score, dimension = '') {
+  const n = Number(score);
+  if (!Number.isFinite(n)) return 'unknown';
+  if (n >= 8.5) return 'exceptional';
+  if (n >= 7.0) return 'strong';
+  if (n >= 5.5) return 'moderate';
+  if (n >= 4.0) return 'weak';
+  if (n >= 2.5) return 'poor';
+  return 'critical';
+}
+
+/**
+ * Round 700 (AutoResearch batch): Compute a quick composite health score (0-100) from scores object.
+ * Useful for lightweight comparison without full scoring pipeline.
+ * @param {object} scores - calculateScores() output
+ * @returns {number} 0-100 health index
+ */
+export function quickHealthIndex(scores = {}) {
+  const dims = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health', 'distribution', 'risk'];
+  const values = dims.map((d) => Number(scores?.[d]?.score ?? 5)).filter(Number.isFinite);
+  if (values.length === 0) return 50;
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  // Normalize 1-10 → 0-100
+  return Math.round(((avg - 1) / 9) * 100);
+}

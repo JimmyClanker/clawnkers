@@ -36,6 +36,11 @@ const CATEGORY_ALIASES = {
   'derivatives': 'Derivatives',
   'perp dex': 'Derivatives',
   'perpetuals': 'Derivatives',
+  // Round 94 (AutoResearch): perpetual DEX aliases
+  'perpetual dex': 'Derivatives',
+  'perpetual exchange': 'Derivatives',
+  'hyperliquid': 'Derivatives',
+  'dydx': 'Derivatives',
   'options': 'Options',
   'structured products': 'Options',
   'nft': 'NFT',

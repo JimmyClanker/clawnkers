@@ -189,6 +189,28 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
     : momentumScore >= 25 ? 'bearish'
     : 'strongly_bearish';
 
+  // Round 700 (AutoResearch batch): Fear & Greed macro context adjustment
+  // When F&G is extreme (>80 greed or <20 fear), it signals macro regime that affects all token momentum
+  // This is a cross-asset signal — not project-specific, but contextualizes the momentum reading
+  const fearGreed = rawData.fear_greed ?? {};
+  const fgValue = safeNum(fearGreed.value ?? null);
+  let macroMomentumOverlay = 'neutral';
+  if (fgValue != null) {
+    if (fgValue >= 75) macroMomentumOverlay = 'extreme_greed';      // Risky — market overbought
+    else if (fgValue >= 60) macroMomentumOverlay = 'greed';         // Cautious optimism
+    else if (fgValue <= 20) macroMomentumOverlay = 'extreme_fear';  // Potential buy zone
+    else if (fgValue <= 40) macroMomentumOverlay = 'fear';          // Negative macro sentiment
+    else macroMomentumOverlay = 'neutral';
+  }
+
+  // Momentum score adjustment for macro context
+  // In extreme greed: discount positive momentum signals (overbought risk)
+  // In extreme fear: discount negative momentum signals (oversold opportunity)
+  let macroBiasAdj = 0;
+  if (macroMomentumOverlay === 'extreme_greed') macroBiasAdj = -5;   // Caution in euphoria
+  else if (macroMomentumOverlay === 'extreme_fear') macroBiasAdj = +5; // Opportunity in panic
+  const momentumScoreAdjusted = Math.max(0, Math.min(100, momentumScore + macroBiasAdj));
+
   return {
     market:     { direction: marketMomentum },
     onchain:    { direction: onchainMomentum },
@@ -197,6 +219,9 @@ export function calculateMomentum(rawData = {}, previousScanData = null) {
     tokenomics: { direction: tokenomicsMomentum },
     dex:        { direction: dexMomentum },
     overall:    { direction: overallMomentum },
+    macro_momentum_overlay: macroMomentumOverlay,
+    fear_greed_value: fgValue,
+    momentum_score_adjusted: momentumScoreAdjusted,
     price_vol_divergence: priceVolDivergence,
     momentum_alignment_score: momentumAlignmentScore,
     momentum_alignment_label: momentumAlignmentLabel,

@@ -371,6 +371,24 @@ export async function runPipeline({ projectName, exaService, mode, config, colle
   if (result && typeof result === 'object') {
     result.scan_duration_ms = Date.now() - _pipelineStart;
   }
+
+  // Round 700 (AutoResearch batch): Quick health index — 0-100 composite score for API consumers
+  // Lets agents quickly compare projects without parsing all 7 dimensions
+  if (result && scores) {
+    try {
+      const dims = ['market_strength', 'onchain_health', 'social_momentum', 'development', 'tokenomics_health', 'distribution', 'risk'];
+      const dimVals = dims.map((d) => Number(scores?.[d]?.score ?? 5)).filter(Number.isFinite);
+      if (dimVals.length > 0) {
+        const avg = dimVals.reduce((a, b) => a + b, 0) / dimVals.length;
+        result.health_index = Math.round(((avg - 1) / 9) * 100);
+        result.health_label = result.health_index >= 70 ? 'healthy'
+          : result.health_index >= 50 ? 'moderate'
+          : result.health_index >= 30 ? 'weak'
+          : 'critical';
+      }
+    } catch (_) { /* non-critical */ }
+  }
+
   return result;
 }
 

@@ -329,11 +329,26 @@ export function scoreReportQuality(rawData, scores, analysis) {
     }
   }
 
+  // Round 85 (AutoResearch): data_freshness_label — human-readable freshness tier
+  // Helps API consumers quickly understand if the report is based on current or stale data
+  const dataFreshnessLabel = freshness == null ? 'unknown'
+    : freshness >= 85 ? 'fresh'      // live or very recent data from collectors
+    : freshness >= 60 ? 'recent'     // mix of fresh + cached data
+    : freshness >= 35 ? 'stale'      // mostly cached, may be hours old
+    : 'very_stale';                  // many failed/old collectors
+
+  // Flag for API consumers: reports based on stale data should be treated with lower conviction
+  if (freshness != null && freshness < 35) {
+    issues.push(`Data freshness is very low (${freshness}/100) — most collectors returned cached or failed data. Verdict confidence reduced.`);
+    score = Math.max(0, score - 5);
+  }
+
   return {
     quality_score: Math.max(0, Math.min(100, score)),
     grade,
     issues,
     data_freshness_score: freshness,
+    data_freshness_label: dataFreshnessLabel,
     verdict_confidence: verdictConfidence,
     score_spread: scoreSpread,
     dimension_coverage_pct: dimCoveragePct,

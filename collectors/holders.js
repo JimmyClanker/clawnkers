@@ -43,10 +43,24 @@ export async function collectHolders(projectName, contractAddress = null) {
 
     if (data?.status !== '1' || !Array.isArray(data?.result)) {
       const msg = data?.message || data?.result || 'Etherscan error';
-      return { ...fallback, contract_address: contractAddress, error: String(msg) };
+      // Round 105 (AutoResearch): clarify "no data" vs API error
+      const isNoData = String(msg).toLowerCase().includes('no data') || String(msg).toLowerCase().includes('no record');
+      const errorDetail = isNoData
+        ? `No holder data available from Etherscan for ${contractAddress} — token may be on a different chain or not indexed`
+        : String(msg);
+      return { ...fallback, contract_address: contractAddress, error: errorDetail };
     }
 
     const holders = data.result;
+
+    // Round 105 (AutoResearch): if holders array is empty, surface better context
+    if (holders.length === 0) {
+      return {
+        ...fallback,
+        contract_address: contractAddress,
+        error: `Etherscan returned 0 holders for ${contractAddress} — token may be new, non-ERC20, or on a different chain`,
+      };
+    }
 
     // Total supply for concentration calculation
     let totalSupply = null;

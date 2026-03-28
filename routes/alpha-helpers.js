@@ -111,6 +111,35 @@ export async function verifyPayment(txHash) {
 export const FULL_TTL_MS = 60 * 60 * 1000;
 export const QUICK_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * Round 700 (AutoResearch batch): Adaptive TTL based on market volatility.
+ * High-volatility regime = shorter cache TTL (data goes stale faster)
+ * Stable market = longer cache TTL (fewer wasted API calls)
+ *
+ * @param {string} mode - 'full' | 'quick'
+ * @param {object|null} volatility - from assessVolatility() or cached report
+ * @param {object|null} scores - from calculateScores()
+ * @returns {number} TTL in milliseconds
+ */
+export function adaptiveTtlMs(mode = 'full', volatility = null, scores = null) {
+  const base = mode === 'quick' ? QUICK_TTL_MS : FULL_TTL_MS;
+
+  const regime = volatility?.regime ?? 'calm';
+  const overallScore = Number(scores?.overall?.score ?? 5);
+
+  // High-volatility tokens: cache expires faster (fresher data needed)
+  let multiplier = 1.0;
+  if (regime === 'extreme') multiplier = 0.25;       // 15min cache (extreme vol)
+  else if (regime === 'high') multiplier = 0.5;       // 30min cache (high vol)
+  else if (regime === 'elevated') multiplier = 0.75;  // 45min cache (elevated vol)
+  // calm = 1.0 = normal TTL
+
+  // Very high scores (potential breakout) or very low scores (potential collapse) = shorter TTL
+  if (overallScore >= 8.5 || overallScore <= 2.5) multiplier = Math.min(multiplier, 0.5);
+
+  return Math.round(base * multiplier);
+}
+
 export function ensureSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS alpha_reports (

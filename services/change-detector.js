@@ -85,6 +85,29 @@ export function detectChanges(db, projectName, currentData) {
     { metric: 'buy_sell_ratio', prev: safeNum(prevDex.buy_sell_ratio), curr: safeNum(currDex.buy_sell_ratio) },
   );
 
+  // Round 700 (AutoResearch batch): Track FDV/MCap ratio changes
+  // A rising FDV/MCap ratio means more supply is unlocking — dilution accelerating
+  const prevFdv = safeNum(prevMarket.fully_diluted_valuation ?? null);
+  const currFdv = safeNum(currMarket.fully_diluted_valuation ?? null);
+  const prevMcap = safeNum(prevMarket.market_cap ?? null);
+  const currMcap = safeNum(currMarket.market_cap ?? null);
+  if (prevFdv != null && prevMcap != null && prevMcap > 0 && currFdv != null && currMcap != null && currMcap > 0) {
+    const prevFdvRatio = prevFdv / prevMcap;
+    const currFdvRatio = currFdv / currMcap;
+    const fdvRatioPct = changePct(prevFdvRatio, currFdvRatio);
+    if (fdvRatioPct !== null && Math.abs(fdvRatioPct) >= 5) {
+      changes.push({
+        metric: 'fdv_mcap_ratio',
+        previous: parseFloat(prevFdvRatio.toFixed(2)),
+        current: parseFloat(currFdvRatio.toFixed(2)),
+        change_pct: Math.round(fdvRatioPct * 100) / 100,
+        direction: direction(fdvRatioPct),
+        significant: Math.abs(fdvRatioPct) >= 15, // 15% ratio change = significant dilution shift
+        note: currFdvRatio > prevFdvRatio ? 'FDV/MCap rising — unlock pressure increasing' : 'FDV/MCap falling — supply increasingly in circulation',
+      });
+    }
+  }
+
   // Round 382 (AutoResearch): Detect wash trading risk state changes
   const prevWashRisk = prevDex?.wash_trading_risk ?? null;
   const currWashRisk = currDex?.wash_trading_risk ?? null;

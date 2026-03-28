@@ -158,6 +158,11 @@ export function calculateConfidence(rawData = {}) {
   else if (reddit.upvote_weighted_sentiment != null && reddit.post_count > 0) redditConf = 80;
   else if (reddit.post_count > 0) redditConf = 50;
   else redditConf = 0;
+  // Round 70 (AutoResearch): avg_upvote_ratio quality bonus/penalty
+  if (redditConf > 0 && reddit.avg_upvote_ratio != null) {
+    if (reddit.avg_upvote_ratio >= 0.85) redditConf = Math.min(100, redditConf + 15); // high consensus
+    else if (reddit.avg_upvote_ratio < 0.5) redditConf = Math.max(0, redditConf - 10);  // controversial/spam
+  }
 
   // Round 382 (AutoResearch): article quality confidence boost — high quality sources = more reliable social signal
   // Only applies when social collector returned results with quality scoring
@@ -362,6 +367,13 @@ function scoreMarketStrength(market = {}) {
   else if (sparklineTrend.trend_quality === 'smooth_down') raw -= 0.35;
   else if (sparklineTrend.trend_quality === 'erratic') raw -= 0.15; // erratic = lower predictability
 
+  // Round 93 (AutoResearch): ATL breakout signal — sustained departure from ATL with uptrend
+  const atlDistancePct = safeNumber(market.atl_distance_pct ?? null, null);
+  if (atlDistancePct !== null && atlDistancePct > 200 && change7d != null && safeNumber(change7d) > 5) {
+    // >200% above ATL with positive 7d trend = clear ATL breakout, not just bounce
+    raw += 0.2;
+  }
+
   // Round 10: Price range position — where in ATL-ATH range is the price?
   const priceRangePos = market.price_range_position != null ? safeNumber(market.price_range_position) : null;
   if (priceRangePos !== null) {
@@ -392,6 +404,12 @@ function scoreMarketStrength(market = {}) {
       }
     }
   }
+
+  // Round 61 (AutoResearch): volume-to-mcap tiered efficiency bonus
+  // High vol/mcap indicates active speculation and price discovery — signals strong market conviction
+  // This supplements the existing `ratio * 20` formula with explicit high-tier bonuses
+  if (ratio > 0.5) raw += 0.25;        // Very high: institutional or viral trading activity
+  else if (ratio > 0.2) raw += 0.1;    // Active: above-average market participation
 
   // Round 34: twitter/telegram followers as social proof for market strength
   const twitterFollowers = safeNumber(market.twitter_followers ?? 0);
@@ -538,13 +556,14 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
   // (e.g. new protocols with 10000% TVL gain, or protocol exploit with -99% in 7d)
   const trend7d = Math.max(-200, Math.min(200, safeNumber(onchain.tvl_change_7d)));
   const trend30d = Math.max(-200, Math.min(200, safeNumber(onchain.tvl_change_30d)));
-  // Use fees_7d; fall back to fees_30d / 4 if only monthly data available
+  // Use fees_7d; fall back to fees_30d / 4.33 (avg weeks per month) if only monthly data available
+  // Round 62 (AutoResearch): use 4.33 divisor for accuracy; cap at $50M to prevent outlier distortion
   const fees = onchain.fees_7d != null
-    ? safeNumber(onchain.fees_7d)
-    : safeNumber(onchain.fees_30d) / 4;
+    ? Math.min(safeNumber(onchain.fees_7d), 50_000_000)
+    : Math.min(safeNumber(onchain.fees_30d) / 4.33, 50_000_000);
   const revenue = onchain.revenue_7d != null
-    ? safeNumber(onchain.revenue_7d)
-    : safeNumber(onchain.revenue_30d) / 4;
+    ? Math.min(safeNumber(onchain.revenue_7d), 50_000_000)
+    : Math.min(safeNumber(onchain.revenue_30d) / 4.33, 50_000_000);
 
   let raw = 4;
   // Round 149 (AutoResearch): Zero fees penalty for established DeFi protocols
@@ -652,6 +671,11 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
     else if (pos <= 0.1) raw -= 0.4;    // Near 90d low = capital flight signal
     else if (pos <= 0.25) raw -= 0.2;   // Lower quartile = cautionary
   }
+
+  // Round 97 (AutoResearch): raise_count bonus — multiple funding rounds = sustained institutional backing
+  const raiseCount = safeNumber(onchain.raise_count ?? 0);
+  if (raiseCount >= 3) raw += 0.2;        // 3+ rounds = validated by multiple investors over time
+  else if (raiseCount >= 2) raw += 0.1;   // 2 rounds = at least some institutional continuity
 
   // Round 57: Active addresses as a usage signal
   const activeAddresses7d = safeNumber(onchain.active_addresses_7d ?? onchain.unique_users_7d ?? 0);
@@ -1026,6 +1050,16 @@ function scoreDevelopment(github = {}) {
     repoHealthTier === 'excellent' ? 8 : repoHealthTier === 'good' ? 5 : repoHealthTier === 'moderate' ? 2 : 0, // repo health (0-8)
     languageCount >= 4 ? 4 : languageCount >= 2 ? 2 : 0, // ecosystem breadth (0-4)
     github.license ? 3 : 0,                            // license (0-3)
+    // Round 700 (AutoResearch batch): open PR count as a dev health signal (0-5)
+    // 1-20 open PRs = healthy backlog; 0 = dormant; 100+ = overwhelmed/abandoned
+    (() => {
+      const openPRs = safeNumber(github.open_prs ?? null, null);
+      if (openPRs == null) return 2; // unknown = neutral
+      if (openPRs >= 1 && openPRs <= 30) return 5;  // healthy PR flow
+      if (openPRs > 30 && openPRs <= 80) return 3;  // many open, backlog growing
+      if (openPRs > 80) return 0;                    // overwhelmed
+      return 0;                                       // 0 open PRs = nothing in flight
+    })(),
     // Round 233 (AutoResearch nightly): issue_health_score supplement (0-7)
     github.issue_health_score != null ? Math.round(github.issue_health_score / 100 * 7) : 3,
   ];
@@ -1082,6 +1116,14 @@ function scoreTokenomicsRisk(tokenomics = {}) {
     raw += Math.min(Math.abs(inflation) / 20, 0.5); // -10% inflation → +0.5 max bonus
   }
 
+  // Round 700 (AutoResearch batch): Fee-capture supplemented by tokenomics scoring
+  // Protocols that direct revenue back to token holders (buybacks, burns, staking rewards)
+  // have better tokenomics alignment than those with inflation-only models
+  const revenueModel = tokenomics.revenue_model;
+  if (revenueModel === 'buyback_burn') raw += 0.5;       // Token burns directly reduce supply
+  else if (revenueModel === 'staking_rewards') raw += 0.3; // Locks tokens, reduces sell pressure
+  else if (revenueModel === 'inflationary_only') raw -= 0.3; // Pure inflation = value dilution
+
   // Round 383 (AutoResearch): Unlock risk label — provides a pre-computed categorical risk judgment
   // that aggregates cliff schedules, team allocations, and vesting into a single risk tier
   const unlockRiskLabel = tokenomics.unlock_risk_label;
@@ -1096,6 +1138,17 @@ function scoreTokenomicsRisk(tokenomics = {}) {
   if (dilutionRisk === 'high') raw -= 1.0;
   else if (dilutionRisk === 'medium') raw -= 0.4;
   // 'low' → no penalty (already captured in pctCirculating bonus)
+
+  // Round 87 (AutoResearch): raised/mcap ratio penalty
+  // Projects that raised heavily relative to mcap have large investor unlock overhang
+  // even when pct_circulating looks OK (VC allocations count as "circulating")
+  const totalRaisedUsd = safeNumber(tokenomics.total_raised_usd ?? null, null);
+  const mcapForTokenomics = safeNumber(tokenomics.market_cap ?? null, null);
+  if (totalRaisedUsd !== null && mcapForTokenomics !== null && mcapForTokenomics > 0) {
+    const raisedToMcapRatio = totalRaisedUsd / mcapForTokenomics;
+    if (raisedToMcapRatio > 0.5) raw -= 0.5;       // Raised >50% of current mcap — heavy investor pressure
+    else if (raisedToMcapRatio > 0.3) raw -= 0.25; // Raised 30-50% — notable investor overhang
+  }
 
   // Round 41 (AutoResearch): tokenomics_risk_score — normalized 0-100 risk metric
   // 100 = safe tokenomics, 0 = extreme risk (inverse of typical "risk" labeling)
@@ -1207,7 +1260,7 @@ function scoreDistribution(tokenomics = {}, market = {}) {
  * Composite risk score (1–10 where 10 = LOW risk / safest).
  * Components: volatility, liquidity depth, concentration risk, age risk.
  */
-function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, holderData = {}) {
+function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, holderData = {}, rawData = {}) {
   // Round 134 (AutoResearch): Empty risk data guard
   // When all risk-relevant fields are absent, return neutral 5.0 instead of optimistic 6.0
   const hasRiskData = (
@@ -1328,10 +1381,20 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
     else if (inflationRateForRisk < 0) raw += 0.2;     // Deflationary = lower supply risk
   }
 
-  // Round 383 (AutoResearch): Contract honeypot = absolute risk ceiling (should cap score)
-  // If honeypot detected, risk score should be minimal regardless of other factors
-  // Note: we check via dexData field since scoreRisk doesn't have direct rawData access
-  // Honeypot/scam signals come through the circuit breaker and red flag system primarily
+  // Round 64 (AutoResearch): High sell tax penalty — friction on exits increases holder risk
+  // Note: contract data accessed via tokenomics param (tokenomics.sell_tax sourced from contract collector)
+  const sellTax = safeNumber(tokenomics.sell_tax ?? dexData.sell_tax ?? null, null);
+  if (sellTax !== null && Number.isFinite(sellTax)) {
+    if (sellTax > 10) raw -= 0.8;       // >10% sell tax = honeypot-adjacent / extreme friction
+    else if (sellTax > 5) raw -= 0.4;   // 5-10% = significant exit friction
+    else if (sellTax > 2) raw -= 0.15;  // 2-5% = notable but manageable
+  }
+
+  // Round 78 (AutoResearch): liquidity_concentration_risk penalty from DexScreener
+  // Single-pair dominance = fragile liquidity — one pool rug = near-total liquidity loss
+  const liqConcentrationRisk = dexData.liquidity_concentration_risk;
+  if (liqConcentrationRisk === 'high') raw -= 0.5;       // >80% in single pair = very fragile
+  else if (liqConcentrationRisk === 'elevated') raw -= 0.25; // >60% = elevated fragility
 
   // Round 12 (AutoResearch batch): DEX liquidity category bonus/penalty
   const liquidityCategory = dexData.liquidity_category;
@@ -1358,6 +1421,18 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
   // Small market caps amplify volatility; a $2M mcap with 50% daily swings is existential
   if (mcap > 0 && mcap < 5_000_000 && volatility > 20) {
     raw -= 0.8; // Additional penalty: micro-cap + high volatility = extreme risk
+  }
+
+  // Round 700 (AutoResearch batch): Beta coefficient risk — beta>2 = highly correlated with BTC/ETH swings
+  // High beta tokens move faster than the market, amplifying both gains and losses
+  // coinpaprika provides beta_value; treat null as unknown (no adjustment)
+  const betaValue = safeNumber(rawData?.coinpaprika?.beta_value ?? market.beta_value ?? null, null);
+  if (betaValue != null) {
+    if (betaValue > 3) raw -= 0.8;        // Extremely high beta — violent swings in market corrections
+    else if (betaValue > 2) raw -= 0.5;   // High beta — 2x market amplification
+    else if (betaValue > 1.5) raw -= 0.2; // Elevated beta — somewhat more volatile than market
+    else if (betaValue < 0.8 && betaValue > 0) raw += 0.15; // Low beta — relatively stable vs market
+    else if (betaValue <= 0) raw -= 0.3;  // Negative beta or zero — uncorrelated/inverse, uncertain risk
   }
 
   // Round R28: Volume spike risk — abnormal volume relative to 7d avg = manipulation signal
@@ -1599,8 +1674,22 @@ export function calculateScores(data) {
     if (xKolSentiment === 'bullish' && xSentScore > 0.3) kolBonus = 0.15;
     else if (xKolSentiment === 'bearish' && xSentScore < -0.3) kolBonus = -0.15;
 
-    social_momentum.score = clampScore(social_momentum.score + xSentAdj + kolBonus);
-    social_momentum.reasoning += ` | X/Twitter: sentiment ${xSentScore.toFixed(2)}, volume ${xVolume ?? 'n/a'}, KOL ${xKolSentiment ?? 'n/a'} (adj ${(xSentAdj + kolBonus).toFixed(2)}).`;
+    // Round 700 (AutoResearch batch): x_social engagement_rate bonus
+    // High engagement rate (replies, RT ratio vs impressions) = genuine community interest vs passive scrolling
+    let engagementBonus = 0;
+    const xEngagementRate = safeNum(xSocial.engagement_rate ?? null);
+    if (xEngagementRate != null) {
+      if (xEngagementRate >= 5) engagementBonus = 0.2;         // Viral engagement (5%+)
+      else if (xEngagementRate >= 2) engagementBonus = 0.1;    // High engagement (2-5%)
+      else if (xEngagementRate < 0.5) engagementBonus = -0.05; // Very low = bot-like audience
+    }
+
+    // Viral tweet bonus — single viral post can dramatically shift sentiment
+    const hasViralTweet = xSocial.has_viral_tweet === true;
+    const viralBonus = (hasViralTweet && xSentScore > 0.2) ? 0.15 : 0;
+
+    social_momentum.score = clampScore(social_momentum.score + xSentAdj + kolBonus + engagementBonus + viralBonus);
+    social_momentum.reasoning += ` | X/Twitter: sentiment ${xSentScore.toFixed(2)}, volume ${xVolume ?? 'n/a'}, KOL ${xKolSentiment ?? 'n/a'}, engagement ${xEngagementRate != null ? xEngagementRate.toFixed(1) + '%' : 'n/a'}${hasViralTweet ? ' [viral]' : ''} (adj ${(xSentAdj + kolBonus + engagementBonus + viralBonus).toFixed(2)}).`;
   }
 
   // Round 11: Risk as 7th dimension
@@ -1609,7 +1698,8 @@ export function calculateScores(data) {
     safeCollector(data?.onchain),
     safeCollector(data?.tokenomics),
     data?.dex ?? data?.dexData ?? {},
-    data?.holders ?? data?.holderData ?? {}
+    data?.holders ?? data?.holderData ?? {},
+    data  // Round 700: pass full rawData for beta_value and future cross-collector risk signals
   );
 
   const completeness = collectorCompleteness(data);
@@ -1684,7 +1774,11 @@ export function calculateScores(data) {
   if (overallConf < 60) {
     const regressionStrength = (60 - overallConf) / 60; // 0 at 60% conf, 1 at 0% conf
     const REGRESSION_NEUTRAL = 5.5; // intentionally slightly above midpoint (1-10 range)
-    overallValue = overallValue + (REGRESSION_NEUTRAL - overallValue) * regressionStrength * 0.4;
+    // Round 92 (AutoResearch): only apply if regressionStrength is meaningfully positive
+    // At conf=60 exactly, strength=0 so skip entirely (avoids floating-point no-op)
+    if (regressionStrength > 0.001) {
+      overallValue = overallValue + (REGRESSION_NEUTRAL - overallValue) * regressionStrength * 0.4;
+    }
   }
 
   const weightStr = Object.entries(W)

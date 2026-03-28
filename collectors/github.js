@@ -63,6 +63,13 @@ async function fetchJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2, hea
         signal: controller.signal,
       });
 
+      // Round 110 (AutoResearch): log rate limit remaining from response headers for observability
+      const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+      const rateLimitLimit = response.headers.get('x-ratelimit-limit');
+      if (rateLimitRemaining !== null && Number(rateLimitRemaining) < 100) {
+        console.warn(`[github:${label}] Rate limit running low: ${rateLimitRemaining}/${rateLimitLimit} remaining`);
+      }
+
       // Handle GitHub rate limiting (403 secondary limit or 429)
       if ((response.status === 429 || response.status === 403) && attempt < retries) {
         const retryAfter = Number(response.headers.get('retry-after') || 0);
@@ -235,9 +242,13 @@ export async function collectGithub(projectName) {
     // Heuristic: CI workflows mentioning "test", "jest", "mocha", "vitest" = has test suite
     const hasTestSuite = (() => {
       if (!Array.isArray(workflowsInfo.value?.data)) return null;
+      // Round 75 (AutoResearch): broader test detection — check both workflow name AND filename
+      // Some repos name workflows "CI" or "Build" but internally run jest/hardhat test
       return workflowsInfo.value.data.some((w) => {
         const name = (w?.name || '').toLowerCase();
-        return /test|jest|mocha|vitest|pytest|coverage|spec/.test(name);
+        const path = (w?.path || '').toLowerCase();
+        const testPattern = /test|jest|mocha|vitest|pytest|coverage|spec|hardhat|foundry|forge/;
+        return testPattern.test(name) || testPattern.test(path);
       });
     })();
 

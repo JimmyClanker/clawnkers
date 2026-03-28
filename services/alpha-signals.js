@@ -1046,6 +1046,24 @@ export function detectAlphaSignals(rawData = {}, scores = {}) {
   const deflationarySig = detectDeflationaryTokenomics(rawData);
   if (deflationarySig) signals.push(deflationarySig);
 
+  // Round 66 (AutoResearch): Revenue vs market cap attractiveness — P/E-equivalent DeFi valuation
+  const revVsMcapSig = detectRevenueVsMcapAttractiveness(rawData);
+  if (revVsMcapSig) signals.push(revVsMcapSig);
+
+  // Round 81 (AutoResearch): Sustained high volume-to-mcap signal
+  const sustainedVolSig = detectSustainedVolumeAlpha(rawData);
+  if (sustainedVolSig) signals.push(sustainedVolSig);
+
+  // Round 82 (AutoResearch): Near-full distribution scarcity signal
+  const nearFullDistSig = detectNearFullDistribution(rawData);
+  if (nearFullDistSig) signals.push(nearFullDistSig);
+
+  // Round 700 (AutoResearch batch): fee switch and cross-chain expansion signals
+  const feeSwitchSig = detectFeeSwitch(rawData);
+  if (feeSwitchSig) signals.push(feeSwitchSig);
+  const crossChainSig = detectCrossChainExpansion(rawData);
+  if (crossChainSig) signals.push(crossChainSig);
+
   // Deduplicate signals by signal key (keep first occurrence)
   const seen = new Set();
   return signals.filter((s) => {
@@ -1505,6 +1523,146 @@ export function detectDeflationaryTokenomics(rawData = {}) {
       signal: 'deflationary_tokenomics',
       strength: inflationRate <= -3 && pctCirculating >= 70 ? 'strong' : 'moderate',
       detail: `Deflationary token: ${inflationRate.toFixed(1)}%/yr inflation with ${pctCirculating.toFixed(0)}% circulating — net supply contraction creates structural scarcity premium.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Round 66 (AutoResearch): Revenue vs market cap attractiveness signal.
+ * When annualized protocol revenue > 5% of market cap, the token is attractively priced
+ * on a DeFi P/E-equivalent basis (the market is pricing it at <20x annualized revenue).
+ * Strong: annualized revenue > 10% of mcap (price = 10x revenue or less).
+ */
+export function detectRevenueVsMcapAttractiveness(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const market = rawData.market ?? {};
+
+  const revenue7d = Number(onchain.revenue_7d ?? NaN);
+  const mcap = Number(market.market_cap ?? NaN);
+
+  if (!Number.isFinite(revenue7d) || revenue7d <= 0) return null;
+  if (!Number.isFinite(mcap) || mcap <= 0) return null;
+
+  const annualizedRevenue = revenue7d * 52;
+  const revenueYield = annualizedRevenue / mcap;
+
+  if (revenueYield >= 0.10) {
+    return {
+      signal: 'revenue_vs_mcap_attractive',
+      strength: 'strong',
+      detail: `P/Revenue ratio ${(1 / revenueYield).toFixed(1)}x — annualized revenue $${(annualizedRevenue / 1e6).toFixed(1)}M vs $${(mcap / 1e6).toFixed(0)}M mcap (${(revenueYield * 100).toFixed(1)}% yield). Deeply undervalued on revenue basis.`,
+    };
+  } else if (revenueYield >= 0.05) {
+    return {
+      signal: 'revenue_vs_mcap_attractive',
+      strength: 'moderate',
+      detail: `P/Revenue ratio ${(1 / revenueYield).toFixed(1)}x — annualized revenue $${(annualizedRevenue / 1e6).toFixed(1)}M vs $${(mcap / 1e6).toFixed(0)}M mcap (${(revenueYield * 100).toFixed(1)}% yield). Attractive relative to DeFi peers.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Round 81 (AutoResearch): Sustained high volume-to-mcap signal.
+ * Filters single-day volume spikes by checking that the token also shows
+ * meaningful 7d price movement (confirming organic trading interest).
+ */
+export function detectSustainedVolumeAlpha(rawData = {}) {
+  const market = rawData.market ?? {};
+  const vol = Number(market.total_volume ?? NaN);
+  const mcap = Number(market.market_cap ?? NaN);
+  const change7d = Number(market.price_change_pct_7d ?? NaN);
+  const volSpikeFlag = market.volume_spike_flag;
+
+  if (!Number.isFinite(vol) || !Number.isFinite(mcap) || mcap <= 0) return null;
+  const ratio = vol / mcap;
+
+  // Require meaningful 7d activity AND volume ratio — filters single-day pumps
+  if (ratio >= 0.15 && Number.isFinite(change7d) && Math.abs(change7d) > 5 && volSpikeFlag !== 'extreme_spike') {
+    return {
+      signal: 'sustained_high_volume_to_mcap',
+      strength: ratio >= 0.3 ? 'strong' : 'moderate',
+      detail: `Vol/MCap ratio ${ratio.toFixed(2)} with ${change7d > 0 ? '+' : ''}${change7d.toFixed(1)}% 7d price move — sustained elevated trading interest, not a one-day spike.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Round 82 (AutoResearch): Near-full distribution signal.
+ * When a token is approaching full circulation (>85%) with low inflation,
+ * supply scarcity becomes a structural tailwind.
+ */
+export function detectNearFullDistribution(rawData = {}) {
+  const tokenomics = rawData.tokenomics ?? {};
+  const pctCirculating = Number(tokenomics.pct_circulating ?? NaN);
+  const inflationRate = Number(tokenomics.inflation_rate ?? NaN);
+
+  if (!Number.isFinite(pctCirculating) || pctCirculating < 85) return null;
+  // Require low or negative inflation to confirm scarcity signal
+  if (Number.isFinite(inflationRate) && inflationRate > 5) return null; // high inflation cancels out
+
+  return {
+    signal: 'near_full_distribution',
+    strength: pctCirculating >= 95 && (!Number.isFinite(inflationRate) || inflationRate <= 0) ? 'strong' : 'moderate',
+    detail: `${pctCirculating.toFixed(0)}% of supply is circulating${Number.isFinite(inflationRate) ? ` with ${inflationRate.toFixed(1)}%/yr inflation` : ''} — minimal future dilution, supply scarcity is a structural tailwind.`,
+  };
+}
+
+// ─── Round 700 (AutoResearch batch): New alpha signal detectors ───────────────
+
+/**
+ * R700-A: Protocol fee switch signal — when a protocol activates token buybacks
+ * or redirects fees to token holders, it creates a strong fundamental catalyst.
+ */
+export function detectFeeSwitch(rawData = {}) {
+  const onchain = rawData.onchain ?? {};
+  const social = rawData.social ?? {};
+  const narratives = Array.isArray(social.key_narratives) ? social.key_narratives : [];
+  const narrativesStr = narratives.join(' ').toLowerCase();
+  const revenueToFeesRatio = Number(onchain.revenue_to_fees_ratio ?? NaN);
+
+  // Revenue-to-fees ratio approaching 1.0 = near-full fee capture = approaching fee switch
+  const highCapture = Number.isFinite(revenueToFeesRatio) && revenueToFeesRatio >= 0.7;
+  const feeSwitchMention = /fee switch|buyback|revenue distribution|protocol revenue sharing|staker reward/.test(narrativesStr);
+
+  if (highCapture && feeSwitchMention) {
+    return {
+      signal: 'fee_switch_catalyst',
+      strength: 'strong',
+      detail: `Fee capture ratio ${(revenueToFeesRatio * 100).toFixed(0)}% + "fee switch" narrative in social — strong catalyst: protocol revenue increasingly flowing to token holders.`,
+    };
+  }
+  if (feeSwitchMention && Number.isFinite(onchain.fees_7d) && onchain.fees_7d > 0) {
+    return {
+      signal: 'fee_switch_catalyst',
+      strength: 'moderate',
+      detail: `"Fee switch / buyback" narrative active in social with $${(onchain.fees_7d / 1e3).toFixed(0)}K weekly protocol fees — fee redistribution catalyst materializing.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * R700-B: Cross-chain expansion signal — when a protocol rapidly expands to new chains,
+ * it signals TAM expansion and often drives a new wave of liquidity and users.
+ */
+export function detectCrossChainExpansion(rawData = {}) {
+  const ecosystem = rawData.ecosystem ?? {};
+  const dex = rawData.dex ?? {};
+  const chainCount = Number(ecosystem.chain_count ?? NaN);
+  const dexChains = Array.isArray(dex.dex_chains) ? dex.dex_chains.length : 0;
+  const tvl7d = Number((rawData.onchain ?? {}).tvl_change_7d ?? NaN);
+
+  const effectiveChains = Math.max(chainCount || 0, dexChains);
+  if (effectiveChains >= 5) {
+    const strength = effectiveChains >= 10 ? 'strong' : 'moderate';
+    const tvlBonus = Number.isFinite(tvl7d) && tvl7d > 10 ? ` with +${tvl7d.toFixed(0)}% TVL growth` : '';
+    return {
+      signal: 'cross_chain_expansion',
+      strength,
+      detail: `Protocol deployed on ${effectiveChains} chains${tvlBonus} — multi-chain presence dramatically expands addressable liquidity and user base. Network effect compounding.`,
     };
   }
   return null;

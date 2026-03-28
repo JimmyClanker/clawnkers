@@ -110,6 +110,20 @@ const SECTOR_DEFINITIONS = {
     weights: { market: 0.16, onchain: 0.18, social: 0.14, development: 0.22, tokenomics: 0.14, distribution: 0.10, risk: 0.06 },
     description: 'DePIN — hardware adoption rate and real network revenue are key. Dev velocity and token economics matter for node incentives.',
   },
+  // Round 700 (AutoResearch batch): Agent Commerce sector — new 2026 category
+  AgentCommerce: {
+    keywords: ['agent commerce', 'x402', 'acp protocol', 'agent-to-agent', 'mcp payment', 'machine payment', 'autonomous payment', 'agent economy', 'agent marketplace'],
+    keyMetrics: ['fees_7d', 'development', 'active_addresses_7d', 'social_mentions'],
+    weights: { market: 0.14, onchain: 0.20, social: 0.16, development: 0.26, tokenomics: 0.12, distribution: 0.08, risk: 0.04 },
+    description: 'Agent Commerce — protocol adoption velocity and developer tooling are primary. Fee generation from machine-to-machine payments is the key fundamental metric.',
+  },
+  // Round 700 (AutoResearch batch): Bitcoin DeFi (BTCfi) sector
+  BTCfi: {
+    keywords: ['bitcoin defi', 'btcfi', 'bitcoin l2', 'bitcoin staking', 'bitcoin yield', 'babylon', 'ordinals defi', 'bitcoin liquidity', 'wrapped btc protocol'],
+    keyMetrics: ['tvl', 'fees_7d', 'active_addresses_7d', 'market_cap'],
+    weights: { market: 0.18, onchain: 0.25, social: 0.12, development: 0.18, tokenomics: 0.13, distribution: 0.10, risk: 0.04 },
+    description: 'BTCfi — BTC TVL growth rate and security model are primary. Unlike EVM DeFi, smart contract simplicity and Bitcoin native custody are key differentiators.',
+  },
 };
 
 /**

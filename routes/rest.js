@@ -612,5 +612,90 @@ export function createRestRouter({ config, exaService, signalsService }) {
     res.json({ coins: [], pairs: [] });
   });
 
+  // ── Round 700 (AutoResearch batch): Score leaderboard — top scanned projects by overall score
+  // Useful for agents wanting to surface the best-performing projects from scan history
+  router.get('/api/leaderboard', (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const minScore = Number(req.query.min_score) || 0;
+    const maxAge = req.query.max_age_hours ? Number(req.query.max_age_hours) : 72;
+    try {
+      const db = signalsService.db;
+      const rows = db.prepare(`
+        SELECT
+          project_name,
+          MAX(scanned_at) as last_scanned,
+          scores_json,
+          COUNT(*) as scan_count
+        FROM scan_history
+        WHERE datetime(scanned_at) > datetime('now', '-${Math.round(maxAge)} hours')
+        GROUP BY project_name
+        HAVING scores_json IS NOT NULL
+        ORDER BY json_extract(scores_json, '$.overall.score') DESC
+        LIMIT ?
+      `).all(limit);
+
+      const leaderboard = rows.map((row, i) => {
+        let scores;
+        try { scores = JSON.parse(row.scores_json); } catch { scores = null; }
+        return {
+          rank: i + 1,
+          project: row.project_name,
+          overall_score: scores?.overall?.score ?? null,
+          verdict: scores?.overall?.verdict ?? null,
+          last_scanned: row.last_scanned,
+          scan_count: row.scan_count,
+        };
+      }).filter((r) => r.overall_score != null && r.overall_score >= minScore);
+
+      return res.json({
+        leaderboard,
+        count: leaderboard.length,
+        max_age_hours: maxAge,
+        min_score: minScore,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[leaderboard]', err.message);
+      return res.status(500).json({ error: 'Failed to retrieve leaderboard' });
+    }
+  });
+
+  // ── Round 700 (AutoResearch batch): Scan history endpoint for a single project
+  // Lets frontend and API consumers see how scores evolved over time
+  router.get('/api/history/:project', (req, res) => {
+    const project = (req.params.project || '').trim().toLowerCase();
+    if (!project) return res.status(400).json({ error: 'Missing project param' });
+    const limit = Math.min(Number(req.query.limit) || 10, 50);
+    try {
+      const db = signalsService.db;
+      const rows = db.prepare(`
+        SELECT scanned_at, scores_json
+        FROM scan_history
+        WHERE LOWER(project_name) = ?
+        ORDER BY scanned_at DESC
+        LIMIT ?
+      `).all(project, limit);
+
+      const history = rows.map((row) => {
+        let scores;
+        try { scores = JSON.parse(row.scores_json); } catch { scores = null; }
+        return {
+          scanned_at: row.scanned_at,
+          overall_score: scores?.overall?.score ?? null,
+          verdict: scores?.overall?.verdict ?? null,
+          market: scores?.market_strength?.score ?? null,
+          onchain: scores?.onchain_health?.score ?? null,
+          social: scores?.social_momentum?.score ?? null,
+          development: scores?.development?.score ?? null,
+        };
+      });
+
+      return res.json({ project, history, timestamp: new Date().toISOString() });
+    } catch (err) {
+      console.error('[history]', err.message);
+      return res.status(500).json({ error: 'Failed to retrieve project history' });
+    }
+  });
+
   return router;
 }

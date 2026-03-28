@@ -90,19 +90,23 @@ function pluckInflation(metricsData) {
 }
 
 // Round 17: Extract vesting/launch date from Messari profile for unlock schedule estimate
-function pluckVestingInfo(profileData) {
+// Round 108 (AutoResearch): better fallback when Messari doesn't have launch_date
+function pluckVestingInfo(profileData, marketData = null) {
   const economics = profileData?.data?.profile?.economics;
-  if (!economics) return null;
-
+  
   const launchDate = economics?.consensus?.launch_date || economics?.launch_date || null;
   const vestingSchedule = economics?.token?.token_sale?.vesting_schedule || null;
   const teamAllocationPct = economics?.token?.token_allocation?.team_allocation_pct ||
     economics?.token?.sale_allocation?.team_pct || null;
 
-  if (!launchDate && !vestingSchedule && !teamAllocationPct) return null;
+  // Round 108 (AutoResearch): fallback launch date to CoinGecko genesis_date when Messari lacks data
+  const effectiveLaunchDate = launchDate || marketData?.genesis_date || null;
+
+  if (!effectiveLaunchDate && !vestingSchedule && !teamAllocationPct) return null;
 
   return {
-    launch_date: launchDate,
+    launch_date: effectiveLaunchDate,
+    launch_date_source: launchDate ? 'messari' : (effectiveLaunchDate ? 'coingecko_genesis' : null),
     vesting_schedule_summary: vestingSchedule || null,
     team_allocation_pct: teamAllocationPct,
   };
@@ -147,7 +151,7 @@ export async function collectTokenomics(projectName, coinGeckoId, marketData = n
     const profileData = profileResult.status === 'fulfilled' ? profileResult.value?.data : null;
     const metricsData = metricsResult.status === 'fulfilled' ? metricsResult.value?.data : null;
 
-    const vestingInfo = pluckVestingInfo(profileData);
+    const vestingInfo = pluckVestingInfo(profileData, marketData);
 
     const inflationFromMessari = pluckInflation(metricsData);
     // Round 53: fall back to market-based inflation estimate if Messari doesn't have it

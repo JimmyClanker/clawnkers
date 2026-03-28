@@ -108,6 +108,19 @@ function detectDivergences(scores) {
     }
   }
 
+  // Round 71 (AutoResearch): High dev + very low social = underexposed builder
+  // Strong builders with no social presence = potential undiscovered alpha
+  if (s.development !== null && s.social_momentum !== null) {
+    if (s.development >= 7 && s.social_momentum <= 3) {
+      divergences.push({
+        type: 'underexposed_builder',
+        severity: 'info',
+        dimensions: ['development', 'social_momentum'],
+        detail: `Strong development activity (${s.development}/10) but very low social momentum (${s.social_momentum}/10) — team is building quietly without marketing, potential undiscovered alpha or pre-launch phase.`,
+      });
+    }
+  }
+
   return divergences;
 }
 
@@ -204,6 +217,20 @@ function detectConvergences(scores) {
       type: 'mostly_strong',
       detail: `${highCount}/${values.length} dimensions score 6+/10 — broad strength with some gaps.`,
       action: 'Investigate weak dimensions before sizing up.',
+    });
+  }
+
+  // Round 72 (AutoResearch): TVL growth + market momentum aligned convergence
+  // When both onchain_health AND market_strength are both strong, the signal is highly reliable
+  const onchainScore = safeScore(scores?.onchain_health);
+  const marketScore = safeScore(scores?.market_strength);
+  const devScore = safeScore(scores?.development);
+  if (onchainScore !== null && marketScore !== null && onchainScore >= 6.5 && marketScore >= 6.5) {
+    const thirdSignal = devScore != null && devScore >= 6 ? ` with strong development (${devScore}/10)` : '';
+    convergences.push({
+      type: 'tvl_growth_market_aligned',
+      detail: `Strong onchain health (${onchainScore}/10) and market strength (${marketScore}/10) are aligned${thirdSignal} — fundamental + market convergence is a high-confidence signal.`,
+      action: 'Alignment of on-chain TVL/fees with market price action = reliable BUY setup.',
     });
   }
 

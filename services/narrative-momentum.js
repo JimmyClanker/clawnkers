@@ -52,6 +52,11 @@ const ALL_NARRATIVE_CLUSTERS = {
   'base_ecosystem': ['base ecosystem', 'coinbase layer2', 'base defi', 'base chain', 'base season'],
   'hyper_liquid': ['hyperliquid', 'hlp vault', 'hype token', 'perps dex', 'on-chain perps', 'decentralized derivatives'],
   'rwa_tokenization': ['tokenized treasury', 'blackrock onchain', 'franklin templeton', 'tokenized mmf', 'on-chain money market'],
+  // Round 84 (AutoResearch): 2026 Q2 new narrative clusters
+  'stablecoin_regulation': ['genius act', 'stable act', 'stablecoin bill', 'stablecoin regulation', 'stablecoin framework', 'regulated stablecoin', 'usdc compliance'],
+  'bitcoin_etf_flows': ['bitcoin etf inflow', 'bitcoin etf outflow', 'etf flows', 'btc etf', 'spot bitcoin etf', 'etf demand'],
+  'tokenized_credit': ['private credit', 'tokenized credit', 'real credit token', 'on-chain lending fund', 'structured credit token', 'credit protocol'],
+  'ai_compute_marketplaces': ['gpu marketplace', 'compute marketplace', 'ai compute token', 'decentralized gpu', 'render network', 'akash compute', 'io.net'],
 };
 
 export function detectNarrativeMomentum(rawData = {}) {

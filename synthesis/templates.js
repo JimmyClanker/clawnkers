@@ -237,6 +237,38 @@ function extractKeyMetrics(rawData, scores) {
       if (d < 365) return `${Math.round(d / 30)}mo`;
       return `${(d / 365).toFixed(1)}yr`;
     })(),
+    // Round 700 (AutoResearch batch): annualized fee yield as % of TVL — capital efficiency signal
+    fee_to_tvl_annualized: rawData?.onchain?.fee_to_tvl_annualized ?? null,
+    fee_to_tvl_annualized_fmt: (() => {
+      const v = rawData?.onchain?.fee_to_tvl_annualized;
+      if (v == null) return 'n/a';
+      if (v >= 20) return `${v.toFixed(1)}%/yr (exceptional fee yield)`;
+      if (v >= 5) return `${v.toFixed(1)}%/yr (strong)`;
+      if (v >= 1) return `${v.toFixed(2)}%/yr (moderate)`;
+      return `${v.toFixed(3)}%/yr (low)`;
+    })(),
+    // Protocol beta value from CoinPaprika — market sensitivity metric
+    beta_value: rawData?.coinpaprika?.beta_value ?? null,
+    beta_fmt: (() => {
+      const b = rawData?.coinpaprika?.beta_value;
+      if (b == null) return 'n/a';
+      if (b > 2) return `${b.toFixed(2)} (high market amplification)`;
+      if (b > 1) return `${b.toFixed(2)} (above market)`;
+      if (b > 0) return `${b.toFixed(2)} (below market)`;
+      return `${b.toFixed(2)} (inverse/uncorrelated)`;
+    })(),
+    // FDV to MCap ratio formatted for display
+    fdv_mcap_ratio_fmt: (() => {
+      const fdvV = Number(rawData?.market?.fully_diluted_valuation ?? 0);
+      const mcapV = Number(rawData?.market?.market_cap ?? 0);
+      if (fdvV <= 0 || mcapV <= 0) return 'n/a';
+      const ratio = fdvV / mcapV;
+      if (ratio <= 1.05) return `${ratio.toFixed(2)}x (fully diluted)`;
+      if (ratio <= 2) return `${ratio.toFixed(2)}x (low overhang)`;
+      if (ratio <= 5) return `${ratio.toFixed(2)}x (moderate overhang)`;
+      if (ratio <= 10) return `${ratio.toFixed(2)}x (high overhang ⚠️)`;
+      return `${ratio.toFixed(1)}x (extreme overhang 🚨)`;
+    })(),
   };
 }
 
