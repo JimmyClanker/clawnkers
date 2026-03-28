@@ -164,12 +164,15 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 237b (AutoResearch nightly): No GitHub + large market cap — major red flag for tech projects
   // A token with >$50M mcap and no verifiable GitHub = either not open-source (centralized risk) or ghost project
+  // FIX (28 Mar 2026): Many top protocols (Hyperliquid, etc.) are closed-source by design.
+  // For large-cap DeFi/infrastructure projects ($1B+), closed-source is a business choice, not a red flag.
+  // Only apply this breaker to mid-cap ($50M-$1B) where zero GitHub is genuinely suspicious.
   const github = rawData?.github ?? {};
   const hasGithubData = !github.error && (github.commits_90d > 0 || github.stars > 0);
   const isObviouslyNonTech = ['meme', 'wrapped', 'stablecoin'].some(
     t => String(rawData?.onchain?.category || '').toLowerCase().includes(t)
   );
-  if (!hasGithubData && mcap > 50_000_000 && !isObviouslyNonTech) {
+  if (!hasGithubData && mcap > 50_000_000 && mcap < 1_000_000_000 && !isObviouslyNonTech) {
     breakers.push({
       cap: 6.5,
       reason: `No GitHub activity detected with $${(mcap / 1e6).toFixed(1)}M market cap — development unverifiable for non-meme, non-stablecoin token`,
@@ -417,11 +420,17 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 212 (AutoResearch): Revenue collapse warning — TVL > $50M with zero fees for >7d
   // Protocols that have significant TVL but generate zero fees may have broken incentives
+  // FIX (28 Mar 2026): DeFiLlama may not track fees for all protocols (e.g., Hyperliquid
+  // generates millions/day in fees but DeFiLlama returns 0). Only trigger this breaker
+  // when both fees_7d AND fees_30d are 0 (confirming data isn't just missing for one period)
+  // AND the protocol is mid-cap ($50M-$1B TVL). For very large TVL ($1B+), zero fees
+  // almost certainly means the data source doesn't cover this protocol, not that it's broken.
   const tvlR212 = safeNum(onchain.tvl ?? 0);
   const fees7dR212 = safeNum(onchain.fees_7d ?? 0);
+  const fees30dR212 = safeNum(onchain.fees_30d ?? 0);
   const categoryR212 = String(onchain.category || '').toLowerCase();
   const isDeFiR212 = /defi|lending|dex|yield|liquidity|bridge|derivatives/.test(categoryR212);
-  if (isDeFiR212 && tvlR212 > 50_000_000 && fees7dR212 === 0) {
+  if (isDeFiR212 && tvlR212 > 50_000_000 && tvlR212 < 1_000_000_000 && fees7dR212 === 0 && fees30dR212 === 0) {
     breakers.push({
       cap: 6.5,
       reason: `DeFi protocol with $${(tvlR212 / 1_000_000).toFixed(0)}M TVL generates zero fees — value accrual mechanism may be broken`,
@@ -458,21 +467,34 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // When multiple news articles report active hacks/exploits, cap score aggressively
   // Round 334 (AutoResearch): only apply to non-meme, non-stablecoin, non-wrapped tokens
   // Meme/stable/wrapped tokens can have high hackMentions from ecosystem news without being directly hacked
+  // FIX (28 Mar 2026): news mentioning "hacks" for established protocols are often historical
+  // references, not active incidents. Only trigger critical cap for smaller/newer projects.
+  // For large-cap established protocols ($1B+ mcap), downgrade to warning-only — the news
+  // is more likely reporting on past events or ecosystem-wide context.
   const hackMentions = safeNum((rawData?.social?.hack_exploit_mentions ?? 0) + (rawData?.social?.exploit_mentions ?? 0));
   const _hackSymbol = (market.symbol || '').toUpperCase();
   const _isPassiveHackTarget = /^(USDT|USDC|DAI|WBTC|WETH|WBNB|WRAPPED|STAKED)/.test(_hackSymbol) ||
     String(rawData?.onchain?.category || '').toLowerCase().includes('meme');
+  const _isLargeCap = mcap > 1_000_000_000; // $1B+ — established protocol
   if (!_isPassiveHackTarget) {
-    if (hackMentions >= 4) {
+    if (hackMentions >= 4 && !_isLargeCap) {
+      // Small/mid-cap with many exploit mentions — likely an active incident
       breakers.push({
         cap: 3.5,
         reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
         severity: 'critical',
       });
+    } else if (hackMentions >= 4 && _isLargeCap) {
+      // Large-cap with exploit mentions — likely historical/ecosystem references, not active incident
+      breakers.push({
+        cap: 6.5,
+        reason: `${hackMentions} articles mention security exploits — verify if active or historical before high-conviction entry`,
+        severity: 'warning',
+      });
     } else if (hackMentions >= 2) {
       breakers.push({
-        cap: 5.5,
-        reason: `${hackMentions} articles mention security exploits — potential security incident, elevated caution warranted`,
+        cap: 6.5,
+        reason: `${hackMentions} articles mention security exploits — elevated caution warranted`,
         severity: 'warning',
       });
     }

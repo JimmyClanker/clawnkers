@@ -76,13 +76,20 @@ CRITICAL: Only report what you actually find via X Search. If there is little to
     if (typeof parsed.sentiment_score === 'number' && !Number.isFinite(parsed.sentiment_score)) {
       parsed.sentiment_score = 0; // default neutral
     }
+    // Round 114 (AutoResearch): dedup key_narratives and notable_accounts arrays (case-insensitive)
+    const dedupNarratives = Array.isArray(parsed.key_narratives)
+      ? [...new Map(parsed.key_narratives.map(n => [String(n).trim().toLowerCase(), String(n).trim()])).values()].slice(0, 10)
+      : [];
+    const dedupAccounts = Array.isArray(parsed.notable_accounts)
+      ? [...new Map(parsed.notable_accounts.map(a => [String(a).trim().toLowerCase(), String(a).trim()])).values()].slice(0, 5)
+      : [];
     // Ensure required fields have defaults if missing
     return {
       sentiment: parsed.sentiment ?? 'neutral',
       sentiment_score: parsed.sentiment_score ?? 0,
       mention_volume: parsed.mention_volume ?? 'none',
-      key_narratives: Array.isArray(parsed.key_narratives) ? parsed.key_narratives : [],
-      notable_accounts: Array.isArray(parsed.notable_accounts) ? parsed.notable_accounts : [],
+      key_narratives: dedupNarratives,
+      notable_accounts: dedupAccounts,
       kol_sentiment: parsed.kol_sentiment ?? null,
       summary: parsed.summary ?? null,
       source: 'grok_fast',

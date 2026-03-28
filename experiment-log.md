@@ -44,6 +44,18 @@
 - **Tests:** 179/179 pass
 - **Result:** kept
 
+### Round 112 — market.js: clamp volume_to_mcap_ratio to max 10 (wash trading guard)
+- **Change:** Clamp volumeToMcapRatio to max 10 (1000% daily volume vs mcap). Extreme ratios (>10) are almost always wash trading or data errors. Also guard negative ratios.
+- **Files:** collectors/market.js
+- **Tests:** 179/179 pass
+- **Result:** kept
+
+### Round 111 — index.js: total collection time warning when duration_ms > 15s
+- **Change:** Added warning log after result build if total collection time >15s. Logs slow collectors (>8s latency) by name. Helps identify rate-limit stalls or API performance issues.
+- **Files:** collectors/index.js
+- **Tests:** 179/179 pass
+- **Result:** kept
+
 ### Round 110 — github.js: log rate limit remaining from x-ratelimit-remaining header
 - **Change:** Added rate limit logging from response headers. Warns when remaining <100 calls. Helps preempt GitHub rate limit exhaustion.
 - **Files:** collectors/github.js

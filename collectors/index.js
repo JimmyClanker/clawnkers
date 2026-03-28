@@ -373,7 +373,8 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     fear_greed: sanitizeCollectorData(fearGreed.data),
   };
 
-  return {
+  // Round 111 (AutoResearch): log warning if total collection time >15s (slow collectors or rate-limit stalls)
+  const resultObject = {
     project_name: projectName,
     market: cleanedData.market,
     onchain: cleanedData.onchain,
@@ -396,6 +397,17 @@ export async function collectAll(projectName, exaService, collectorCache = null)
       cross_collector: crossCollectorSignals,
     },
   };
+
+  const totalDuration = Date.now() - startedAt;
+  if (totalDuration > 15000) {
+    const slowCollectors = Object.entries(collectorsInfo)
+      .filter(([, info]) => info.latency_ms != null && info.latency_ms > 8000)
+      .map(([name, info]) => `${name}(${Math.round(info.latency_ms)}ms)`)
+      .join(', ');
+    console.warn(`[collectAll:${projectName}] Slow total collection: ${totalDuration}ms${slowCollectors ? ` — slow: ${slowCollectors}` : ''}`);
+  }
+
+  return resultObject;
 }
 
 export {

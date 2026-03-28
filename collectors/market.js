@@ -171,7 +171,11 @@ export async function collectMarket(projectName) {
     const volumeToMcapRatio = (() => {
       if (totalVolume == null || marketCap == null || marketCap <= 0) return null;
       const ratio = totalVolume / marketCap;
-      return Number.isFinite(ratio) ? parseFloat(ratio.toFixed(6)) : null;
+      // Round 112 (AutoResearch): clamp extreme ratios — >10 is almost certainly wash trading or data error
+      if (!Number.isFinite(ratio)) return null;
+      if (ratio > 10) return 10.0; // cap at 1000% daily volume vs mcap
+      if (ratio < 0) return null;
+      return parseFloat(ratio.toFixed(6));
     })();
     // Round 9: price range position (0 = at ATL, 1 = at ATH)
     const priceRangePosition = (price != null && ath != null && atl != null && ath > atl)
