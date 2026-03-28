@@ -211,6 +211,9 @@ async function tryChainTvl(projectName) {
 
     return {
       slug: chainName.toLowerCase(),
+      // FIX (28 Mar 2026): gecko_id is the canonical DeFiLlama slug for fee queries.
+      // chainName.toLowerCase() can produce "hyperliquid l1" but fees are under "hyperliquid".
+      geckoSlug: chain.gecko_id || chainName.toLowerCase(),
       tvl: currentTvl,
       tvl_change_7d: computePctChange(currentTvl, tvl7dAgo),
       tvl_change_30d: computePctChange(currentTvl, tvl30dAgo),
@@ -247,29 +250,38 @@ export async function collectOnchain(projectName) {
     const protocolTvl = match?.protocol?.tvl;
     const useChain = chainResult && (!match?.protocol?.slug || match.score < 40 || protocolTvl == null);
 
-    if (useChain) {
-      // L1 chain path — use chain TVL + try to get fees from protocol slug
-      let fees7d = null;
-      let revenue7d = null;
+    // FIX (28 Mar 2026): Always fetch fees from the chain slug when chainResult exists.
+    // DeFiLlama separates L1 chains into sub-protocols (e.g., Hyperliquid → Bridge, HLP, Perps, Spot).
+    // The protocol matcher often picks a sub-protocol (Bridge with highest TVL) that has no fees,
+    // while the parent chain slug ("hyperliquid") holds the aggregate fees ($14.9M/7d).
+    // Solution: fetch chain-level fees regardless of which path we use for TVL.
+    let chainFees7d = null;
+    let chainRevenue7d = null;
+    let chainFees30d = null;
+    if (chainResult?.slug) {
       try {
-        const feesData = await fetchJson(`${LLAMA_FEES_URL}/${encodeURIComponent(chainResult.slug)}`);
-        // Round 188 (AutoResearch): DeFiLlama fees API can return various shapes;
-        // try all known array fields, fall back to total24h scalar, or leave null.
+        // Use geckoSlug for fee queries — it's the canonical DeFiLlama identifier
+        const feeSlug = chainResult.geckoSlug || chainResult.slug;
+        const feesData = await fetchJson(`${LLAMA_FEES_URL}/${encodeURIComponent(feeSlug)}`);
         const feeArray = feesData?.totalDataChart || feesData?.totalDataChartBreakdown || feesData?.data || [];
         const feeTotals = sumLastNDays(Array.isArray(feeArray) ? feeArray : [], 7);
-        fees7d = feeTotals?.fees != null
+        chainFees7d = feeTotals?.fees != null
           ? feeTotals.fees
           : (feesData?.total7d ? Number(feesData.total7d) : feesData?.total24h ? Number(feesData.total24h) * 7 : null);
-        revenue7d = feeTotals?.revenue != null
+        chainRevenue7d = feeTotals?.revenue != null
           ? feeTotals.revenue
           : (feesData?.totalRevenue7d ? Number(feesData.totalRevenue7d) : null);
-        // Sanitize
-        if (!Number.isFinite(fees7d)) fees7d = null;
-        if (!Number.isFinite(revenue7d)) revenue7d = null;
+        chainFees30d = feesData?.total30d ? Number(feesData.total30d) : null;
+        if (!Number.isFinite(chainFees7d)) chainFees7d = null;
+        if (!Number.isFinite(chainRevenue7d)) chainRevenue7d = null;
+        if (!Number.isFinite(chainFees30d)) chainFees30d = null;
       } catch {}
+    }
 
-      const chainRevenueToFees = (revenue7d != null && fees7d != null && fees7d > 0)
-        ? revenue7d / fees7d
+    if (useChain) {
+      // L1 chain path — use chain TVL + chain fees
+      const chainRevenueToFees = (chainRevenue7d != null && chainFees7d != null && chainFees7d > 0)
+        ? chainRevenue7d / chainFees7d
         : null;
 
       return {
@@ -280,8 +292,9 @@ export async function collectOnchain(projectName) {
         tvl_change_30d: chainResult.tvl_change_30d,
         chains: chainResult.chains,
         category: chainResult.category,
-        fees_7d: fees7d,
-        revenue_7d: revenue7d,
+        fees_7d: chainFees7d,
+        fees_30d: chainFees30d,
+        revenue_7d: chainRevenue7d,
         revenue_to_fees_ratio: chainRevenueToFees,
         treasury_balance: null,
         error: null,
@@ -474,6 +487,19 @@ export async function collectOnchain(projectName) {
       else protocolMaturity = 'emerging';
     }
 
+    // FIX (28 Mar 2026): Use chain-level fees when they're significantly higher than
+    // protocol-level fees. This handles L1 chains (Hyperliquid, etc.) where DeFiLlama
+    // splits the protocol into sub-components (Bridge, Perps, HLP, Spot) and the matcher
+    // picks a sub-protocol with low/no fees, while the parent chain aggregates all fees.
+    // Use chain fees if: (a) they exist AND (b) they're at least 10x the protocol fees.
+    const useChainFees = chainFees7d != null && chainFees7d > 0 &&
+      (fees7d == null || fees7d === 0 || chainFees7d > fees7d * 10);
+    const finalFees7d = useChainFees ? chainFees7d : fees7d;
+    const finalRevenue7d = useChainFees ? (chainRevenue7d ?? revenue7d) : revenue7d;
+    const finalFees30d = useChainFees
+      ? (chainFees30d ?? (chainFees7d != null ? chainFees7d * (30 / 7) : fees30dDerived))
+      : fees30dDerived;
+
     return {
       ...fallback,
       slug,
@@ -482,12 +508,12 @@ export async function collectOnchain(projectName) {
       tvl_change_30d: tvl30dChange,
       chains: protocolChains,
       category: protocol?.category || match.protocol?.category || null,
-      fees_7d: fees7d,
+      fees_7d: finalFees7d,
       // Round 238 (AutoResearch): fees_7d_prev for revenue trend detection in circuit breakers
       fees_7d_prev: feeTotalsPrev?.fees ?? null,
-      fees_30d: fees30dDerived,
+      fees_30d: finalFees30d,
       fees_30d_actual: fees30dActual,
-      revenue_7d: revenue7d,
+      revenue_7d: finalRevenue7d,
       revenue_30d: revenue30dDerived,
       revenue_to_fees_ratio: revenueToFeesRatio,
       revenue_7d_prev: revenue7dPrev,
