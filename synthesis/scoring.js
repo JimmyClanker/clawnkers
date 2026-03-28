@@ -167,10 +167,18 @@ export function calculateConfidence(rawData = {}) {
   }
 
   // overall_confidence: weighted average of 8 dimensions (reddit added at 5% weight, dex reduced to 3%)
-  const overall_confidence = Math.round(
-    (marketConf * 0.20 + onchainConf * 0.19 + socialConf * 0.15 + devConf * 0.15 +
-     tokenomicsConf * 0.14 + holderConf * 0.10 + dexConf * 0.04 + redditConf * 0.03)
-  );
+  // Round 58 (AutoResearch): guard NaN inputs in weighted sum — any non-finite confidence dimension
+  // would produce NaN overall_confidence, propagating to circuit breaker comparisons downstream
+  const _confSum =
+    (Number.isFinite(marketConf) ? marketConf : 50) * 0.20 +
+    (Number.isFinite(onchainConf) ? onchainConf : 50) * 0.19 +
+    (Number.isFinite(socialConf) ? socialConf : 50) * 0.15 +
+    (Number.isFinite(devConf) ? devConf : 50) * 0.15 +
+    (Number.isFinite(tokenomicsConf) ? tokenomicsConf : 50) * 0.14 +
+    (Number.isFinite(holderConf) ? holderConf : 50) * 0.10 +
+    (Number.isFinite(dexConf) ? dexConf : 50) * 0.04 +
+    (Number.isFinite(redditConf) ? redditConf : 0) * 0.03;
+  const overall_confidence = Math.round(Number.isFinite(_confSum) ? _confSum : 50);
 
   return {
     market: marketConf,
@@ -612,10 +620,12 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
 
   // Round 236 (AutoResearch): TVL efficiency per active user — protocols with high TVL but few users
   // may have mercenary capital. High TVL per-user with high fees = product-market fit.
+  // Round 55 (AutoResearch): cap tvlPerUser at $10M (prevents absurd bonus from 1-user protocols)
+  // and ensure activeUsersForEff is reasonable (> 1000 guard already in place)
   const tvlForEff = safeNumber(onchain.tvl ?? 0);
   const activeUsersForEff = safeNumber(onchain.active_addresses_7d ?? onchain.active_users_24h ?? 0);
   if (tvlForEff > 0 && activeUsersForEff > 1000) {
-    const tvlPerUser = tvlForEff / activeUsersForEff;
+    const tvlPerUser = Math.min(tvlForEff / activeUsersForEff, 10_000_000); // cap at $10M/user
     // High TVL/user ($100K+) = power users, institutional capital = sticky
     if (tvlPerUser > 100_000) raw += 0.3;
     else if (tvlPerUser > 10_000) raw += 0.15;
@@ -880,10 +890,21 @@ function scoreDevelopment(github = {}) {
   const forks = safeNumber(github.forks);
   const openIssues = safeNumber(github.open_issues);
   const lastCommitDate = github?.last_commit?.date ? new Date(github.last_commit.date) : null;
-  const daysSinceCommit = lastCommitDate && !Number.isNaN(lastCommitDate.getTime())
+  // Round 51 (AutoResearch): guard negative daysSinceCommit (future commit dates from timezone
+  // issues or malformed data). Negative values would give an undeserved staleness penalty via
+  // the `daysSinceCommit > 180` branch once the negative value wraps past the condition.
+  // Also guard Infinity (epoch 0 or invalid date) by capping at 3650d (10 years = very stale).
+  const _rawDaysSince = lastCommitDate && !Number.isNaN(lastCommitDate.getTime())
     ? (Date.now() - lastCommitDate.getTime()) / 86400000
     : null;
-  const issuePressure = commits90d > 0 ? openIssues / commits90d : openIssues > 0 ? openIssues : 0;
+  // Clamp: future dates → 0 (just committed), very old/invalid → 3650d (10y = very stale)
+  const daysSinceCommit = _rawDaysSince === null ? null : Math.max(0, Math.min(_rawDaysSince, 3650));
+  // Round 53 (AutoResearch): issue pressure — issues per commit (backlog density)
+  // When commits90d=0 but openIssues>0: map openIssues directly as a high-pressure signal
+  // Cap at 50 to prevent extreme outliers from causing arithmetic issues downstream
+  const issuePressure = commits90d > 0
+    ? Math.min(openIssues / commits90d, 50)
+    : openIssues > 0 ? Math.min(openIssues / 5, 50) : 0; // 5 issues per "virtual commit" for zero-dev projects
 
   // Commit trend bonus/penalty (new field from improved github collector)
   const commitTrend = github.commit_trend;
@@ -1658,11 +1679,12 @@ export function calculateScores(data) {
 
   // Round 54: confidence-weighted regression to mean — low confidence pulls score toward 5.5
   // Prevents extreme scores (1 or 10) from appearing authoritative with sparse data
+  // Round 56 (AutoResearch): fixed shadowed NEUTRAL const — outer scope uses 5.0, regression uses 5.5
   const overallConf = confidence.overall_confidence;
   if (overallConf < 60) {
     const regressionStrength = (60 - overallConf) / 60; // 0 at 60% conf, 1 at 0% conf
-    const NEUTRAL = 5.5;
-    overallValue = overallValue + (NEUTRAL - overallValue) * regressionStrength * 0.4; // max 40% pull toward neutral
+    const REGRESSION_NEUTRAL = 5.5; // intentionally slightly above midpoint (1-10 range)
+    overallValue = overallValue + (REGRESSION_NEUTRAL - overallValue) * regressionStrength * 0.4;
   }
 
   const weightStr = Object.entries(W)

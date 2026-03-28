@@ -154,6 +154,14 @@ export const CATEGORY_WEIGHTS = {
     market: 0.10, onchain: 0.28, social: 0.15, development: 0.18,
     tokenomics: 0.10, distribution: 0.09, risk: 0.10,
   },
+  // Round 54 (AutoResearch): CEX/Exchange tokens (BNB, OKB, KCS, etc.)
+  // Exchange volume + tokenomics (buyback/burn) drive value — onchain usage is secondary
+  // Development matters less (centralized infra); distribution matters (insider holdings)
+  // Risk is moderate — centralized exchange operational risk is real but different from DeFi
+  cex_token: {
+    market: 0.22, onchain: 0.12, social: 0.12, development: 0.08,
+    tokenomics: 0.22, distribution: 0.14, risk: 0.10,
+  },
   default: {
     market: 0.14, onchain: 0.18, social: 0.14, development: 0.18,
     tokenomics: 0.14, distribution: 0.12, risk: 0.10,
@@ -324,6 +332,12 @@ export const CATEGORY_MAP = {
   'nft-collateral': 'nft_fi',
   'nft-fractionalization': 'nft_fi',
   'nft-loan': 'nft_fi',
+  // Round 54: CEX tokens
+  'centralized-exchange': 'cex_token',
+  'cex-token': 'cex_token',
+  'exchange-token': 'cex_token',
+  'exchange-based-tokens': 'cex_token',
+  'binance-ecosystem': 'cex_token',
   // Round 34: Move/Aptos/Sui ecosystem tokens
   'move-ecosystem': 'layer_1',
   'aptos-ecosystem': 'layer_1',

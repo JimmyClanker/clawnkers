@@ -95,8 +95,18 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   // FDV/MCap > 10x
   // Round 346 (AutoResearch): added $1M minimum mcap — micro-cap tokens with high FDV ratio are
   // a different risk profile that's already captured by the low_market_cap red flag
-  const fdv = market.fully_diluted_valuation ?? market.fdv ?? 0;
-  const mcap = market.market_cap ?? 0;
+  const fdv = safeNum(market.fully_diluted_valuation ?? market.fdv ?? 0) ?? 0;
+  const mcap = safeNum(market.market_cap ?? 0) ?? 0;
+  // Round 52 (AutoResearch): FDV < MCap anomaly — CoinGecko sometimes reports FDV < MCap when
+  // circulating supply data is stale. This is physically impossible and signals data corruption.
+  // Cap score to prevent overconfident BUY signal from corrupted tokenomics data.
+  if (fdv > 0 && mcap > 1_000_000 && fdv < mcap * 0.95) {
+    breakers.push({
+      cap: 6.5,
+      reason: `Data anomaly: FDV ($${(fdv / 1e6).toFixed(1)}M) < MCap ($${(mcap / 1e6).toFixed(1)}M) — circulating supply data may be stale or corrupted`,
+      severity: 'warning',
+    });
+  }
   if (fdv > 0 && mcap > 1_000_000 && fdv / mcap > 10) {
     breakers.push({
       cap: 6.5,
@@ -142,8 +152,15 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Data completeness < 40%
   // Round 337 (AutoResearch): tiered completeness caps — very low data = stronger cap
+  // Round 59 (AutoResearch): add sub-10% tier — single data point is nearly useless
   const completeness = scores?.overall?.completeness ?? 100;
-  if (completeness < 20) {
+  if (completeness < 10) {
+    breakers.push({
+      cap: 4.0,
+      reason: `Only ${completeness}% data coverage — single or near-zero data points, score is unreliable`,
+      severity: 'critical',
+    });
+  } else if (completeness < 20) {
     breakers.push({
       cap: 5.0,
       reason: `Only ${completeness}% data coverage — extremely limited data, score is speculative`,
@@ -631,6 +648,21 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
       cap: 7.5,
       reason: `$${(mcapCB / 1e6).toFixed(0)}M MCap project with zero tier-1 news coverage — information vacuum prevents high-conviction BUY rating.`,
       severity: 'warning',
+    });
+  }
+
+  // Round 57 (AutoResearch): Coordinated social + price dump cap
+  // High social mentions that are overwhelmingly bearish while price dumps = coordinated FUD or exit
+  // This prevents the social momentum signal from masking what is actually a distribution event
+  const sentScore57 = safeNum(rawData?.social?.sentiment_score ?? null);
+  const mentions57 = safeNum(rawData?.social?.filtered_mentions ?? rawData?.social?.mentions ?? null);
+  const change24h57 = safeNum(rawData?.market?.price_change_pct_24h ?? null);
+  if (sentScore57 != null && sentScore57 < -0.6 && mentions57 != null && mentions57 >= 15 &&
+      change24h57 != null && change24h57 < -20) {
+    breakers.push({
+      cap: 4.5,
+      reason: `Coordinated dump signal: sentiment ${sentScore57.toFixed(2)}, ${mentions57} mentions, ${change24h57.toFixed(1)}% 24h — heavy bearish social + price dump = active exit event`,
+      severity: 'critical',
     });
   }
 
