@@ -451,6 +451,10 @@ export async function collectSocial(projectName, exaService) {
       sentiment_counts: sentimentCounts,
       sentiment_dominance: sentimentDominance != null ? Math.round(sentimentDominance * 100) / 100 : null,
       key_narratives: extractNarratives(uniqueNews, projectName),
+      // FIX (28 Mar 2026): Store full news items for LLM news analyst (needs highlights for context)
+      _raw_news: uniqueNews.slice(0, 15).map(({ title, url, date, highlights }) => ({
+        title, url, date, highlights: (highlights || []).slice(0, 3),
+      })),
       recent_news: recentNews,
       unlock_mentions: unlockMentions,
       exploit_mentions: exploitMentions,

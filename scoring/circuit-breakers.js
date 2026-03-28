@@ -476,28 +476,48 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
   const _isPassiveHackTarget = /^(USDT|USDC|DAI|WBTC|WETH|WBNB|WRAPPED|STAKED)/.test(_hackSymbol) ||
     String(rawData?.onchain?.category || '').toLowerCase().includes('meme');
   const _isLargeCap = mcap > 1_000_000_000; // $1B+ — established protocol
-  if (!_isPassiveHackTarget) {
-    if (hackMentions >= 4 && !_isLargeCap) {
-      // Small/mid-cap with many exploit mentions — likely an active incident
+  // FIX (28 Mar 2026): Use LLM news analysis to determine exploit severity when available.
+  // The news_analysis.exploit_risk field distinguishes "active" / "historical" / "ecosystem" / "none".
+  const _newsExploitRisk = rawData?.news_analysis?.exploit_risk || null;
+  if (!_isPassiveHackTarget && hackMentions >= 2) {
+    if (_newsExploitRisk === 'active') {
+      // LLM confirmed active security incident
       breakers.push({
         cap: 3.5,
-        reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
+        reason: `${hackMentions} articles report hacks/exploits — LLM analysis confirms ACTIVE security incident: ${rawData?.news_analysis?.exploit_summary || 'see news'}`,
         severity: 'critical',
       });
-    } else if (hackMentions >= 4 && _isLargeCap) {
-      // Large-cap with exploit mentions — likely historical/ecosystem references, not active incident
+    } else if (_newsExploitRisk === 'historical' || _newsExploitRisk === 'ecosystem') {
+      // LLM determined these are historical/ecosystem mentions, not active threats
+      // No circuit breaker — just log as informational
       breakers.push({
-        cap: 6.5,
-        reason: `${hackMentions} articles mention security exploits — verify if active or historical before high-conviction entry`,
-        severity: 'warning',
+        cap: 8.0, // effectively no cap (above max meaningful score)
+        reason: `${hackMentions} articles mention security topics — LLM analysis: ${_newsExploitRisk} (${rawData?.news_analysis?.exploit_summary || 'not a current threat'})`,
+        severity: 'info',
       });
-    } else if (hackMentions >= 2) {
-      breakers.push({
-        cap: 6.5,
-        reason: `${hackMentions} articles mention security exploits — elevated caution warranted`,
-        severity: 'warning',
-      });
+    } else if (!_newsExploitRisk) {
+      // No LLM analysis available — fall back to heuristic rules
+      if (hackMentions >= 4 && !_isLargeCap) {
+        breakers.push({
+          cap: 3.5,
+          reason: `${hackMentions} news articles report hacks/exploits — active security incident likely, avoid until resolved`,
+          severity: 'critical',
+        });
+      } else if (hackMentions >= 4 && _isLargeCap) {
+        breakers.push({
+          cap: 6.5,
+          reason: `${hackMentions} articles mention security exploits — verify if active or historical`,
+          severity: 'warning',
+        });
+      } else {
+        breakers.push({
+          cap: 6.5,
+          reason: `${hackMentions} articles mention security exploits — elevated caution warranted`,
+          severity: 'warning',
+        });
+      }
     }
+    // exploit_risk === 'none' → skip entirely (LLM says not relevant)
   }
 
   // Round 238 (AutoResearch): Revenue collapse breaker — 7d fees < 10% of 30d weekly avg

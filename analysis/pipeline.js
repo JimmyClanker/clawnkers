@@ -206,10 +206,47 @@ export async function phaseEnrichAsync(rawData, scores, enrichment, db, projectN
   const conviction = calculateConviction(rawData, scores, enrichment);
   rawData.conviction = conviction;
 
+  // FIX (28 Mar 2026): LLM-powered news analysis — contextualizes red flags.
+  // Instead of "6 articles mention exploit = AVOID", the LLM determines if the
+  // exploit is active, historical, or ecosystem-wide. Results stored in rawData
+  // and used by circuit breakers to adjust severity.
+  let newsAnalysis = null;
+  try {
+    const { analyzeNews } = await import('../services/news-analyst.js');
+    // Use the full Exa results with highlights when available.
+    // Fall back to recent_news (title + url + date only).
+    // Even if highlights are empty, the titles alone carry signal.
+    const newsItems = rawData?.social?._raw_news || rawData?.exa?.results || rawData?.social?.recent_news || [];
+    // Only analyze if we have exploit/unlock/regulatory mentions flagged by keyword scanner
+    const hasRiskMentions = (rawData?.social?.hack_exploit_mentions ?? 0) + 
+      (rawData?.social?.exploit_mentions ?? 0) + 
+      (rawData?.social?.unlock_mentions ?? 0) +
+      (rawData?.social?.regulatory_mentions ?? 0) > 0;
+    if (newsItems.length > 0 && hasRiskMentions) {
+      newsAnalysis = await analyzeNews(projectName, newsItems, {
+        xaiApiKey: process.env.XAI_API_KEY,
+      });
+      rawData.news_analysis = newsAnalysis;
+    }
+  } catch (_) { /* non-critical — fallback to keyword analysis */ }
+
+  // After news analysis, re-evaluate red flags with LLM context.
+  // This allows exploit/unlock flags to be downgraded from critical to info
+  // when the LLM determines the news is historical/ecosystem-wide.
+  if (newsAnalysis?.analyzed || newsAnalysis?.model_used) {
+    try {
+      const redFlagsUpdated = detectRedFlags(rawData, scores);
+      const feeRevDivFlag = detectFeeRevenueDivergence(rawData);
+      enrichment.redFlags = feeRevDivFlag ? [...redFlagsUpdated, feeRevDivFlag] : redFlagsUpdated;
+      rawData.red_flags = enrichment.redFlags;
+    } catch (_) { /* keep original red flags */ }
+  }
+
   enrichment.sectorComparison = sectorComparison;
   enrichment.sectorContext = sectorContext;
   enrichment.temporalDelta = temporalDelta;
   enrichment.conviction = conviction;
+  enrichment.newsAnalysis = newsAnalysis;
 
   return enrichment;
 }
@@ -356,6 +393,15 @@ export async function runPipeline({ projectName, exaService, mode, config, colle
     await phaseEnrichAsync(rawData, scores, enrichment, db, projectName);
   } catch (error) {
     throw withPipelineStage('async-enrichment', error, { projectName, mode });
+  }
+
+  // FIX (28 Mar 2026): Re-score after async enrichment (news analysis).
+  // The news analyst may have updated red flags (e.g., exploit downgraded from critical to info).
+  // Circuit breakers use rawData.news_analysis to adjust caps, so scores must be recalculated.
+  if (rawData?.news_analysis) {
+    try {
+      scores = calculateScores(rawData);
+    } catch (_) { /* keep original scores if recalc fails */ }
   }
 
   let result;

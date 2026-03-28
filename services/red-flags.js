@@ -223,23 +223,57 @@ export function detectRedFlags(rawData = {}, scores = {}) {
 
   // 18. Round 24: Social-sourced exploit mentions
   // Round 238 (AutoResearch): also check new hack_exploit_mentions field for richer coverage
+  // FIX (28 Mar 2026): Use LLM news analysis when available to determine actual risk level.
   const exploitMentions = safeNum((social.exploit_mentions ?? 0) + (social.hack_exploit_mentions ?? 0));
+  const newsAnalysis = rawData?.news_analysis;
   if (exploitMentions >= 2) {
-    flags.push({
-      flag: 'exploit_mentions_social',
-      severity: exploitMentions >= 4 ? 'critical' : 'warning',
-      detail: `${exploitMentions} recent news items mention exploits, hacks, or security vulnerabilities — verify protocol safety before entry.`,
-    });
+    const exploitRisk = newsAnalysis?.exploit_risk;
+    if (exploitRisk === 'active') {
+      flags.push({
+        flag: 'exploit_mentions_social',
+        severity: 'critical',
+        detail: `${exploitMentions} news items — ACTIVE security incident confirmed: ${newsAnalysis?.exploit_summary || 'verify immediately'}.`,
+      });
+    } else if (exploitRisk === 'historical' || exploitRisk === 'ecosystem') {
+      flags.push({
+        flag: 'exploit_mentions_social',
+        severity: 'info',
+        detail: `${exploitMentions} news items mention exploits (${exploitRisk}): ${newsAnalysis?.exploit_summary || 'not a current threat to this protocol'}.`,
+      });
+    } else {
+      // No LLM analysis — use keyword count as before
+      flags.push({
+        flag: 'exploit_mentions_social',
+        severity: exploitMentions >= 4 ? 'critical' : 'warning',
+        detail: `${exploitMentions} recent news items mention exploits, hacks, or security vulnerabilities — verify protocol safety before entry.`,
+      });
+    }
   }
 
   // 19. Round 24: Social-sourced unlock/vesting mentions (potential sell pressure)
+  // FIX (28 Mar 2026): Use LLM news analysis to distinguish imminent from distant unlocks.
   const unlockMentions = safeNum(social.unlock_mentions ?? 0);
   if (unlockMentions >= 2) {
-    flags.push({
-      flag: 'token_unlock_news',
-      severity: 'warning',
-      detail: `${unlockMentions} recent news items discuss token unlocks or vesting events — potential near-term sell pressure.`,
-    });
+    const unlockRisk = newsAnalysis?.unlock_risk;
+    if (unlockRisk === 'imminent') {
+      flags.push({
+        flag: 'token_unlock_news',
+        severity: 'critical',
+        detail: `${unlockMentions} news items — IMMINENT token unlock: ${newsAnalysis?.unlock_summary || 'significant supply increase expected within 30 days'}.`,
+      });
+    } else if (unlockRisk === 'distant' || unlockRisk === 'none') {
+      flags.push({
+        flag: 'token_unlock_news',
+        severity: 'info',
+        detail: `${unlockMentions} news items discuss unlocks (${unlockRisk}): ${newsAnalysis?.unlock_summary || 'no near-term supply pressure'}.`,
+      });
+    } else {
+      flags.push({
+        flag: 'token_unlock_news',
+        severity: 'warning',
+        detail: `${unlockMentions} recent news items discuss token unlocks or vesting events — potential near-term sell pressure.`,
+      });
+    }
   }
 
   // 20. Round 32: Revenue-to-fees ratio collapse — protocol not capturing value
