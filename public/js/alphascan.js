@@ -402,6 +402,10 @@
         ['Fees 7d','fees_7d',raw?.onchain?.fees_7d,null],
         ['Commits 90d','commits_90d',raw?.github?.commits_90d,null],
         ['Pct circulating','pct_circulating',raw?.tokenomics?.pct_circulating,null],
+        ['Unlock overhang','unlock_overhang_pct',raw?.tokenomics?.unlock_overhang_pct != null ? raw.tokenomics.unlock_overhang_pct.toFixed(1) + '%' : null,null],
+        ['Inflation rate','inflation_rate', raw?.tokenomics?.inflation_rate != null ? raw.tokenomics.inflation_rate.toFixed(1) + '%' + (raw.tokenomics.inflation_source === 'estimated_from_supply' ? ' (est.)' : '') : null,null],
+        ['Dilution risk','dilution_risk',raw?.tokenomics?.dilution_risk,null],
+        ['Distribution','fair_launch', raw?.tokenomics?.total_raised_usd === 0 || (raw?.tokenomics?.total_raised_usd == null && !raw?.tokenomics?.roi_data) ? '✅ Fair launch (no VC)' : (raw?.tokenomics?.total_raised_usd > 0 ? '$' + (raw.tokenomics.total_raised_usd / 1e6).toFixed(1) + 'M raised' : null),null],
         ['DEX liquidity','dex_liquidity_usd',raw?.dex?.dex_liquidity_usd,null],
         ['DEX buy/sell','buy_sell_ratio',raw?.dex?.buy_sell_ratio,null],
         // Round 91 (AutoResearch): liquidity concentration risk

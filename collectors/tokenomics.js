@@ -123,11 +123,17 @@ function estimateInflationFromMarket(marketData) {
   const max  = Number(marketData.max_supply ?? marketData.total_supply ?? 0);
   if (circ <= 0 || max <= 0) return null;
   const pct = (circ / max) * 100;
-  // Estimate: if 95%+ circulating, very low inflation; if <50%, potentially high
-  if (pct >= 95) return 1.0;
-  if (pct >= 80) return 5.0;
-  if (pct >= 60) return 15.0;
-  return 30.0; // rough estimate for early-stage with lots of supply locked
+
+  // FIX (28 Mar 2026): Previous estimates were wildly inaccurate (e.g. 30% for HYPE).
+  // Low circulating % does NOT mean high inflation — it means tokens are locked/vesting.
+  // Inflation = rate at which NEW tokens enter circulation, not total locked supply.
+  // Most well-designed protocols unlock 5-15% of total supply per year via vesting.
+  // Conservative estimates based on typical unlock schedules:
+  if (pct >= 95) return 1.0;   // Nearly fully circulating
+  if (pct >= 80) return 3.0;   // Most supply already out
+  if (pct >= 60) return 6.0;   // Moderate remaining unlocks
+  if (pct >= 40) return 10.0;  // Significant supply still locked, typical vesting
+  return 12.0;                  // Early stage — but 30% was absurd, most unlock 8-15%/yr
 }
 
 export async function collectTokenomics(projectName, coinGeckoId, marketData = null) {
