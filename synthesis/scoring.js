@@ -1162,6 +1162,19 @@ function scoreTokenomicsRisk(tokenomics = {}, rawData = {}) {
   raw += hasDistribution ? 0.5 : -0.5;
   raw += hasRoiData ? 0.3 : 0;
 
+  // Fair launch / no VC bonus: if no fundraising data exists (total_raised = 0 or null)
+  // AND the token has meaningful market activity, it suggests a community-driven distribution
+  // (airdrop, fair launch, no private sales). This significantly de-risks unlock overhang
+  // because locked tokens belong to foundation/community, not VCs with sell pressure incentives.
+  const totalRaised = safeNumber(tokenomics.total_raised_usd ?? null, null);
+  const isFairLaunch = (totalRaised === null || totalRaised === 0) && !hasRoiData;
+  if (isFairLaunch && pctCirculating > 0) {
+    raw += 1.5;  // Major bonus: no VC = no coordinated sell pressure at unlock
+    // Also reduce the dilution risk penalty applied above — fair launch tokens
+    // have different unlock dynamics (foundation/ecosystem grants vs VC cliff dumps)
+    if (dilutionRisk === 'high') raw += 0.5; // Partial reversal of the -1.0/-0.4 penalty above
+  }
+
   // Additional dilution risk penalty using unlock overhang
   // FIX (28 Mar 2026): For protocols with very high TVL ($1B+), high dilution risk is partially
   // offset by strong capital attraction. A protocol that attracts $4B+ TVL clearly has product-market
@@ -1213,13 +1226,14 @@ function scoreTokenomicsRisk(tokenomics = {}, rawData = {}) {
     hasDistribution ? 15 : 0,                                               // has distribution data (0-15)
     dilutionRisk === 'low' ? 15 : dilutionRisk === 'medium' ? 8 : 0,       // dilution risk (0-15)
     unlockOverhangPct !== null && unlockOverhangPct < 20 ? 10 : unlockOverhangPct !== null && unlockOverhangPct < 50 ? 5 : 0, // unlock safety (0-10)
+    isFairLaunch ? 12 : 0,  // Fair launch bonus: no VC = lower coordinated sell pressure (0-12)
   ];
   const tokenomicsRiskScore = Math.round(Math.min(100, trsComponents.reduce((a, b) => a + b, 0)));
 
   return {
     score: clampScore(raw),
     tokenomics_risk_score: tokenomicsRiskScore,
-    reasoning: `Circulating supply ${pctCirculating.toFixed(2)}%, unlock overhang ${unlockOverhangPct != null ? `${unlockOverhangPct.toFixed(1)}%` : 'n/a'} (${dilutionRisk || 'unknown'} dilution risk), inflation ${inflation.toFixed(2)}%, distribution ${hasDistribution ? 'available' : 'missing'}, tokenomics_risk_score ${tokenomicsRiskScore}/100 (higher=safer).`,
+    reasoning: `Circulating supply ${pctCirculating.toFixed(2)}%, unlock overhang ${unlockOverhangPct != null ? `${unlockOverhangPct.toFixed(1)}%` : 'n/a'} (${dilutionRisk || 'unknown'} dilution risk), inflation ${inflation.toFixed(2)}%, distribution ${hasDistribution ? 'available' : 'missing'}${isFairLaunch ? ', fair launch (no VC/private sale — community distributed)' : ''}, tokenomics_risk_score ${tokenomicsRiskScore}/100 (higher=safer).`,
   };
 }
 
@@ -1283,6 +1297,23 @@ function scoreDistribution(tokenomics = {}, market = {}, rawData = {}) {
 
   // Distribution data availability bonus
   if (dist) { raw += 0.3; parts.push('distribution data available'); }
+
+  // Fair launch / no VC bonus: community-distributed tokens (airdrop, fair launch) have
+  // fundamentally different unlock dynamics than VC-backed projects. No coordinated sell
+  // pressure from investors hitting cliff dates. Locked tokens are typically foundation/ecosystem
+  // allocations that unlock gradually for growth, not VC profit-taking.
+  const totalRaisedDist = safeNumber(tokenomics.total_raised_usd ?? null, null);
+  const hasRoiDataDist = tokenomics.roi_data ? 1 : 0;
+  const isFairLaunchDist = (totalRaisedDist === null || totalRaisedDist === 0) && !hasRoiDataDist;
+  if (isFairLaunchDist && pctCirculating > 0) {
+    raw += 1.5;
+    parts.push('fair launch (no VC/private sale detected): unlock pressure significantly lower (+1.5)');
+    // Partially reverse unlock overhang penalty — foundation unlocks ≠ VC dumps
+    if (unlockOverhang != null && unlockOverhang > 40) {
+      raw += 0.5;
+      parts.push('fair-launch offset: locked tokens are foundation/community, not VC (+0.5)');
+    }
+  }
 
   // FIX (28 Mar 2026): Fee revenue as distribution quality signal.
   // Protocols generating significant fees relative to FDV have organic demand for the token,
