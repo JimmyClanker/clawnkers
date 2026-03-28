@@ -223,6 +223,12 @@ function buildFactRegistry(rawData = {}) {
   push('onchain.revenue_per_active_user', rawData?.onchain?.revenue_per_active_user);
   push('onchain.fee_revenue_acceleration', rawData?.onchain?.fee_revenue_acceleration);
   push('onchain.protocol_maturity', rawData?.onchain?.protocol_maturity);
+  // Round 593 (AutoResearch batch): Fear & Greed index context — macro sentiment overlay
+  // Helps Grok calibrate between "project-specific alpha" vs "macro tide rising all boats"
+  push('macro.fear_greed_value', rawData?.fear_greed?.value);
+  push('macro.fear_greed_classification', rawData?.fear_greed?.classification);
+  push('macro.fear_greed_7d_avg', rawData?.fear_greed?.value_7d_avg);
+  push('macro.fear_greed_trend', rawData?.fear_greed?.trend);
 
   return facts;
 }

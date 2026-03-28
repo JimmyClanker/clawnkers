@@ -9,6 +9,8 @@ import { collectHolders } from './holders.js';
 import { collectEcosystem } from './ecosystem.js';
 import { collectContractStatus } from './contract.js';
 import { collectXSocial } from './x-social.js';
+// Round 592 (AutoResearch batch): Fear & Greed Index — macro sentiment context (free, no API key)
+import { collectFearGreed } from './fear-greed.js';
 
 const GLOBAL_TIMEOUT_MS = 20000;
 
@@ -96,6 +98,8 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const dexPromise = timedCollect('dex', () => collectDexScreener(projectName));
   const redditPromise = timedCollect('reddit', () => collectReddit(projectName));
   const xSocialPromise = timedCollect('x_social', () => collectXSocial(projectName));
+  // Round 592 (AutoResearch batch): Fear & Greed collected in parallel (free, fast, < 1s)
+  const fearGreedPromise = timedCollect('fear_greed', () => collectFearGreed());
 
   const TOKENOMICS_OWN_TIMEOUT_MS = 12000;
   const tokenomicsPromise = marketPromise
@@ -122,6 +126,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     withTimeout(dexPromise, 'dex'),
     withTimeout(redditPromise, 'reddit', 15000),
     withTimeout(xSocialPromise, 'x_social', 30000),
+    withTimeout(fearGreedPromise, 'fear_greed', 10000),
   ]);
 
   const [
@@ -133,6 +138,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     dexResult,
     redditResult,
     xSocialResult,
+    fearGreedResult,
   ] = phase1Results;
 
   // Unwrap cache wrapper results
@@ -171,6 +177,8 @@ export async function collectAll(projectName, exaService, collectorCache = null)
   const dex = unwrapCache(dexResult, 'dex');
   const reddit = unwrapCache(redditResult, 'reddit');
   const xSocial = unwrapCache(xSocialResult, 'x_social');
+  // Round 592 (AutoResearch batch): Fear & Greed unwrap
+  const fearGreed = unwrapCache(fearGreedResult, 'fear_greed');
 
   // --- Phase 2: Dependent collectors (need market/onchain/dex data) ---
   // Extract contract address from market data if available
@@ -222,6 +230,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     ecosystem:  { ok: ecosystem.ok,  error: ecosystem.error,  source: ecosystem.source,  age_ms: ecosystem.age_ms,  latency_ms: collectorStartTimes.ecosystem ? now226 - collectorStartTimes.ecosystem : null },
     contract:   { ok: contract.ok,   error: contract.error,   source: contract.source,   age_ms: contract.age_ms,   latency_ms: collectorStartTimes.contract ? now226 - collectorStartTimes.contract : null },
     x_social:   { ok: xSocial.ok,    error: xSocial.error,    source: xSocial.source,    age_ms: xSocial.age_ms,    latency_ms: collectorStartTimes.x_social ? now226 - collectorStartTimes.x_social : null },
+    fear_greed: { ok: fearGreed.ok,  error: fearGreed.error,  source: fearGreed.source,  age_ms: fearGreed.age_ms,  latency_ms: collectorStartTimes.fear_greed ? now226 - collectorStartTimes.fear_greed : null },
   };
 
   const dataSourceSummary = buildDataSourceSummary(collectorsInfo);
@@ -333,6 +342,7 @@ export async function collectAll(projectName, exaService, collectorCache = null)
     ecosystem: ecosystem.data,
     contract: contract.data,
     x_social: xSocial.data,
+    fear_greed: fearGreed.data,
     metadata: {
       started_at: new Date(startedAt).toISOString(),
       completed_at: new Date().toISOString(),
@@ -356,4 +366,5 @@ export {
   collectEcosystem,
   collectContractStatus,
   collectXSocial,
+  collectFearGreed,
 };

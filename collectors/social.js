@@ -17,6 +17,15 @@ const BULLISH_KEYWORDS = [
   'parallel evm', 'appchain', 'gas abstraction', 'account abstraction',
   'liquid restaking', 'lrt', 'erc-4337', 'eip-7702', 'validator sets',
   'paymaster', 'bundler', 'social graph', 'farcaster', 'lens protocol',
+  // Round 590 (AutoResearch batch): Q1-Q2 2026 alpha-driving narratives
+  'token burn', 'deflationary', 'supply reduction', 'halving effect',
+  'hyperscaler', 'sovereign ai', 'ai compute', 'gpu cluster', 'inference network',
+  'protocol revenue', 'revenue milestone', 'profitable protocol',
+  'onchain orderbook', 'fully onchain', 'permissionless',
+  'cross-chain liquidity', 'unified liquidity', 'omnichain',
+  'consumer crypto', 'mass adoption', 'mainstream',
+  'institutional custody', 'prime brokerage', 'cleared derivatives',
+  'autonomous agent', 'agent-to-agent', 'agentic', 'multi-agent',
 ];
 const BEARISH_KEYWORDS = [
   'bearish', 'selloff', 'dump', 'decline', 'risk', 'downside', 'lawsuit',
@@ -35,6 +44,14 @@ const BEARISH_KEYWORDS = [
   'nonce manipulation', 'price manipulation', 'liquidity removal', 'liquidity drain',
   'emergency withdrawal', 'protocol pause', 'circuit breaker triggered', 'depeg risk',
   'contagion', 'counterparty risk', 'insolvency risk', 'treasury depleted',
+  // Round 591 (AutoResearch batch): 2026 emerging threat signals
+  'token unlock cliff', 'large unlock', 'massive unlock', 'insider selling',
+  'team selloff', 'vc dump', 'investor vesting', 'cliff unlock',
+  'smart contract bug', 'critical vulnerability', 'zero day exploit',
+  'regulatory seizure', 'ofac sanctions', 'blacklisted', 'frozen funds',
+  'governance takeover', 'governance exploit', 'vote manipulation',
+  'sybil attack', 'bribery attack', 'validator bribe', 'centralized sequencer',
+  'mass liquidation', 'cascade liquidation', 'undercollateralized',
 ];
 const NEUTRAL_KEYWORDS = ['neutral', 'mixed', 'sideways', 'watchlist', 'monitor', 'range', 'unclear', 'consolidation'];
 
