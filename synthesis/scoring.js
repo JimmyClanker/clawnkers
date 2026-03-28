@@ -87,8 +87,18 @@ export function calculateConfidence(rawData = {}) {
   // Dev — Round 139: graduated (4 key fields)
   // Round 336 (AutoResearch): like onchain, distinguish error (0) vs N/A (50).
   // Closed-source / non-open-source projects have no GitHub but it's not a collection failure.
+  // Round 50 (AutoResearch): distinguish "not found / closed-source" (N/A = 50) from actual API errors (0)
+  // "not found", "no repo", "closed source", "private" → entity exists but has no public GitHub = N/A
+  // HTTP 5xx, timeout, rate limit → collection failure = 0
   let devConf;
-  if (github.error) devConf = 0;
+  const githubErrorStr = typeof github.error === 'string' ? github.error.toLowerCase() : '';
+  const isGithubNA = githubErrorStr && (
+    githubErrorStr.includes('not found') || githubErrorStr.includes('no repo') ||
+    githubErrorStr.includes('closed') || githubErrorStr.includes('private') ||
+    githubErrorStr.includes('no github')
+  );
+  if (github.error && !isGithubNA) devConf = 0; // actual collection failure
+  else if (isGithubNA) devConf = 50;             // closed/private source — neutral, not a failure
   else {
     const hasAnyGithubField = github.commits_90d != null || github.contributors != null ||
       github.stars != null || github.last_commit != null;
@@ -553,11 +563,12 @@ function scoreOnchainHealth(onchain = {}, rawData = {}) {
   raw += multichainBonus;
 
   // Round 233 (AutoResearch nightly): P/TVL supplement — undervalued protocols get boost
+  // Round 49 (AutoResearch): explicit NaN guard on adjustment value before adding to raw
   const ptvlResult = computePTVLAdjustment(
     safeNumber(rawData?.market?.market_cap ?? null),
     safeNumber(onchain.tvl ?? null)
   );
-  if (ptvlResult.adjustment !== 0) {
+  if (ptvlResult.adjustment !== 0 && Number.isFinite(ptvlResult.adjustment)) {
     raw += ptvlResult.adjustment;
   }
 
@@ -780,13 +791,22 @@ function scoreSocialMomentum(social = {}) {
     raw -= Math.min(penalty, 0.4);
   }
 
-  // Round 381 (AutoResearch): narrative_freshness_score bonus — fresh narratives indicate
-  // that the social signal is driven by recent events (catalysts), not stale coverage
+  // Round 381/383/48 (AutoResearch): narrative_freshness_score — unified single bonus block
+  // Round 48 fixed double-counting: Rounds 381 and 383 both applied freshness bonuses independently.
+  // Unified approach: continuous gradient + stepped bonus for volume confirmation, capped at +0.4 total.
+  // Penalty for stale low-volume social is preserved.
   const narrativeFreshness = safeNumber(social.narrative_freshness_score ?? null, null);
-  if (narrativeFreshness !== null && narrativeFreshness > 0) {
-    // Map 0-100 freshness to max +0.3 bonus
-    const freshnessAdj = (narrativeFreshness / 100) * 0.3;
-    raw += freshnessAdj;
+  if (narrativeFreshness !== null) {
+    if (narrativeFreshness >= 70 && filteredMentions >= 5) {
+      // Very fresh + volume = high-quality catalyst signal — strong bonus capped at +0.4
+      raw += Math.min(0.2 + (narrativeFreshness / 100) * 0.2, 0.4);
+    } else if (narrativeFreshness > 0) {
+      // Moderate freshness without volume confirmation — lighter gradient bonus (max +0.2)
+      const freshnessAdj = (narrativeFreshness / 100) * 0.2;
+      raw += freshnessAdj;
+    } else if (narrativeFreshness < 15 && filteredMentions < 5) {
+      raw -= 0.1; // Stale narrative + low volume = signal exhaustion
+    }
   }
 
   // Round 382 (AutoResearch): Source quality bonus — if avg_article_quality_score is available
@@ -798,15 +818,6 @@ function scoreSocialMomentum(social = {}) {
     else if (articleQualityScore >= 1.2) raw += 0.2;   // Above-average source quality
     else if (articleQualityScore >= 1.0) raw += 0.05;  // Average
     else if (articleQualityScore < 0.8) raw -= 0.15;   // Low quality / blog noise
-  }
-
-  // Round 383 (AutoResearch): Narrative freshness boost — very fresh narratives indicate
-  // current catalysts driving social activity vs stale ongoing coverage.
-  const narrativeFreshnessForSocial = safeNumber(social.narrative_freshness_score ?? null, null);
-  if (narrativeFreshnessForSocial !== null && narrativeFreshnessForSocial >= 70 && filteredMentions >= 5) {
-    raw += 0.2; // Fresh catalyst + volume = high-quality signal
-  } else if (narrativeFreshnessForSocial !== null && narrativeFreshnessForSocial < 15 && filteredMentions < 5) {
-    raw -= 0.1; // Stale narrative + low volume = signal exhaustion
   }
 
   // Round R10 (AutoResearch nightly): top_tier_source_count bonus
@@ -860,7 +871,11 @@ function scoreDevelopment(github = {}) {
   }
 
   const contributors = safeNumber(github.contributors);
-  const commits90d = safeNumber(github.commits_90d);
+  // Round 45 (AutoResearch): cap commits_90d at 10000 — GitHub monorepos (e.g. Solana core) can
+  // report 50000+ commits/90d which would give +2.5 regardless via Math.min(50000/30, 2.5).
+  // The cap is already there but explicit capping prevents integer overflow in edge cases
+  // and makes the score boundary behavior explicit. 10000 commits/90d = already +2.5.
+  const commits90d = Math.min(safeNumber(github.commits_90d), 10_000);
   const stars = safeNumber(github.stars);
   const forks = safeNumber(github.forks);
   const openIssues = safeNumber(github.open_issues);
@@ -1094,7 +1109,9 @@ function scoreDistribution(tokenomics = {}, market = {}) {
   }
 
   const dist = tokenomics.token_distribution;
-  const pctCirculating = Math.min(safeNumber(tokenomics.pct_circulating), 100);
+  // Round 43 (AutoResearch): apply same floor+ceiling normalization as scoreTokenomicsRisk
+  // Negative pctCirculating from bad CoinGecko data would corrupt distribution scoring
+  const pctCirculating = Math.max(0, Math.min(safeNumber(tokenomics.pct_circulating), 100));
   const unlockOverhang = tokenomics.unlock_overhang_pct != null ? safeNumber(tokenomics.unlock_overhang_pct) : null;
   const dilutionRisk = tokenomics.dilution_risk;
   const mcap = safeNumber(market.market_cap);
@@ -1199,9 +1216,13 @@ function scoreRisk(market = {}, onchain = {}, tokenomics = {}, dexData = {}, hol
   if (raw24h != null && raw7d != null) {
     volatility = raw24h * 0.6 + raw7d * 0.4;
   } else if (raw24h != null) {
-    volatility = raw24h; // only 24h available — use as-is (no artificial downscale)
+    volatility = raw24h; // only 24h available — use as-is
   } else if (raw7d != null) {
-    volatility = raw7d;
+    // Round 41 (AutoResearch): when only 7d data is available, scale down by 0.6
+    // 7-day moves are larger by nature — a 30% 7d swing ≈ ~7% per day on average.
+    // Using raw7d directly with the same thresholds as 24h over-penalizes weekly volatility.
+    // 0.6 factor aligns the threshold perception: a 50% 7d move → 30 (same tier as 30% 24h move).
+    volatility = raw7d * 0.6;
   } else {
     volatility = 0; // no data → neutral
   }

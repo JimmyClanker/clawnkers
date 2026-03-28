@@ -146,6 +146,14 @@ export const CATEGORY_WEIGHTS = {
     market: 0.12, onchain: 0.18, social: 0.28, development: 0.18,
     tokenomics: 0.10, distribution: 0.08, risk: 0.06,
   },
+  // Round 47 (AutoResearch): NFT-Fi — NFT lending, fractionalization, NFT-collateralized lending
+  // Onchain TVL + risk are primary (liquidation cascades are a known failure mode)
+  // Social matters more than pure DeFi (NFT community drives collateral demand)
+  // Development is important (smart contract quality = audit risk)
+  nft_fi: {
+    market: 0.10, onchain: 0.28, social: 0.15, development: 0.18,
+    tokenomics: 0.10, distribution: 0.09, risk: 0.10,
+  },
   default: {
     market: 0.14, onchain: 0.18, social: 0.14, development: 0.18,
     tokenomics: 0.14, distribution: 0.12, risk: 0.10,
@@ -310,7 +318,12 @@ export const CATEGORY_MAP = {
   // Round 34: NFT infrastructure — more dev-heavy than gaming, less social
   'nft-infrastructure': 'infra_tooling',
   'nft-marketplace': 'nft_gaming',
-  'nft-lending': 'defi_lending',
+  'nft-lending': 'nft_fi',         // Round 47: NFT lending → nft_fi dedicated weights
+  // Round 47: NFT-Fi specific slugs
+  'nft-fi': 'nft_fi',
+  'nft-collateral': 'nft_fi',
+  'nft-fractionalization': 'nft_fi',
+  'nft-loan': 'nft_fi',
   // Round 34: Move/Aptos/Sui ecosystem tokens
   'move-ecosystem': 'layer_1',
   'aptos-ecosystem': 'layer_1',

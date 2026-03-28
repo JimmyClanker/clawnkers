@@ -64,6 +64,15 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
 
   // Round 141 (AutoResearch): DEX liquidity in "extremely thin" zone ($10K-$50K) = warning cap
   // Not quite untradeable but severe slippage risk for any meaningful position
+  // Round 42 (AutoResearch): also add thin zone ($50K-$200K) = mild cap at 7.0
+  // Tokens with $50K-$200K liquidity can be traded but large positions will move price significantly
+  if (dexLiq >= 50_000 && dexLiq < 200_000) {
+    breakers.push({
+      cap: 7.0,
+      reason: `DEX liquidity $${(dexLiq / 1000).toFixed(0)}K — thin liquidity, significant slippage for position sizes >$10K`,
+      severity: 'warning',
+    });
+  }
   if (dexLiq >= 10_000 && dexLiq < 50_000) {
     breakers.push({
       cap: 5.5,
@@ -319,6 +328,20 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
         severity: 'critical',
       });
     }
+  }
+
+  // Round 44 (AutoResearch): circulating supply > max supply anomaly guard
+  // When circulating > max supply (pct_circulating > 105%), CoinGecko data is likely corrupted
+  // This would give an undeserved tokenomics bonus — cap score to prevent false-positive
+  const rawData44 = rawData ?? {};
+  const pctCirc44 = safeNum(rawData44?.tokenomics?.pct_circulating ?? null);
+  const mcap44 = safeNum(market.market_cap ?? 0);
+  if (pctCirc44 != null && pctCirc44 > 110 && mcap44 > 1_000_000) {
+    breakers.push({
+      cap: 6.5,
+      reason: `Data anomaly: circulating supply reported as ${pctCirc44.toFixed(0)}% of max supply — CoinGecko data may be corrupted, tokenomics score unreliable`,
+      severity: 'warning',
+    });
   }
 
   // Round R12 (AutoResearch batch): Suspicious volume — 24h vol < 0.05% of market cap for established coin
@@ -608,6 +631,21 @@ export function applyCircuitBreakers(overallScore, rawData, scores, redFlags) {
       cap: 7.5,
       reason: `$${(mcapCB / 1e6).toFixed(0)}M MCap project with zero tier-1 news coverage — information vacuum prevents high-conviction BUY rating.`,
       severity: 'warning',
+    });
+  }
+
+  // Round 46 (AutoResearch): Silent crash circuit breaker
+  // A token that drops >70% in 7d with zero social mentions is in a silent collapse —
+  // either an exploit, team exit, or exchange delisting. No coverage = no warning for holders.
+  // This is more dangerous than a documented crash which at least gets media attention.
+  const change7dCB46 = safeNum(market.price_change_pct_7d ?? null);
+  const socialMentionsCB46 = safeNum(rawData?.social?.filtered_mentions ?? rawData?.social?.mentions ?? null);
+  const socialRanCB46 = rawData?.social?.sentiment_score != null || Array.isArray(rawData?.social?.key_narratives);
+  if (change7dCB46 != null && change7dCB46 < -70 && socialRanCB46 && socialMentionsCB46 === 0) {
+    breakers.push({
+      cap: 3.5,
+      reason: `Silent crash: ${change7dCB46.toFixed(1)}% 7d price drop with zero social coverage — unannounced collapse risk (exploit, delisting, or team exit)`,
+      severity: 'critical',
     });
   }
 
